@@ -1,11 +1,23 @@
+/* Dark surfaces, mapped to the Bravado design system tokens.
+   Mintlify derives its dark greys from the primary colour, which tinted the
+   background green and pushed it close to black (#0b100e). These map it back
+   to the neutral palette used in Figma. Scoped to .dark so light mode is
+   untouched. */
+html.dark {
+  --gray-950: 27 27 29;    /* #1b1b1d  Dark/Fill/Background */
+  --gray-900: 32 32 32;    /* #202020  Dark/Fill/Card */
+  --gray-800: 48 48 48;    /* #303030  Dark/Border-1 */
+  --gray-400: 143 143 143; /* #8f8f8f  Dark/Text/Secondary */
+}
+
 /* Vertical divider between sidebar and content */
 #sidebar {
-  border-right: 1px solid rgb(38, 43, 42);
+  border-right: 1px solid #303030;
 }
 
 /* Glow on the active sidebar item */
 #sidebar a[aria-current="page"] {
-  box-shadow: 0 0 12px rgba(39, 215, 155, 0.25), 0 0 3px rgba(39, 215, 155, 0.15);
+  box-shadow: 0 0 12px rgba(39, 215, 159, 0.25), 0 0 3px rgba(39, 215, 159, 0.15);
   border-radius: 8px;
 }
 

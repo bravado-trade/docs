@@ -3,9 +3,9 @@
   "name": "Bravado",
   "theme": "mint",
   "colors": {
-    "primary": "#27D79B",
-    "light": "#27D79B",
-    "dark": "#27D79B"
+    "primary": "#27d79f",
+    "light": "#27d79f",
+    "dark": "#27d79f"
   },
   "css": "/custom.css",
   "icons": {
