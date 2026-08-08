@@ -5,20 +5,3 @@ nav li a.active,
   box-shadow: 0 0 12px rgba(39, 215, 155, 0.4), 0 0 4px rgba(39, 215, 155, 0.2);
   border-radius: 6px;
 }
-
-/* Top nav tabs — underline style like Struct */
-[role="tablist"] a,
-nav[aria-label="Tabs"] a,
-header nav a[href] {
-  border-bottom: 2px solid transparent;
-  transition: border-color 0.2s ease;
-}
-
-[role="tablist"] a[data-active="true"],
-[role="tablist"] a[aria-selected="true"],
-nav[aria-label="Tabs"] a[data-active="true"],
-header nav a[href][data-active="true"] {
-  border-bottom: 2px solid #27D79B;
-  background: transparent !important;
-  box-shadow: none;
-}
