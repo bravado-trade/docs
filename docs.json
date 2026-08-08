@@ -37,7 +37,7 @@
               "markets/overview",
               {
                 "group": "Polymarket",
-                "icon": "circle-check",
+                "icon": "/logo/polymarket.png",
                 "pages": [
                   "markets/polymarket/overview",
                   "markets/polymarket/trade-api",
