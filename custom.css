@@ -8,3 +8,18 @@
   box-shadow: 0 0 12px rgba(39, 215, 155, 0.25), 0 0 3px rgba(39, 215, 155, 0.15);
   border-radius: 8px;
 }
+
+/* Hide the AI assistant: the navbar entry point and the floating input.
+   The feature requires a Mintlify Pro plan and only indexes published docs,
+   so it currently errors instead of answering. */
+#assistant-entry,
+#assistant-entry-mobile,
+.chat-assistant-floating-input,
+.chat-assistant-sheet {
+  display: none !important;
+}
+
+/* Give the freed space to the search bar */
+div:has(> #search-bar-entry) {
+  flex-grow: 2.2;
+}
