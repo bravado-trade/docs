@@ -122,6 +122,7 @@
           {
             "group": "Use Cases",
             "pages": [
+              "use-cases/terminals",
               "use-cases/algorithmic-trading-bots",
               "use-cases/copy-trading",
               "use-cases/portfolio-dashboards",
@@ -266,6 +267,7 @@
           {
             "group": "Use Cases",
             "pages": [
+              "use-cases/terminals",
               "use-cases/algorithmic-trading-bots",
               "use-cases/copy-trading",
               "use-cases/portfolio-dashboards",

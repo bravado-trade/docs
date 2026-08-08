@@ -20,6 +20,18 @@ Autonomous agents (LLM-driven or otherwise) that trade prediction markets need t
 
 {/* TODO: Confirm the MCP server URL and auth method, then link it in the Build with AI page. */}
 
+## APIs used
+
+| API | What the agent uses it for |
+| --- | --- |
+| [Trade API](/products/trade-api) | Placing and cancelling orders, reading positions and balances, so the agent can act on a decision |
+| [Data API](/products/data-api) | Wallet history, PnL, and leaderboards that give the agent grounded context before it trades |
+| [UMA API](/products/uma-api) | Resolution state, so an agent does not treat a concluded event as a settled, redeemable position |
+
+<Note>
+  The UMA API endpoint reference is still being written. Until it lands, resolution state has to be inferred from position data. See [UMA API](/products/uma-api).
+</Note>
+
 ## Worked example
 
 An LLM tool-calling function that lets an agent evaluate a market and place a scaled position:

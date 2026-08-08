@@ -1,0 +1,97 @@
+---
+title: "Trading Terminals and Front Ends"
+sidebarTitle: "Terminals"
+description: "Build a full trading terminal for prediction markets: order entry, live positions, leaderboards, and copy-trading from a single API surface."
+icon:
+  name: "monitor"
+  library: "lucide"
+---
+
+## The problem
+
+A trading terminal has to show a complete picture in one place: what the user holds, what it is worth, what the market is doing, and how to act on it. Assembled directly against a venue, that means stitching together an order endpoint, a positions endpoint, an indexer for history, and your own accounting layer to make the numbers agree.
+
+Prediction markets add a wrinkle that spot venues do not have. A position is not simply open or closed. It can be open, awaiting resolution, or resolved but not yet redeemed, and a terminal that collapses those into one state will show users a balance they cannot actually access.
+
+## What Bravado provides
+
+Bravado is the widest single surface a terminal can build on, because every product shares one authentication model, one set of numeric conventions, and one accounting standard. Order entry, portfolio, market data, and social features all come from the same integration.
+
+- **Order entry** with eight order types, so the terminal can offer more than market and limit without building an execution engine.
+- **Portfolio state** with cost basis already computed, rather than reconstructed client-side from fills.
+- **Discovery** through leaderboards, so the terminal can surface who is performing well.
+- **Social features** through copy-trading, without building a mirroring engine.
+
+## APIs used
+
+A terminal is the one use case that touches every product.
+
+| API | What a terminal uses it for |
+| --- | --- |
+| [Trade API](/products/trade-api) | Order entry and cancellation, open orders, live balances, and position management including redeem, split, and merge |
+| [Data API](/products/data-api) | Portfolio panels, PnL curves, trade history, leaderboards, and trader profiles |
+| [Copytrade API](/products/copytrade-api) | Follow buttons, leader discovery, and paper-trading through simulation mode |
+| [Combos API](/api/combos/overview) | Multi-leg parlay entry, priced by RFQ rather than the order book |
+| [UMA API](/products/uma-api) | Distinguishing a position awaiting resolution from one that is genuinely closed |
+
+<Note>
+  The UMA API endpoint reference is still being written. Until it lands, a terminal has to infer resolution state from position data. See [UMA API](/products/uma-api).
+</Note>
+
+## Worked example
+
+A minimal terminal screen needs four calls on load:
+
+```bash
+# 1. who am I, and what can this key do
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+
+# 2. spendable collateral
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/balances \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+
+# 3. current positions with cost basis
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+
+# 4. resting orders to render on the book
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/orders/open \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+Order entry is a single call regardless of order type, so the same code path serves a market order and a TWAP:
+
+```json
+{
+  "type": "MARKET",
+  "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+  "side": "BUY",
+  "quote_amount": "25"
+}
+```
+
+<Warning>
+  Send an `Idempotency-Key` on every order. A terminal is the worst place to double-submit: users retry on a spinner, and a duplicate order is real money. See [Idempotency](/reference/idempotency).
+</Warning>
+
+## Product patterns
+
+- **Self-custody terminal.** The user's own wallet, own key. Everything comes from the Trade API plus the Data API for history.
+- **White-label terminal.** Partner provisions sub-accounts under a master key with [`POST /v2/trade/users`](/api/trade/account), and each end user gets their own bound key.
+- **Read-only terminal.** No trading at all, built entirely on the Data API against any public wallet. Useful as a free tier, since Data API reads need no funded account.
+- **Social terminal.** Leaderboard-driven discovery with a follow button wired to the Copytrade API.
+
+## Things that will bite you
+
+- **Numeric precision.** Every numeric field is a JSON string. Parsing them as floats will produce balances that disagree with the venue. See [Numeric conventions](/reference/numeric-conventions).
+- **Managed strategies are not CLOB orders.** TWAP, Iceberg, Pegged, and stops return a `record_id` and appear on `GET /v2/trade/strategies`, not on the open orders endpoint. A terminal that only polls open orders will show a user's TWAP as having vanished.
+- **`PENDING` is not a rejection.** A managed strategy sits in `PENDING` until its entry criteria are met. Rendering that as an error will generate support tickets.
+- **Rate limits are per key.** A terminal polling on a short interval for many users needs backoff. See [Rate limits](/reference/rate-limits).
+
+## Related
+
+- [Trade API](/products/trade-api)
+- [Data API](/products/data-api)
+- [Quick Start](/quickstart)
+- [Error reference](/reference/errors)

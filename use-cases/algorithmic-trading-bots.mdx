@@ -22,6 +22,15 @@ The Trade API v2 exposes six order types beyond the exchange native LIMIT and MA
 
 All six execute server-side on Bravado's engine on top of the Polymarket CLOB. That means you don't need to run your own execution loop, hold state during retries, or reason about partial fills across a schedule.
 
+## APIs used
+
+| API | What a bot uses it for |
+| --- | --- |
+| [Trade API](/products/trade-api) | Eight order types including TWAP, Iceberg, Pegged, and the three stop variants, plus batch submit and cancel |
+| [Data API](/products/data-api) | Historical fills and PnL series for signal generation and post-trade analysis |
+| [Combos API](/api/combos/overview) | Multi-leg positions when a strategy spans several correlated markets |
+| [UMA API](/products/uma-api) | Resolution timing, which determines when capital is released from a position |
+
 ## Worked example
 
 Signal fires, size the position, execute with TWAP \+ ICEBERG, and set a trailing stop for the exit. All in one flow:
@@ -77,7 +86,7 @@ Two constraints matter specifically for prediction markets:
 
 ## Related
 
-- [Guide: Execute a large position with TWAP \+ Iceberg](/guides/large-position-twap-iceberg)
+- [Order types: TWAP and Iceberg](/products/trade-api#order-type-overview)
 - [Concept: Orders](/products/trade-api)
-- [Concept: CLOB](/concepts/clob)
+- [CLOB orders vs. managed strategies](/products/trade-api#clob-orders-vs-managed-strategies)
 - [Trade API reference](/api/trade/overview)

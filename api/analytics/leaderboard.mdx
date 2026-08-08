@@ -5,7 +5,7 @@ api: "GET /leaderboard"
 description: "Returns traders ranked by realized PnL for the requested rolling window, computed under PMWAS."
 ---
 
-Returns traders on Polymarket ranked by realized PnL for the requested window. All PnL values are computed under [PMWAS](/concepts/pnl-methodology). For volume-ranked results, use [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume).
+Returns traders on Polymarket ranked by realized PnL for the requested window. All PnL values are computed under [PMWAS](/products/data-api). For volume-ranked results, use [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume).
 
 ```text
 GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard
@@ -127,4 +127,4 @@ curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard \
 
 - [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume) for volume-ranked results.
 - [`GET /traders/{address}`](/api/analytics/trader) for per-trader detail.
-- [Guide: Build a PnL leaderboard](/guides/pnl-leaderboard).
+- [PnL leaderboard endpoint](/api/analytics/leaderboard).

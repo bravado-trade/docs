@@ -21,7 +21,15 @@ The Data API returns every field a full portfolio dashboard needs, on any Polyma
 - `GET /traders/{address}/categories` for exposure by category (sports, politics, crypto, etc.).
 - `GET /traders/{address}/metrics` for win rate, average hold time, and other summary stats.
 
-All PnL numbers are computed under [PMWAS](/concepts/pnl-methodology), so cost basis is consistent across every response.
+All PnL numbers are computed under [PMWAS](/products/data-api), so cost basis is consistent across every response.
+
+## APIs used
+
+| API | What a dashboard uses it for |
+| --- | --- |
+| [Data API](/products/data-api) | Every figure the dashboard renders: PnL series, open and closed positions, category exposure, and summary metrics |
+| [Trade API](/products/trade-api) | Live balances and positions when the dashboard covers the user's own Bravado account rather than a public wallet |
+| [UMA API](/products/uma-api) | Whether an open position is awaiting resolution rather than still trading |
 
 ## Worked example
 
@@ -63,6 +71,6 @@ Four parallel Analytics calls, one snapshot. Cache aggressively per wallet; thes
 
 ## Related
 
-- [Guide: Build a PnL leaderboard](/guides/pnl-leaderboard)
-- [Concept: PnL methodology (PMWAS)](/concepts/pnl-methodology)
+- [PnL leaderboard endpoint](/api/analytics/leaderboard)
+- [Data API: PMWAS accounting](/products/data-api)
 - [Data API reference](/api/analytics/overview)

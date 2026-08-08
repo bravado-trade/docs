@@ -16,7 +16,14 @@ Prediction-market gains and losses need to be reported to tax authorities in mos
 - **Tax reports** via `GET /traders/{address}/tax-report` with per-disposition detail and summary totals.
 - **R1 statements** via `GET /traders/{address}/statements/r1` for standalone access to disposition rows without the parent wrapper.
 - **Reconciliation statements** via `GET /traders/{address}/reconciliation` cross-checking Bravado's computed balance against on-chain state.
-- **PMWAS methodology** documented in [PnL methodology](/concepts/pnl-methodology) so a preparer can verify the numbers.
+- **PMWAS methodology** documented in [PnL methodology](/products/data-api) so a preparer can verify the numbers.
+
+## APIs used
+
+| API | What a tax workflow uses it for |
+| --- | --- |
+| [Data API](/products/data-api) | R1 dispositions, per-year tax reports, and the R8 reconciliation certificate |
+| [UMA API](/products/uma-api) | Resolution dates, which determine when a gain or loss is realised |
 
 ## Worked example
 
@@ -67,7 +74,7 @@ Each row has enough detail to file a Form 8949-style report.
 
 ## Verifying the numbers
 
-Every disposition returned by the API can be reconstructed from the underlying fills using the [PMWAS methodology](/concepts/pnl-methodology). If a client's preparer disputes a number, cross-check by pulling the raw fills from `GET /traders/{address}/trades` and applying the standard.
+Every disposition returned by the API can be reconstructed from the underlying fills using the [PMWAS methodology](/products/data-api). If a client's preparer disputes a number, cross-check by pulling the raw fills from `GET /traders/{address}/trades` and applying the standard.
 
 <Warning>
   Bravado provides accounting data, not tax advice. Confirm the correct treatment of prediction-market gains and losses in your jurisdiction with a qualified tax professional.
@@ -75,6 +82,6 @@ Every disposition returned by the API can be reconstructed from the underlying f
 
 ## Related
 
-- [Guide: Generate a US tax statement](/guides/us-tax-statement)
-- [Concept: PnL methodology (PMWAS)](/concepts/pnl-methodology)
+- [Tax report endpoint](/api/analytics/trader-tax-report)
+- [Data API: PMWAS accounting](/products/data-api)
 - [Analytics: tax report endpoint](/api/analytics/trader-tax-report)

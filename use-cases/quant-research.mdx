@@ -17,7 +17,14 @@ Quantitative research on Polymarket requires clean historical fill data, positio
 - **Position reconstruction** at any timestamp via `GET /traders/{address}/positions` with time range filters.
 - **PnL time series** via `GET /traders/{address}/pnl` with configurable bucketing.
 - **Universe-level data** via `GET /trades` for global fill data across wallets.
-- All PnL computed under [PMWAS](/concepts/pnl-methodology), so backtests reconcile with the live Analytics endpoints.
+- All PnL computed under [PMWAS](/products/data-api), so backtests reconcile with the live Analytics endpoints.
+
+## APIs used
+
+| API | What a research workflow uses it for |
+| --- | --- |
+| [Data API](/products/data-api) | Trade logs, PnL series, and positions for any public wallet, paginated for bulk extraction |
+| [UMA API](/products/uma-api) | Resolution outcomes and timing, needed to label historical events correctly |
 
 ## Worked example
 
@@ -77,6 +84,6 @@ The resulting parquet has every fill for every wallet, with columns for `symbol`
 
 ## Related
 
-- [Concept: PnL methodology (PMWAS)](/concepts/pnl-methodology)
+- [Data API: PMWAS accounting](/products/data-api)
 - [Reference: Pagination](/reference/pagination)
 - [Data API reference](/api/analytics/overview)

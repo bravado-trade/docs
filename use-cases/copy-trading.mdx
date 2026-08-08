@@ -23,6 +23,14 @@ The Copytrade API is a purpose-built engine that:
 
 Polymarket does not offer a native equivalent. Every copy-trading product on Polymarket is running its own version of this engine or is using Bravado.
 
+## APIs used
+
+| API | What a copy-trading product uses it for |
+| --- | --- |
+| [Copytrade API](/products/copytrade-api) | Subscriptions, sizing modes, filters, risk controls, and simulation |
+| [Data API](/products/data-api) | Evaluating a prospective leader before subscribing: PnL curve, win rate, and category exposure |
+| [Trade API](/products/trade-api) | The execution layer mirrored fills run through, plus balances and positions for the follower |
+
 ## Worked example
 
 Provision a follower, subscribe to a leader, and print mirrored fills:
@@ -74,11 +82,11 @@ Two common product shapes on top of the Copytrade API:
 1. **Follow-a-trader.** User picks one leader from a curated list. Simple, low-cognitive-load onboarding.
 2. **Basket.** User subscribes to many leaders at once with different sizing weights. Reduces single-trader risk.
 
-Both are single-API-call operations once a follower is provisioned. See the [guide](/guides/copy-trading-bot-50-lines) for a starter implementation.
+Both are single-API-call operations once a follower is provisioned. See the [guide](/products/copytrade-api) for a starter implementation.
 
 ## Related
 
-- [Guide: Build a copy-trading bot in 50 lines](/guides/copy-trading-bot-50-lines)
-- [Guide: Track a whale wallet and mirror its fills](/guides/track-whale-wallet)
+- [Copytrade API overview](/products/copytrade-api)
+- [Copytrade sizing and filters](/products/copytrade-api)
 - [Concept: Copy trading](/products/copytrade-api)
 - [Copytrade API reference](/api/copytrade/overview)
