@@ -19,6 +19,13 @@ html.dark #navbar-transition {
   border-color: #303030 !important;      /* Dark/Border-1 */
 }
 
+/* Navbar logo: Mintlify fixes this at 28px, which sits small against the
+   two-row navbar. The wordmark's embedded mark is 140x180, so there is
+   plenty of resolution at this size. */
+#navbar .nav-logo {
+  height: 36px !important;
+}
+
 /* Vertical divider between sidebar and content */
 #sidebar {
   border-right: 1px solid #303030;
