@@ -1,0 +1,38 @@
+---
+title: "Copytrade API on Polymarket"
+sidebarTitle: "Copytrade API"
+description: "Mirror any Polymarket wallet's fills in real time with configurable sizing modes, filters, and risk controls."
+icon:
+  name: "users"
+  library: "lucide"
+---
+
+The [Copytrade API](/products/copytrade-api) is fully supported on Polymarket. Polymarket has no native copy-trading, so this capability exists only through Bravado.
+
+Subscribe to a leader wallet and Bravado mirrors its fills onto your own wallet using the sizing mode you configure. Because the Data API indexes every public Polymarket wallet, you can evaluate a prospective leader's full history before subscribing to them.
+
+## What you can mirror
+
+Any public Polymarket wallet can be followed — the leader does not need to be a Bravado user, and is not notified.
+
+## Sizing, filters, and risk controls
+
+Sizing modes, market filters, and risk controls behave identically to the general copy-trading model. See the [Copytrade API product page](/products/copytrade-api) for the full configuration surface, and the [endpoint reference](/api/copytrade/overview) for request shapes.
+
+## Evaluating a leader first
+
+Before subscribing, pull the leader's history through the Data API:
+
+- [`GET /traders/{address}`](/api/analytics/trader) — headline performance summary
+- [`GET /traders/{address}/pnl`](/api/analytics/trader-pnl) — cumulative PnL curve
+- [`GET /traders/{address}/metrics`](/api/analytics/trader-metrics) — win rate and hold-time stats
+
+<Note>
+  Simulation mode lets you paper-trade a subscription before committing real collateral. See [Simulation](/api/copytrade/simulation).
+</Note>
+
+## Related
+
+- [Copytrade API product overview](/products/copytrade-api)
+- [Copytrade endpoint reference](/api/copytrade/overview)
+- [Polymarket overview](/markets/polymarket/overview)

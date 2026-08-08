@@ -1,0 +1,48 @@
+---
+title: "predict.fun on Bravado — Coverage and Supported Features"
+sidebarTitle: "Overview"
+description: "predict.fun is supported for a subset of Bravado products. Check which surfaces are live before building against it."
+icon:
+  name: "circle-dashed"
+  library: "lucide"
+---
+
+<Info>
+  **Partial support.** predict.fun is not yet covered by every Bravado product. The sections below are deliberately left unfilled rather than assumed — confirm the details and this page will be completed to match the [Polymarket pages](/markets/polymarket/overview).
+</Info>
+
+predict.fun is a prediction market venue supported by Bravado for a subset of products. As with any prediction market, outcomes trade as tokens that settle at \$1 if the event happens and \$0 if it does not, so live prices read as implied probabilities.
+
+## Product coverage
+
+| Bravado product | Status |
+| --- | --- |
+| [Trade API](/markets/predict-fun/trade-api) | *To be confirmed* |
+| [Copytrade API](/markets/predict-fun/copytrade-api) | *To be confirmed* |
+| [Data API](/markets/predict-fun/data-api) | *To be confirmed* |
+
+<Warning>
+  Do not build against a surface listed as unconfirmed above. Treat only Polymarket as fully supported until these rows are filled in.
+</Warning>
+
+## Venue details
+
+{/* TODO: Confirm and fill in. Left blank deliberately — these were not
+     documented anywhere in the repo and were not assumed. */}
+
+| Detail | Value |
+| --- | --- |
+| Chain | *To be confirmed* |
+| Settlement asset | *To be confirmed* |
+| Market structure | *To be confirmed* |
+| Resolution mechanism | *To be confirmed* |
+| Order book model | *To be confirmed* |
+
+## How it differs from Polymarket
+
+Once the table above is filled in, this section should call out anything that changes how you integrate — settlement asset, price representation, minimum order sizes, and resolution behaviour are the usual differences. See [what differs between venues](/markets/overview#what-differs-between-venues).
+
+## Related
+
+- [Supported prediction markets](/markets/overview)
+- [Polymarket overview](/markets/polymarket/overview) — the fully supported reference implementation

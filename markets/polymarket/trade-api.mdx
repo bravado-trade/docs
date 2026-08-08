@@ -1,0 +1,43 @@
+---
+title: "Trade API on Polymarket"
+sidebarTitle: "Trade API"
+description: "Order execution and position management on Polymarket via the Bravado Trade API v2, including all eight supported order types."
+icon:
+  name: "arrow-left-right"
+  library: "lucide"
+---
+
+The [Trade API](/products/trade-api) is fully supported on Polymarket. Every order type, bracket leg, and position operation Bravado offers works against Polymarket's CLOB.
+
+This page covers what is specific to Polymarket. For the full behaviour of each order type, see the [Trade API product page](/products/trade-api); for endpoint-level detail, see the [Trade API reference](/api/trade/overview).
+
+## Supported order types
+
+| Type | Returns | Notes on Polymarket |
+| --- | --- | --- |
+| `LIMIT` | `order_id` | Rests on the CLOB. Subject to the 5-share minimum. |
+| `MARKET` | `order_id` | Fills at best available price. Minimum \$1 notional. |
+| `PEGGED` | `record_id` | Chases the touch price within a budget. |
+| `TWAP` | `record_id` | Splits a parent order across a duration. |
+| `ICEBERG` | `record_id` | Slices are post-only; they cannot cross the book. |
+| `STOP_LOSS` | `record_id` | Pre-trigger records appear only on `/strategies`. |
+| `TAKE_PROFIT` | `order_id` | Placed directly on the CLOB. |
+| `TRAILING_STOP` | `record_id` | Trails the high-water mark. |
+
+## Polymarket-specific fields
+
+- **`symbol`** is the ERC-1155 token id of a single outcome, not the market. A binary market has two of them.
+- **`price`** is a decimal probability in `0.001`–`0.999`.
+- **`budget_usdc`** and **`quote_amount`** are denominated in US dollars.
+
+## Positions
+
+Polymarket positions support redeem, split, and merge. A complete set of outcome tokens is always redeemable for the underlying collateral, and winning shares become redeemable only after [UMA resolution](/markets/polymarket/uma-resolution) settles.
+
+See [Positions](/products/trade-api#positions) for the full lifecycle.
+
+## Related
+
+- [Trade API product overview](/products/trade-api)
+- [Trade API endpoint reference](/api/trade/overview)
+- [Polymarket overview](/markets/polymarket/overview)

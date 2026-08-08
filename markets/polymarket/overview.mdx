@@ -1,0 +1,71 @@
+---
+title: "Polymarket on Bravado — Coverage and Supported Features"
+sidebarTitle: "Overview"
+description: "Polymarket is the largest prediction market by volume, running on Polygon. Bravado supports it across the Trade, Copytrade, Data, and UMA APIs."
+icon:
+  name: "circle-check"
+  library: "lucide"
+---
+
+Polymarket is the largest prediction market by volume, running on Polygon. Markets are framed as questions with binary YES / NO outcomes, collateralised in USDC, and traded on a central limit order book (CLOB).
+
+Bravado supports Polymarket across every product, and gives you execution and data capabilities the native APIs do not offer.
+
+## How Polymarket works
+
+Each market has a `condition_id`, and each tradeable outcome within it has its own ERC-1155 token id — the `symbol` you pass when placing an order. Prices are decimal probabilities between `0.001` and `0.999`, so `0.62` means 62 cents per share.
+
+Depositing USDC mints a complete set of outcome tokens, which can be split and merged. Because exactly one outcome resolves true, a complete set is always redeemable for the underlying collateral. See [Positions](/products/trade-api#positions) for split, merge, and redeem mechanics.
+
+Once an event concludes, the outcome is reported through UMA's Optimistic Oracle before winning shares become redeemable — see [UMA resolution](/markets/polymarket/uma-resolution).
+
+## Supported Bravado products
+
+<CardGroup cols={2}>
+  <Card title="Trade API" icon="arrow-left-right" href="/markets/polymarket/trade-api">
+    Eight order types including TWAP, Iceberg, Pegged, and three stop variants.
+  </Card>
+
+  <Card title="Copytrade API" icon="users" href="/markets/polymarket/copytrade-api">
+    Mirror any wallet's fills with proportional, fixed, or capped sizing.
+  </Card>
+
+  <Card title="Data API" icon="chart-line" href="/markets/polymarket/data-api">
+    Wallet PnL, leaderboards, trade logs, and tax statements.
+  </Card>
+
+  <Card title="UMA resolution" icon="gavel" href="/markets/polymarket/uma-resolution">
+    How markets settle, and why a concluded event is not yet a redeemable one.
+  </Card>
+</CardGroup>
+
+## What Bravado adds over Polymarket's native APIs
+
+| Capability | Polymarket native | Bravado |
+| --- | --- | --- |
+| Order types | LIMIT, MARKET | LIMIT, MARKET, TWAP, ICEBERG, PEGGED, STOP\_LOSS, TAKE\_PROFIT, TRAILING\_STOP |
+| Execution latency | Baseline | Lower, with server-side execution of advanced order types |
+| Data accuracy | Baseline | PMWAS-standardized PnL and full fill reconciliation |
+| Copy-trading | Not available | First-class Copytrade API with configurable sizing modes |
+| Historical PnL | Recent activity | Full wallet history from first trade, with cost-basis tracking |
+| Tax reporting | Not available | Tax statements per wallet, US-format |
+| Sub-accounts | Not available | Master-key flow for white-label integrations |
+| Idempotency | Not enforced | Required `Idempotency-Key` on every mutating request |
+
+## Venue constraints
+
+These limits are enforced by Polymarket's CLOB and the underlying protocol. Rejections that cite them are venue rules, not Bravado bugs:
+
+- **Resting order share minimum** — most markets require at least 5 shares per resting limit order.
+- **Market order notional minimum** — `MARKET` orders require a minimum spend of \$1.
+- **Iceberg slices are post-only** — each slice is submitted passively, so for a buy the slice price must be at or below the current best bid.
+
+<Warning>
+  Prices are decimal probabilities, not cents. Sending `price: "62"` is rejected because 62 falls outside the valid `0.001`–`0.999` range. Send `"0.62"` instead.
+</Warning>
+
+## Related
+
+- [Trade API reference](/api/trade/overview)
+- [Data API reference](/api/analytics/overview)
+- [Error reference](/reference/errors)

@@ -1,0 +1,49 @@
+---
+title: "UMA Resolution on Polymarket"
+sidebarTitle: "UMA resolution"
+description: "How Polymarket markets settle through UMA's Optimistic Oracle, why a concluded event is not immediately redeemable, and how disputes extend that window."
+icon:
+  name: "gavel"
+  library: "lucide"
+---
+
+Polymarket markets do not settle themselves. When an event concludes, the outcome must be reported on-chain and accepted before winning shares can be redeemed. Polymarket uses [UMA](https://uma.xyz)'s Optimistic Oracle for that step.
+
+The practical consequence: **an event finishing in the real world and a position becoming redeemable are two different moments**, sometimes separated by a meaningful window.
+
+## The resolution lifecycle
+
+<Steps>
+  <Step title="Assertion">
+    A proposer asserts the outcome on-chain and posts a bond backing that claim.
+  </Step>
+  <Step title="Challenge window">
+    The assertion stays open for a fixed period. If nobody disputes it, it is accepted and settles automatically.
+  </Step>
+  <Step title="Dispute (optional)">
+    Any party may dispute within the window by posting their own bond. A disputed assertion escalates to a UMA token-holder vote instead of settling on the proposer's word — so the initially proposed outcome is not guaranteed to be the final one.
+  </Step>
+  <Step title="Settlement">
+    The final outcome is written on-chain. Winning outcome tokens become redeemable at \$1; losing tokens are worth \$0.
+  </Step>
+</Steps>
+
+## What this means when you build
+
+- **Do not treat a concluded event as realized PnL.** Until settlement, the position is still open and its value is still a mark, not a realization.
+- **Budget for the dispute path.** An undisputed market settles predictably. A disputed one takes materially longer and can land on a different outcome than first proposed.
+- **Redeem only after settlement.** Calling [`POST /v2/trade/positions/redeem`](/api/trade/positions) before a market settles will not produce collateral.
+
+<Warning>
+  A market whose event has visibly concluded is not necessarily settled, and an undisputed assertion can still be disputed until its challenge window closes. Confirm final resolution state before treating a position as closed.
+</Warning>
+
+## Data availability during resolution
+
+PMWAS and tax endpoints return `503` with `available: false` while a wallet's data is still being processed. This is expected rather than an error state — poll on a reasonable interval and surface a "processing" state to users. See [Error reference](/reference/errors).
+
+## Related
+
+- [UMA API](/products/uma-api) — querying resolution data programmatically
+- [Positions](/products/trade-api#positions) — redeem, split, and merge
+- [Polymarket overview](/markets/polymarket/overview)

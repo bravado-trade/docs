@@ -1,0 +1,63 @@
+---
+title: "UMA API — Optimistic Oracle Resolution Data"
+sidebarTitle: "UMA API"
+description: "Query how Polymarket markets are resolved through UMA's Optimistic Oracle, including proposals, disputes, and final settlement outcomes."
+icon:
+  name: "gavel"
+  library: "lucide"
+---
+
+<Info>
+  **This page is a scaffold.** The endpoint reference below has not been filled in yet. Send the endpoint list and this page will be completed to match the other product pages.
+</Info>
+
+Polymarket markets do not settle themselves. When a market's event concludes, the outcome has to be reported on-chain and accepted before holders can redeem winning shares. Polymarket uses [UMA](https://uma.xyz)'s Optimistic Oracle for that step, and the Bravado UMA API exposes the resolution lifecycle as queryable data.
+
+## Why resolution matters for traders
+
+Resolution is the point where an outcome token stops being a probability and becomes worth exactly \$1 or \$0. Three things about that transition affect anyone trading or building on Polymarket:
+
+- **Timing.** A market's event can conclude well before its outcome is finalized on-chain. Positions are not redeemable during that window.
+- **Disputes.** A proposed outcome can be challenged, which extends the window and introduces the possibility that the initially proposed answer is not the final one.
+- **Finality.** Only after resolution settles can a position be redeemed via [`POST /v2/trade/positions/redeem`](/api/trade/positions).
+
+## How UMA resolution works
+
+<Steps>
+  <Step title="Assertion">
+    Once the event concludes, a proposer asserts the outcome on-chain and posts a bond backing that claim.
+  </Step>
+  <Step title="Challenge window">
+    The assertion stays open for a fixed period. If nobody disputes it, it is treated as correct and settles automatically.
+  </Step>
+  <Step title="Dispute (optional)">
+    Any party may dispute within the window by posting their own bond. A disputed assertion escalates to UMA's token-holder vote rather than settling on the proposer's word.
+  </Step>
+  <Step title="Settlement">
+    The final outcome is written on-chain. Winning outcome tokens become redeemable at \$1; losing tokens go to \$0.
+  </Step>
+</Steps>
+
+<Warning>
+  A market whose event has visibly concluded is not necessarily settled. Always confirm final resolution state before treating a position as realized — an undisputed assertion can still be disputed until its challenge window closes.
+</Warning>
+
+## Endpoints
+
+{/* TODO: Replace with the real endpoint list.
+     For each endpoint, follow the pattern used in the Data API pages:
+     an `api:` frontmatter entry on its own page under api/, a description,
+     ResponseField blocks, and a worked example. */}
+
+<Note>
+  Endpoint documentation is pending. In the meantime, resolution-adjacent behaviour that **is** documented today:
+
+  - [`POST /v2/trade/positions/redeem`](/api/trade/positions) — redeem winning shares once a market has settled.
+  - [Error reference](/reference/errors) — includes the `503` / `available: false` behaviour returned while data is still being processed.
+</Note>
+
+## Related
+
+- [Trade API](/products/trade-api) — order execution and position management
+- [Data API](/products/data-api) — wallet PnL, trade logs, and tax statements
+- [Polymarket](/markets/polymarket/overview) — market coverage and supported features

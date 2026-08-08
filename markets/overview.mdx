@@ -1,0 +1,69 @@
+---
+title: "Supported Prediction Markets"
+sidebarTitle: "Overview"
+description: "Bravado provides a single API surface across multiple prediction markets. Compare venue coverage and which Bravado products are available on each."
+icon:
+  name: "globe"
+  library: "lucide"
+---
+
+A prediction market lets people trade on the outcome of a future event. Each possible outcome is a token that settles at \$1 if it happens and \$0 if it does not, so the live price doubles as the market's implied probability — a share trading at `0.62` means the market collectively puts the outcome at about 62%.
+
+Bravado connects to these venues so you integrate once instead of per-venue. The same order types, copy-trading engine, and analytics model apply across every supported market.
+
+<CardGroup cols={2}>
+  <Card title="Polymarket" icon="circle-check" href="/markets/polymarket/overview">
+    The largest prediction market by volume, running on Polygon. Fully supported across every Bravado product.
+  </Card>
+
+  <Card title="predict.fun" icon="circle-dashed" href="/markets/predict-fun/overview">
+    Supported for a subset of Bravado products. See the coverage table before you build.
+  </Card>
+</CardGroup>
+
+## How prediction markets work
+
+The mechanics are broadly the same across venues, which is what makes a shared API possible.
+
+<Steps>
+  <Step title="A market is created">
+    An event is framed as a question with mutually exclusive outcomes — most commonly a binary YES / NO pair, though some markets have more.
+  </Step>
+  <Step title="Collateral is split into outcome tokens">
+    Depositing one unit of collateral mints one full set of outcome tokens. Because exactly one outcome can be true, a complete set is always redeemable for the original collateral.
+  </Step>
+  <Step title="Outcome tokens trade">
+    Tokens trade freely against collateral. Prices sit between 0 and 1 and behave as implied probabilities.
+  </Step>
+  <Step title="The event concludes and resolves">
+    An oracle reports the outcome on-chain. This step is not instant, and on some venues it can be disputed.
+  </Step>
+  <Step title="Winning shares redeem">
+    Holders of the winning outcome redeem at \$1 per share. Losing shares are worth nothing.
+  </Step>
+</Steps>
+
+## Product coverage by venue
+
+| Bravado product | Polymarket | predict.fun |
+| --- | --- | --- |
+| [Trade API](/products/trade-api) | Supported | *To be confirmed* |
+| [Copytrade API](/products/copytrade-api) | Supported | *To be confirmed* |
+| [Data API](/products/data-api) | Supported | *To be confirmed* |
+| [UMA API](/products/uma-api) | Supported | Not applicable |
+
+<Info>
+  predict.fun coverage is partial and the per-product rows above are intentionally left unconfirmed rather than guessed. Fill them in and the venue pages will be updated to match.
+</Info>
+
+## What differs between venues
+
+Most of the Bravado surface is venue-agnostic, but a few things are not:
+
+- **Settlement asset.** Collateral differs by venue, which changes what balances and PnL are denominated in.
+- **Resolution mechanism.** Polymarket resolves through UMA's Optimistic Oracle, including a dispute path. Other venues may resolve differently.
+- **Market microstructure.** Minimum resting order size, tick size, and notional minimums are set per venue and per market, and rejections that come from those limits are venue rules rather than Bravado errors.
+
+<Note>
+  Venue-specific constraints are documented on each venue's own pages. When a request is rejected for a reason that is not obviously a Bravado validation error, check the venue's constraints first — see [Error reference](/reference/errors).
+</Note>

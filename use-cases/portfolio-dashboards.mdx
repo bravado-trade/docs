@@ -1,7 +1,7 @@
 ---
 title: "Portfolio Dashboards and PnL Tracking"
 sidebarTitle: "Portfolio dashboards"
-description: "Build portfolio dashboards and PnL trackers for Polymarket wallets with the Bravado Analytics API."
+description: "Build portfolio dashboards and PnL trackers for Polymarket wallets with the Bravado Data API."
 icon:
   name: "chart-pie"
   library: "lucide"
@@ -13,7 +13,7 @@ Polymarket's web app shows a user their current positions and cash balance. It d
 
 ## What Bravado provides
 
-The Analytics API returns every field a full portfolio dashboard needs, on any Polymarket wallet:
+The Data API returns every field a full portfolio dashboard needs, on any Polymarket wallet:
 
 - `GET /traders/{address}/pnl` for lifetime cumulative PnL with realized and unrealized split.
 - `GET /traders/{address}/positions/active` for open positions with cost basis.
@@ -65,4 +65,4 @@ Four parallel Analytics calls, one snapshot. Cache aggressively per wallet; thes
 
 - [Guide: Build a PnL leaderboard](/guides/pnl-leaderboard)
 - [Concept: PnL methodology (PMWAS)](/concepts/pnl-methodology)
-- [Analytics API reference](/api/analytics/overview)
+- [Data API reference](/api/analytics/overview)

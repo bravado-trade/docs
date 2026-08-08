@@ -19,7 +19,7 @@ Create and manage your API keys in the [Bravado Portal](https://portal.bravadotr
   </Card>
 
   <Card title="API Reference" icon="code" href="/api/trade/overview">
-    Full endpoint reference for Trade, Copytrade, and Analytics APIs.
+    Full endpoint reference for Trade, Copytrade, and Data APIs.
   </Card>
 
   <Card title="Build with AI" icon="sparkles" href="/build-with-ai">
@@ -30,7 +30,7 @@ Create and manage your API keys in the [Bravado Portal](https://portal.bravadotr
 ## Why Bravado
 
 <CardGroup cols={3}>
-  <Card title="Eight order types" icon="arrow-left-right" href="/concepts/orders">
+  <Card title="Eight order types" icon="arrow-left-right" href="/products/trade-api">
     LIMIT, MARKET, TWAP, ICEBERG, PEGGED, STOP_LOSS, TAKE_PROFIT, and TRAILING_STOP for algorithmic strategies on thin books.
   </Card>
 
@@ -38,7 +38,7 @@ Create and manage your API keys in the [Bravado Portal](https://portal.bravadotr
     Mirror any wallet's fills with proportional, fixed, or capped sizing. No native equivalent on Polymarket.
   </Card>
 
-  <Card title="Tax-grade analytics" icon="chart-line" href="/concepts/analytics">
+  <Card title="Tax-grade analytics" icon="chart-line" href="/products/data-api">
     Wallet-level PnL under the Prediction Market Wallet Accounting Standard (PMWAS), with tax statements for realized gains.
   </Card>
 </CardGroup>
@@ -62,11 +62,11 @@ Create and manage your API keys in the [Bravado Portal](https://portal.bravadotr
 | --- | --- | --- |
 | **Trade API v2** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade` | Order execution, positions, balances, user provisioning |
 | **Copytrade API** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade` | Mirror fills from top traders with configurable sizing |
-| **Analytics API** | `https://bravado-api-k7kaq.ondigitalocean.app` | Leaderboards, wallet PnL, trade logs, tax statements |
+| **Data API** | `https://bravado-api-k7kaq.ondigitalocean.app` | Leaderboards, wallet PnL, trade logs, tax statements |
 
 ## Your first request
 
-The Analytics API is public read-only — run this with zero setup. Replace `demo` with your own key from the [portal](https://portal.bravadotrade.com/).
+The Data API is public read-only — run this with zero setup. Replace `demo` with your own key from the [portal](https://portal.bravadotrade.com/).
 
 <CodeGroup>
 
@@ -124,7 +124,7 @@ print(res.json())
     Pythonic wrapper for all three Bravado APIs.
   </Card>
 
-  <Card title="Concepts" icon="layers" href="/concepts/orders">
+  <Card title="Concepts" icon="layers" href="/products/trade-api">
     Understand order types, positions, analytics, and copy-trading.
   </Card>
 

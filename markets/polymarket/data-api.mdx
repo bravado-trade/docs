@@ -1,0 +1,40 @@
+---
+title: "Data API on Polymarket"
+sidebarTitle: "Data API"
+description: "Wallet-level PnL, leaderboards, trade logs, and tax statements for any Polymarket address, derived from on-chain Polygon settlement."
+icon:
+  name: "chart-line"
+  library: "lucide"
+---
+
+The [Data API](/products/data-api) is fully supported on Polymarket. Every figure is derived from on-chain Polygon settlement records and replayed through a share-level FIFO cost-basis engine — no off-chain estimates.
+
+It works on **any** public Polymarket address, not just wallets managed through Bravado, and the read endpoints require no funded account.
+
+## What you can query
+
+| Data | Endpoint |
+| --- | --- |
+| Performance summary | [`GET /traders/{address}`](/api/analytics/trader) |
+| Cumulative PnL series | [`GET /traders/{address}/pnl`](/api/analytics/trader-pnl) |
+| Open positions | [`GET /traders/{address}/positions/active`](/api/analytics/trader-positions-active) |
+| Closed positions | [`GET /traders/{address}/positions/closed`](/api/analytics/trader-positions-closed) |
+| Trade log | [`GET /traders/{address}/trades`](/api/analytics/trader-trades) |
+| Category breakdown | [`GET /traders/{address}/categories`](/api/analytics/trader-categories) |
+| PnL leaderboard | [`GET /leaderboard`](/api/analytics/leaderboard) |
+| Volume leaderboard | [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume) |
+| Tax summary | [`GET /traders/{address}/tax-report`](/api/analytics/trader-tax-report) |
+
+## Accounting model
+
+PnL is computed under the Prediction Market Wallet Accounting Standard (PMWAS), so cost basis is consistent across every response rather than recomputed per endpoint.
+
+<Note>
+  All numeric fields are returned as JSON **strings** to preserve decimal precision. Parse them with an arbitrary-precision type, never a float. See [Numeric conventions](/reference/numeric-conventions).
+</Note>
+
+## Related
+
+- [Data API product overview](/products/data-api)
+- [Data API endpoint reference](/api/analytics/overview)
+- [Polymarket overview](/markets/polymarket/overview)

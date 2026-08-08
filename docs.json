@@ -32,12 +32,39 @@
             ]
           },
           {
-            "group": "Concepts",
+            "group": "Supported Prediction Markets",
             "pages": [
-              "concepts/orders",
-              "concepts/positions",
-              "concepts/analytics",
-              "concepts/copytrade"
+              "markets/overview",
+              {
+                "group": "Polymarket",
+                "icon": "circle-check",
+                "pages": [
+                  "markets/polymarket/overview",
+                  "markets/polymarket/trade-api",
+                  "markets/polymarket/copytrade-api",
+                  "markets/polymarket/data-api",
+                  "markets/polymarket/uma-resolution"
+                ]
+              },
+              {
+                "group": "predict.fun",
+                "icon": "circle-dashed",
+                "pages": [
+                  "markets/predict-fun/overview",
+                  "markets/predict-fun/trade-api",
+                  "markets/predict-fun/copytrade-api",
+                  "markets/predict-fun/data-api"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Products Overview",
+            "pages": [
+              "products/data-api",
+              "products/trade-api",
+              "products/copytrade-api",
+              "products/uma-api"
             ]
           },
           {
@@ -91,7 +118,7 @@
             ]
           },
           {
-            "group": "Analytics API",
+            "group": "Data API",
             "pages": [
               "api/analytics/overview",
               "api/analytics/healthz",
@@ -117,15 +144,15 @@
         ]
       },
       {
-        "tab": "Concepts",
+        "tab": "Products",
         "groups": [
           {
-            "group": "Concepts",
+            "group": "Products",
             "pages": [
-              "concepts/orders",
-              "concepts/positions",
-              "concepts/analytics",
-              "concepts/copytrade"
+              "products/data-api",
+              "products/trade-api",
+              "products/copytrade-api",
+              "products/uma-api"
             ]
           }
         ]
@@ -204,5 +231,23 @@
       "claude"
     ],
     "display": "header"
-  }
+  },
+  "redirects": [
+    {
+      "source": "/concepts/orders",
+      "destination": "/products/trade-api"
+    },
+    {
+      "source": "/concepts/positions",
+      "destination": "/products/trade-api"
+    },
+    {
+      "source": "/concepts/analytics",
+      "destination": "/products/data-api"
+    },
+    {
+      "source": "/concepts/copytrade",
+      "destination": "/products/copytrade-api"
+    }
+  ]
 }

@@ -1,16 +1,16 @@
 ---
-title: "Trader Analytics and Performance Metrics on Bravado"
-sidebarTitle: "Analytics"
-description: "Bravado's Analytics API provides on-chain PnL metrics, leaderboards, trade history, and tax statements for any Polymarket wallet address."
+title: "Data API — Trader Analytics and Performance Metrics"
+sidebarTitle: "Data API"
+description: "The Bravado Data API provides on-chain PnL metrics, leaderboards, trade history, and tax statements for any Polymarket wallet address."
 icon:
   name: "chart-line"
   library: "lucide"
 ---
 
-Bravado's Analytics API derives all metrics directly from on-chain Polygon data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any Polymarket wallet. You can query performance data for your own wallet or any public address — useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
+Bravado's Data API derives all metrics directly from on-chain Polygon data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any Polymarket wallet. You can query performance data for your own wallet or any public address — useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
 
 <Warning>
-  All numeric fields in Analytics API responses — including PnL, volume, and prices — are returned as **JSON strings**. Always parse them as `BigDecimal` (or your language's equivalent arbitrary-precision type). Parsing as a float risks silent rounding errors on large values.
+  All numeric fields in Data API responses — including PnL, volume, and prices — are returned as **JSON strings**. Always parse them as `BigDecimal` (or your language's equivalent arbitrary-precision type). Parsing as a float risks silent rounding errors on large values.
 </Warning>
 
 ## Key metrics
