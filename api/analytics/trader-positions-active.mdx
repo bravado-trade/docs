@@ -1,0 +1,27 @@
+---
+title: "GET /traders/{address}/positions/active — Open Positions"
+sidebarTitle: "GET /traders/{address}/positions/active"
+description: "The wallet's currently open positions."
+icon:
+  name: "circle-dot"
+  library: "lucide"
+---
+
+Returns only the wallet's currently open positions. Response shape matches [/positions](/api/analytics/trader-positions).
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/positions/active
+```
+
+### Path Parameters
+
+### Response
+
+Array of position objects. See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the full schema.
+
+### Example
+
+```bash cURL
+curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../positions/active \
+  -H "Authorization: Bearer <token>"
+```

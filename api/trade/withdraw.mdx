@@ -1,0 +1,119 @@
+---
+title: "Withdraw Collateral to an External Polygon Address"
+sidebarTitle: "Withdraw"
+description: "POST /v2/trade/withdraw transfers pUSD or any ERC20 token from your deposit wallet to an external Polygon address. Requires trade.withdraw scope."
+icon:
+  name: "arrow-up-from-line"
+  library: "lucide"
+---
+
+The withdraw endpoint lets you move pUSD — or any other ERC20 token held in your deposit wallet — to an external address on Polygon. This is how you take collateral out of the Bravado system, whether to return funds to a user in a white-label integration or to bridge assets elsewhere. Withdrawals are submitted on-chain by Bravado and confirmed before the response returns in most cases.
+
+<Warning>
+  Withdrawals require the **`trade.withdraw`** scope on your API key. This scope is **not** included in `trade.execute` and must be explicitly granted. If you receive a `403 Forbidden` response, contact your Bravado integration manager to enable withdrawals on your key.
+</Warning>
+
+---
+
+## POST /v2/trade/withdraw
+
+Initiates an ERC20 transfer from your Bravado deposit wallet to a destination address on Polygon. Omit the `token` field to withdraw pUSD. Pass any ERC20 contract address in `token` to withdraw that asset instead — useful for recovering airdrops or other tokens that have accumulated in the wallet.
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+| `Content-Type` | `application/json` |
+
+### Request body
+
+<ParamField body="to" type="string" required>
+  Destination Polygon wallet address. Must be a valid checksummed or lowercase Ethereum-format address (`0x` followed by exactly 40 hex characters). Bravado does **not** validate that the destination is a smart contract; verify the address carefully before submitting.
+</ParamField>
+
+<ParamField body="amount" type="string" required>
+  Decimal amount to withdraw as a string (e.g. `"10.5"`, `"250.00"`). The value is interpreted in human-readable units — do not pass base units. For pUSD this is a dollar amount; for other tokens the unit matches the token's standard denomination.
+</ParamField>
+
+<ParamField body="token" type="string">
+  ERC20 contract address of the token to withdraw. Omit this field to withdraw pUSD (the default). To withdraw any other token, pass its Polygon contract address — you can find the address in the `token` field returned by `GET /v2/trade/balances/withdrawable`.
+</ParamField>
+
+### Response
+
+<ResponseField name="transaction_hash" type="string">
+  Polygon transaction hash of the on-chain transfer. Present as soon as the transaction is broadcast.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  Transaction confirmation state. `STATE_CONFIRMED` means the transaction was included in a block within the latency budget. `STATE_PENDING` means it was broadcast but not yet confirmed — reconcile via `GET /v2/trade/activity`.
+</ResponseField>
+
+<ResponseField name="to" type="string">
+  Echo of the destination address.
+</ResponseField>
+
+<ResponseField name="amount" type="string">
+  Echo of the amount submitted.
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  Contract address of the token withdrawn. Returns the pUSD contract address even when the `token` field was omitted in the request.
+</ResponseField>
+
+<Note>
+  If the on-chain transaction does not confirm within the Bravado latency budget, the response returns `state: "STATE_PENDING"` along with the broadcast `transaction_hash`. The transfer is still in flight — poll `GET /v2/trade/activity?type=WITHDRAW` and match on `transaction_hash` to confirm the final outcome. Do not resubmit with the same `Idempotency-Key`.
+</Note>
+
+### Example
+
+<CodeGroup>
+
+```json Request — withdraw pUSD
+// POST /v2/trade/withdraw
+// Idempotency-Key: e1f2a3b4-c5d6-7890-4efa-890123456710
+
+{
+  "to": "0xDestination...aabbccdd",
+  "amount": "250.00"
+}
+```
+
+```json Response — confirmed
+{
+  "transaction_hash": "0xtxhash...withdraw01",
+  "state": "STATE_CONFIRMED",
+  "to": "0xDestination...aabbccdd",
+  "amount": "250.00",
+  "token": "0xpUSDcontract...1111"
+}
+```
+
+```json Request — withdraw specific ERC20
+// POST /v2/trade/withdraw
+// Idempotency-Key: f2a3b4c5-d6e7-8901-5fab-901234567811
+
+{
+  "to": "0xDestination...aabbccdd",
+  "amount": "50.00",
+  "token": "0xUSDCeContract...2222"
+}
+```
+
+```json Response — pending
+{
+  "transaction_hash": "0xtxhash...withdraw02",
+  "state": "STATE_PENDING",
+  "to": "0xDestination...aabbccdd",
+  "amount": "50.00",
+  "token": "0xUSDCeContract...2222"
+}
+```
+
+</CodeGroup>
+
+<Tip>
+  Before withdrawing, call `GET /v2/trade/balances/withdrawable` to see available balances and confirm the exact `token` contract address for any non-pUSD asset. Sending to the wrong address or an unsupported token address is irreversible.
+</Tip>

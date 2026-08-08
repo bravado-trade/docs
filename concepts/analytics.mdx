@@ -1,0 +1,156 @@
+---
+title: "Trader Analytics and Performance Metrics on Bravado"
+sidebarTitle: "Analytics"
+description: "Bravado's Analytics API provides on-chain PnL metrics, leaderboards, trade history, and tax statements for any Polymarket wallet address."
+icon: "line-chart"
+---
+
+Bravado's Analytics API derives all metrics directly from on-chain Polygon data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any Polymarket wallet. You can query performance data for your own wallet or any public address — useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
+
+<Warning>
+  All numeric fields in Analytics API responses — including PnL, volume, and prices — are returned as **JSON strings**. Always parse them as `BigDecimal` (or your language's equivalent arbitrary-precision type). Parsing as a float risks silent rounding errors on large values.
+</Warning>
+
+## Key metrics
+
+<CardGroup cols={2}>
+  <Card title="Realized PnL">
+    Cashflow-based net profit after fees, computed over the full position lifecycle including trades, splits, merges, redemptions, and market resolutions. Splits and merges are correctly excluded from volume inflation.
+  </Card>
+
+  <Card title="Unrealized PnL">
+    Open position shares marked to the latest CLOB midpoint prices. Updates in real time as market prices move.
+  </Card>
+
+  <Card title="Volume">
+    USDC notional traded, filtered to exclude CTF split, merge, and redeem transactions. This gives you true trading volume, not inflated on-chain throughput.
+  </Card>
+
+  <Card title="Win rate">
+    Closed-position stats at the outcome level — a position is a "win" if it closed with positive realized PnL. Calculated independently of position size.
+  </Card>
+</CardGroup>
+
+## The `window` parameter
+
+All analytics endpoints accept a `?window=` query parameter that controls the rolling lookback period for returned metrics.
+
+| Value | Description |
+| --- | --- |
+| `1h` | Last 1 hour |
+| `4h` | Last 4 hours |
+| `24h` | Last 24 hours (default for leaderboard endpoints) |
+| `7d` | Last 7 days |
+| `30d` | Last 30 days |
+| `90d` | Last 90 days |
+| `365d` | Last 365 days |
+| `all` | All-time |
+
+**What the window affects:** PnL, volume, and trade counts use daily or hourly rollups that respect the window boundary. Windowed queries are fast because they aggregate pre-computed buckets.
+
+**What the window does not affect:** Fee totals, streak metadata, and drawdown statistics are always computed all-time regardless of the `window` value. This is by design — these metrics are meaningless when truncated to a short window.
+
+```bash
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b?window=30d
+```
+
+<Note>
+  Wallet addresses are matched **case-insensitively**. You can supply a checksummed or lowercase Polygon EOA address and receive the same result.
+</Note>
+
+## Leaderboards
+
+Bravado maintains two live leaderboards ranked by the `window` you specify:
+
+<Tabs>
+  <Tab title="PnL leaderboard">
+    Returns traders ranked by realized PnL over the selected window.
+
+    ```bash
+    GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard?window=24h
+    ```
+  </Tab>
+  <Tab title="Volume leaderboard">
+    Returns traders ranked by USDC trading volume over the selected window. CTF infrastructure transactions are excluded.
+
+    ```bash
+    GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume?window=7d
+    ```
+  </Tab>
+</Tabs>
+
+## Trader profile
+
+The trader endpoints return comprehensive performance data for a single wallet across all markets.
+
+```bash
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}?window=30d
+```
+
+The response includes:
+
+| Field | Description |
+| --- | --- |
+| `realized_pnl` | Net closed-position profit after fees |
+| `unrealized_pnl` | Mark-to-market open position value minus cost |
+| `volume` | USDC notional traded in the window |
+| `trade_count` | Number of individual fills |
+| `win_rate` | Fraction of closed positions that were profitable |
+| `open_positions` | Count of currently active positions |
+| `current_streak` | Consecutive winning (positive) or losing (negative) closed positions |
+| `max_drawdown` | Largest peak-to-trough equity decline, all-time |
+| `biggest_win` | Highest single-position realized PnL, all-time |
+| `biggest_loss` | Largest single-position realized loss, all-time |
+
+Additional per-wallet endpoints:
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /traders/{address}/pnl` | PnL breakdown over the selected window |
+| `GET /traders/{address}/positions` | All positions (open and closed) for the wallet |
+| `GET /traders/{address}/trades` | Individual trade history |
+| `GET /traders/{address}/categories` | Performance grouped by market category |
+| `GET /traders/{address}/metrics` | Aggregate performance metrics |
+| `GET /traders/{address}/statements` | Full accounting statement for the wallet |
+| `GET /traders/{address}/reconciliation` | On-chain data reconciliation report |
+| `GET /traders/{address}/tax-report` | Downloadable tax report for the wallet |
+
+## Tax statements
+
+Bravado generates formal accounting documents for tax reporting and financial reconciliation. Each statement type covers a specific aspect of wallet activity.
+
+<Accordion title="Dispositions (Form 8949-style)">
+  Lists every closed position as a disposition row with acquisition date, disposal date, proceeds, cost basis, gain/loss, and holding-period term (`SHORT` for positions held ≤ 365 days, `LONG` for positions held \> 365 days). Formatted to mirror IRS Form 8949 for US taxpayers.
+</Accordion>
+
+<Accordion title="Income">
+  Itemizes non-trade income received by the wallet: liquidity rewards, maker rebates, and referral bonuses. Each line includes the on-chain transaction hash and USDC amount.
+</Accordion>
+
+<Accordion title="Open positions">
+  A point-in-time snapshot of all open positions — share balances, cost bases, mark prices, and unrealized PnL. Useful for year-end Schedule D footnotes.
+</Accordion>
+
+<Accordion title="Capital flows">
+  A chronological log of deposits into and withdrawals from the wallet. Distinguishes between USDC.e and pUSD flows.
+</Accordion>
+
+<Accordion title="Performance metrics">
+  Quantitative performance summary:
+
+  | Metric | Description |
+  | --- | --- |
+  | **TWR** | Time-weighted return — eliminates the effect of capital inflows/outflows |
+  | **MWR** | Money-weighted return (IRR) — accounts for the timing and size of capital flows |
+  | **NAV** | Net asset value at the statement date |
+  | **ROI** | Simple return on invested capital |
+  | **Win rate** | Closed-position win percentage |
+</Accordion>
+
+<Accordion title="Reconciliation certificate">
+  A machine-verifiable certificate that confirms the on-chain data used to generate statements is complete and consistent. Include this with any professional tax filing for auditability.
+</Accordion>
+
+```bash
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/tax-report?window=365d
+```

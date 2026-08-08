@@ -1,0 +1,42 @@
+---
+title: "GET /traders/{address}/usdc-balance — On-Chain USDC Balance"
+sidebarTitle: "GET /traders/{address}/usdc-balance"
+description: "Current on-chain USDC collateral balance for a Polygon wallet."
+icon:
+  name: "dollar-sign"
+  library: "lucide"
+---
+
+Returns the wallet's current on-chain USDC collateral balance on Polygon.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/usdc-balance
+```
+
+### Path Parameters
+
+### Response
+
+     
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../usdc-balance \
+  -H "Authorization: Bearer <token>"
+```
+
+```json Response
+{
+  "address": "0xabc...",
+  "balance": "4200000000",
+  "balance_usdc": "4200.000000",
+  "fetched_at": "2025-01-15T12:00:00Z",
+  "token_contract": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+  "token_symbol": "USDC"
+}
+```
+
+</CodeGroup>

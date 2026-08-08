@@ -1,0 +1,124 @@
+---
+title: "Bravado Analytics API — Polymarket Trader Data Overview"
+sidebarTitle: "Overview"
+description: "The Bravado Analytics API provides on-chain PnL metrics, leaderboards, positions, trade logs, and formal tax statements for Polymarket wallets."
+icon:
+  name: "book-open"
+  library: "lucide"
+---
+
+The Bravado Analytics API surfaces trader performance data derived entirely from on-chain Polygon settlement records. Every PnL figure, position valuation, and fee total is calculated by a share-level FIFO cost-basis engine that replays each wallet's full transaction history — no off-chain estimates or manual adjustments. The base URL for all endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
+
+## Authentication
+
+All endpoints (except `/healthz`) require a Bearer token in the `Authorization` header.
+
+```http
+Authorization: Bearer <token>
+```
+
+## All Endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | [`/healthz`](/api/analytics/healthz) | Liveness probe |
+| GET | [`/leaderboard`](/api/analytics/leaderboard) | PnL leaderboard by rolling window |
+| GET | [`/leaderboard/volume`](/api/analytics/leaderboard-volume) | Volume leaderboard |
+| GET | [`/traders/{address}`](/api/analytics/trader) | Trader profile and performance summary |
+| GET | [`/traders/{address}/pnl`](/api/analytics/trader-pnl) | Cumulative PnL time series |
+| GET | [`/traders/{address}/positions`](/api/analytics/trader-positions) | All positions (open \+ closed) |
+| GET | [`/traders/{address}/positions/active`](/api/analytics/trader-positions-active) | Active positions only |
+| GET | [`/traders/{address}/positions/closed`](/api/analytics/trader-positions-closed) | Closed positions only |
+| GET | [`/traders/{address}/trades`](/api/analytics/trader-trades) | Trade log |
+| GET | [`/traders/{address}/categories`](/api/analytics/trader-categories) | Per-category PnL and volume |
+| GET | [`/traders/{address}/usdc-balance`](/api/analytics/trader-usdc-balance) | On-chain collateral balance |
+| GET | [`/traders/{address}/statements`](/api/analytics/trader-statements) | Full §20 formal accounting statement |
+| GET | [`/traders/{address}/statements/r1`](/api/analytics/trader-statements-r1) | Form-8949-style disposition rows |
+| GET | [`/traders/{address}/metrics`](/api/analytics/trader-metrics) | Performance and fee metrics |
+| GET | [`/traders/{address}/reconciliation`](/api/analytics/trader-reconciliation) | Reconciliation certificate |
+| GET | [`/traders/{address}/tax-report`](/api/analytics/trader-tax-report) | Per-year tax summary |
+| GET | [`/entity/{owner}`](/api/analytics/entity) | Multi-wallet entity rollup |
+| GET | [`/trades`](/api/analytics/trades) | Trade log by wallet address (query param) |
+
+## PnL Model
+
+Understanding how Bravado calculates PnL helps you interpret every number returned by the API.
+
+**Realized PnL** uses a cashflow model: proceeds from selling or redeeming shares minus the original cost to acquire them, net of fees, accounting for the full position lifecycle including partial closes and market resolution.
+
+**Unrealized PnL** marks open position shares at the latest available token prices from on-chain data. This figure changes continuously as market prices move.
+
+**Fees** are always reported gross — as a separate line item — regardless of whether you request `basis=net`. Net basis adjusts `realized_pnl` and `total_pnl` for fee impact, but the `fees` and `total_fees` fields always show the raw fee total.
+
+**Income** (maker rebates, liquidity rewards, referral rewards) is a separate line that is never netted into PnL. Use the `income` parameter to control how much detail you receive.
+
+## Common Query Parameters
+
+The following parameters are accepted by multiple endpoints across the API.
+
+<ParamField query="window" default="all" type="string">
+  Rolling time window for metric calculation. Accepted values: `1h`, `4h`, `24h`, `7d`, `30d`, `90d`, `365d`, `all`.
+</ParamField>
+
+<ParamField query="basis" default="net" type="string">
+  Cost basis presentation. `net` deducts fees from realized PnL; `gross` excludes fee adjustments from PnL figures. The `fees` field is always populated regardless.
+</ParamField>
+
+<ParamField query="income" default="total" type="string">
+  Income line-item detail. `total` returns a single aggregated income figure; `detail` breaks income into `maker_rebate`, `reward_income`, and `liquidity_reward`; `none` omits income entirely. The `detail` option is available on all-time queries only.
+</ParamField>
+
+## Numeric Types
+
+All monetary values (PnL, volume, prices, balances) are returned as **JSON strings** to preserve decimal precision. Parse them with an arbitrary-precision decimal library before performing arithmetic.
+
+```json
+{
+  "realized_pnl": "1842.503291",
+  "fees": "24.110000"
+}
+```
+
+## Wallet Addresses
+
+All `{address}` path parameters accept Polygon EOA addresses in `0x…` format. Matching is **case-insensitive** — you may pass checksummed or lowercase addresses interchangeably.
+
+## Timestamps
+
+Timestamp fields are **Unix seconds integers** unless the field name indicates otherwise (for example, fields ending in `_at` may be RFC 3339 strings). Check individual endpoint documentation for field-level details.
+
+## Errors
+
+All error responses follow a consistent shape with an appropriate HTTP status code.
+
+```json
+{
+  "error": "wallet not found"
+}
+```
+
+Common status codes:
+
+| Status | Meaning |
+| --- | --- |
+| `400` | Bad request — invalid parameter value |
+| `401` | Missing or invalid Bearer token |
+| `404` | Resource not found (wallet has no recorded activity) |
+| `503` | Data not yet available for this wallet — retry in a few minutes |
+
+## Liveness Probe
+
+You can verify API availability without authentication using the health endpoint.
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/healthz
+```
+
+```json
+{
+  "ok": true,
+  "ts": "2025-01-15T12:00:00Z"
+}
+```
+
+`ts` is an RFC 3339 UTC timestamp. This endpoint requires no `Authorization` header and returns `200` when the service is healthy.

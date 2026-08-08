@@ -1,0 +1,68 @@
+---
+title: "Bravado API Docs — Prediction Market Infrastructure"
+sidebarTitle: "Home"
+description: "REST APIs for Polymarket trading on Polygon. Execute orders, mirror top traders via copy-trading, and generate analytics and tax statements."
+---
+
+Bravado gives partners and developers programmatic access to Polymarket trading through a suite of REST APIs. Place sophisticated orders, mirror top traders, analyze wallet performance, and generate tax-ready statements, all from a single authenticated integration.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Make your first API call in under 5 minutes
+  </Card>
+
+  <Card title="Authentication" icon="key" href="/authentication">
+    Get your API key and authenticate requests
+  </Card>
+
+  <Card title="Place an Order" icon="arrow-up-right" href="/guides/place-an-order">
+    Buy and sell outcome tokens on Polymarket
+  </Card>
+
+  <Card title="API Reference" icon="code" href="/api/trade/overview">
+    Full endpoint reference for all three APIs
+  </Card>
+</CardGroup>
+
+## What you can build
+
+<CardGroup cols={3}>
+  <Card title="Trading Bots" icon="robot" href="/concepts/orders">
+    Automate strategies with TWAP, iceberg, pegged, and bracket orders
+  </Card>
+
+  <Card title="Copy Trading" icon="copy" href="/concepts/copytrade">
+    Mirror top traders automatically with configurable sizing
+  </Card>
+
+  <Card title="Analytics Dashboards" icon="chart-line" href="/concepts/analytics">
+    Surface leaderboards, PnL charts, and wallet profiles
+  </Card>
+</CardGroup>
+
+## APIs at a glance
+
+Bravado exposes three APIs that work together:
+
+| API | Base URL | What it does |
+| --- | --- | --- |
+| **Trade API v2** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade` | Order execution, balances, positions, user provisioning |
+| **Copytrade API** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade` | Subscribe to leaders, mirror fills, paper-trade |
+| **Analytics API** | `https://bravado-api-k7kaq.ondigitalocean.app` | Leaderboards, trader profiles, PnL series, tax statements |
+
+## Get started
+
+<Steps>
+  <Step title="Get your API key">
+    Contact the Bravado team to receive your `Bearer` token and onboarding credentials.
+  </Step>
+  <Step title="Verify your account">
+    Call `GET /v2/trade/account` to confirm your credentials and inspect your wallet address, scopes, and rate limits.
+  </Step>
+  <Step title="Place your first order">
+    Send a `POST /v2/trade/order` with `type: "MARKET"` to buy shares in any Polymarket outcome token.
+  </Step>
+  <Step title="Explore advanced features">
+    Add bracket orders, set up copy-trading, or pull analytics to build richer product experiences.
+  </Step>
+</Steps>

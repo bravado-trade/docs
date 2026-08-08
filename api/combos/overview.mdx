@@ -1,0 +1,56 @@
+---
+title: "Combos API — Multi-Leg Parlay Trading on Bravado"
+sidebarTitle: "Overview"
+description: "The Bravado Combos API lets you buy multi-leg parlay positions across 2–10 markets via RFQ. Requires the trade.combos scope to quote, accept, and redeem."
+icon:
+  name: "book-open"
+  library: "lucide"
+---
+
+Combos are multi-leg parlays — a single position that pays out only if every selected market resolves in your favor. Instead of placing separate orders across multiple markets, you submit a single combo order that bundles 2–10 YES outcome legs into one on-chain position. This API uses a Request-for-Quote (RFQ) model, meaning every price you receive is a firm, live quote from a real maker counterparty. To use the Combos API, your token must carry the `trade.combos` scope.
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/v2/trade/combo/quote` | Request an RFQ quote for 2–10 legs |
+| POST | `/v2/trade/combo/accept` | Accept a live quote and execute on-chain |
+| POST | `/v2/trade/combo/redeem` | Redeem a resolved-win combo to pUSD |
+| GET | `/v2/trade/combo/positions` | List the user's combo positions |
+
+## RFQ model
+
+The Combos API is built on a Request-for-Quote flow. When you call `/combo/quote`, a real maker counterparty prices the blended position and returns a firm quote — not an estimate or a simulated midpoint. That quote is valid for approximately **8.5 seconds** from the time it is issued.
+
+You must call `/combo/accept` before the `expires_at` timestamp in the quote response. If you wait too long, the API returns a `410 QUOTE_EXPIRED` error. When that happens, **re-quote rather than retrying the stale accept** — the underlying market prices may have moved, and the maker needs to re-price the position.
+
+```
+POST /combo/quote  →  POST /combo/accept (within ~8.5 s)  →  (event resolves)  →  POST /combo/redeem
+```
+
+## Key units
+
+| Field | Unit | Example |
+|-------|------|---------|
+| `leg_position_ids` | 2–10 YES position token IDs | `["7248…", "9931…"]` |
+| `notional_usd` | US dollars to spend | `5` |
+| `price_cents` (response) | Cents per blended YES share | `2` |
+| `taker_shares` (response) | Combo shares you receive | `66.5` |
+| `payout_usd` (redeem response) | pUSD paid out on win | `50` |
+
+<Note>
+All numeric fields in API responses are returned as JSON strings, not numbers. Parse them accordingly before performing arithmetic.
+</Note>
+
+## Combo positions
+
+After a combo is accepted on-chain, it appears in `GET /combo/positions` with one of four status values:
+
+| Status | Meaning |
+|--------|---------|
+| `OPEN` | All legs are still active and unresolved |
+| `PARTIAL` | One or more legs have resolved (win so far) |
+| `RESOLVED_WIN` | Every leg resolved in your favor — eligible for redeem |
+| `RESOLVED_LOSS` | At least one leg resolved against you — position is worthless |
+
+Use the `combo_position_id` returned from `/combo/positions` when calling `/combo/redeem` if you did not retain the original `combo_order_id` from `/combo/accept`.

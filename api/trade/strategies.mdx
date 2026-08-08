@@ -1,0 +1,193 @@
+---
+title: "Managed Strategies API — TWAP, Iceberg, Pegged, Stops"
+sidebarTitle: "Strategies"
+description: "List and cancel long-running managed order strategies — TWAP, Iceberg, Pegged, Stop-Loss, and Trailing Stop — on the Bravado Trade API v2."
+icon:
+  name: "target"
+  library: "lucide"
+---
+
+When you submit a `PEGGED`, `TWAP`, `ICEBERG`, `STOP_LOSS`, or `TRAILING_STOP` order, Bravado returns a `record_id` instead of (or in addition to) a CLOB `order_id`. These long-running strategy records are tracked separately from the CLOB order book. Use the strategies endpoints to monitor their lifecycle and cancel them before they complete or trigger.
+
+---
+
+## GET /v2/trade/strategies
+
+Returns all managed strategy records on your account. You can filter by status to focus on live strategies or review historical executions.
+
+### Query parameters
+
+<ParamField query="status" type="string">
+  Filter by strategy status. Accepted values:
+  - `ACTIVE` — currently executing or waiting to trigger.
+  - `PAUSED` — temporarily halted (e.g. a PEGGED order repricing).
+  - `COMPLETED` — fully filled or resolved.
+  - `CANCELED` — manually cancelled via this API.
+  - `ERROR` — terminated due to an execution error.
+</ParamField>
+
+### Response
+
+<ResponseField name="strategies" type="array">
+  Array of strategy objects.
+
+  <Expandable title="strategy fields">
+    <ResponseField name="id" type="string">
+      The `record_id` of this strategy. Use this value with `DELETE /v2/trade/strategies/{id}`.
+    </ResponseField>
+    <ResponseField name="type" type="string">
+      Strategy type: `PEGGED` | `TWAP` | `ICEBERG` | `STOP_LOSS` | `TRAILING_STOP`.
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      Current lifecycle status: `ACTIVE` | `PAUSED` | `COMPLETED` | `CANCELED` | `ERROR`.
+    </ResponseField>
+    <ResponseField name="side" type="string">
+      `"buy"` or `"sell"`.
+    </ResponseField>
+    <ResponseField name="token_id" type="string">
+      Outcome token address this strategy operates on.
+    </ResponseField>
+    <ResponseField name="condition_id" type="string">
+      Polymarket condition ID. Present for `PEGGED` and stop orders.
+    </ResponseField>
+    <ResponseField name="total_size" type="string">
+      Total shares targeted by this strategy.
+    </ResponseField>
+    <ResponseField name="filled_size" type="string">
+      Shares filled so far across all child orders.
+    </ResponseField>
+    <ResponseField name="price" type="string">
+      Reference or limit price as a decimal probability. For stops, this is the trigger price.
+    </ResponseField>
+    <ResponseField name="trailing_offset_pct" type="string">
+      Trail distance as a percentage. Present for `TRAILING_STOP` strategies only.
+    </ResponseField>
+    <ResponseField name="high_water_mark" type="string">
+      Current high-water mark price tracked by a `TRAILING_STOP`.
+    </ResponseField>
+    <ResponseField name="created_at" type="string">
+      ISO 8601 timestamp when the strategy was created.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Note>
+  Pre-trigger `STOP_LOSS` and `TRAILING_STOP` strategies only appear here on `/strategies`. Once a stop triggers, Bravado places a CLOB order and you can also see it on `GET /v2/trade/orders/open` with `is_stop_loss: true`.
+</Note>
+
+### Example
+
+```json
+{
+  "strategies": [
+    {
+      "id": "rec_twap_abc123",
+      "type": "TWAP",
+      "status": "ACTIVE",
+      "side": "buy",
+      "token_id": "0xtoken...abcd",
+      "condition_id": null,
+      "total_size": null,
+      "filled_size": "312.50",
+      "price": null,
+      "trailing_offset_pct": null,
+      "high_water_mark": null,
+      "created_at": "2025-01-15T10:00:00Z"
+    },
+    {
+      "id": "rec_stop_def456",
+      "type": "STOP_LOSS",
+      "status": "ACTIVE",
+      "side": "sell",
+      "token_id": "0xtoken...abcd",
+      "condition_id": null,
+      "total_size": "500",
+      "filled_size": "0",
+      "price": "0.45",
+      "trailing_offset_pct": null,
+      "high_water_mark": null,
+      "created_at": "2025-01-15T11:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## DELETE /v2/trade/strategies/{id}
+
+Cancels a managed strategy by its `record_id`. The operation is idempotent — cancelling an already-terminal strategy (`COMPLETED`, `CANCELED`, `ERROR`) returns the current record without error.
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The `record_id` of the strategy to cancel (e.g. `rec_twap_abc123`).
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  The strategy record ID.
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Strategy type.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Final status after the cancellation attempt — `CANCELED` on success, or the existing terminal status if already complete.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```http Request
+DELETE /v2/trade/strategies/rec_twap_abc123
+Authorization: Bearer <token>
+Idempotency-Key: c9d0e1f2-a3b4-5678-2cde-678901234508
+```
+
+```json Response
+{
+  "id": "rec_twap_abc123",
+  "type": "TWAP",
+  "status": "CANCELED"
+}
+```
+
+</CodeGroup>
+
+<Warning>
+  A `STOP_LOSS` strategy can only be cancelled while it is in the `ACTIVE` (pre-trigger) state. Once the trigger price is hit, Bravado places a CLOB order and the strategy transitions to `COMPLETED`. To cancel the resulting order, use `DELETE /v2/trade/orders/{order_id}` with the `order_id` returned by `GET /v2/trade/orders/open` (look for `is_stop_loss: true`).
+</Warning>
+
+---
+
+## Where to find each order type
+
+Different order types surface on different endpoints depending on their current state. Use this table to locate any order after submission:
+
+| Order Type | Returns on submission | Live tracking endpoint |
+|---|---|---|
+| `LIMIT` | `order_id` | `GET /v2/trade/orders/open` |
+| `MARKET` | `order_id` | (fills immediately; check `/activity`) |
+| `TAKE_PROFIT` | `order_id` | `GET /v2/trade/orders/open` (`is_take_profit: true`) |
+| `STOP_LOSS` (pre-trigger) | `record_id` | `GET /v2/trade/strategies` only |
+| `STOP_LOSS` (triggered) | `record_id` | `GET /v2/trade/orders/open` (`is_stop_loss: true`) |
+| `TRAILING_STOP` | `record_id` | `GET /v2/trade/strategies` |
+| `TWAP` | `record_id` | `GET /v2/trade/strategies` |
+| `ICEBERG` (parent) | `record_id` | `GET /v2/trade/strategies` |
+| `ICEBERG` (active slice) | child `order_id` | `GET /v2/trade/orders/open` |
+| `PEGGED` | `record_id` | `GET /v2/trade/strategies` |
+
+<Tip>
+  For bracket orders (take-profit or stop-loss attached to a LIMIT/MARKET parent), the `brackets` field on the parent order response contains both the `order_id` for the take-profit resting order and the `record_id` for the stop-loss strategy.
+</Tip>

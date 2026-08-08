@@ -1,0 +1,72 @@
+---
+title: "GET /traders/{address}/pnl — Cumulative PnL Time Series"
+sidebarTitle: "GET /traders/{address}/pnl"
+description: "Cumulative PnL time series for a wallet, suitable for plotting an equity curve."
+icon:
+  name: "trending-up"
+  library: "lucide"
+---
+
+Returns a cumulative PnL time series for the wallet, suitable for plotting an equity curve.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/pnl
+```
+
+### Path Parameters
+
+### Query Parameters
+
+<ParamField query="window" default="30d" type="string">
+  Time range. Accepted values: `1h`, `4h`, `24h`, `7d`, `30d`, `90d`, `365d`, `all`.
+</ParamField>
+
+<ParamField query="pnl_type" default="overall" type="string">
+  `realized` for the running realized-only curve; `unrealized` for current open-position marks; `overall` for the realized curve with current unrealized value appended.
+</ParamField>
+
+### Response
+
+  
+
+<ResponseField name="series" type="array">
+  <Expandable title="Series point fields">
+    <ResponseField name="ts" type="integer">
+      Unix timestamp.
+    </ResponseField>
+
+    <ResponseField name="pnl" type="string">
+      Cumulative PnL at this timestamp, decimal string USDC.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Note>
+  `pnl_type=unrealized` returns only a single data point representing the current snapshot. Use `overall` to get the full realized curve with current unrealized as the terminal point.
+</Note>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../pnl \
+  -H "Authorization: Bearer <token>" \
+  -d window=30d \
+  -d pnl_type=overall
+```
+
+```json Response (abbreviated)
+{
+  "trader": "0xabc...",
+  "window": "30d",
+  "pnl_type": "overall",
+  "series": [
+    { "ts": 1734307200, "pnl": "0.000000" },
+    { "ts": 1734393600, "pnl": "142.500000" },
+    { "ts": 1736899200, "pnl": "3630.550000" }
+  ]
+}
+```
+
+</CodeGroup>

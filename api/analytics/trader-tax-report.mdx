@@ -1,0 +1,88 @@
+---
+title: "GET /traders/{address}/tax-report — Per-Year Tax Summary"
+sidebarTitle: "GET /traders/{address}/tax-report"
+description: "Per-calendar-year tax summary with short-term and long-term capital gains and income breakdown."
+icon:
+  name: "receipt"
+  library: "lucide"
+---
+
+Returns a per-calendar-year tax summary with short-term and long-term capital gains, income by kind, and capital flow totals.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/tax-report
+```
+
+### Path Parameters
+
+### Query Parameters
+
+ 
+
+### Response
+
+An array of per-year summary objects (or a single object when `year` is specified).
+
+<ResponseField name="short_term" type="object">
+  <Expandable title="Short-term fields">
+    <ResponseField name="count" type="integer">
+      Number of short-term dispositions.
+    </ResponseField>
+
+    <ResponseField name="proceeds_uusdc" type="string">
+      Total proceeds.
+    </ResponseField>
+
+    <ResponseField name="cost_uusdc" type="string">
+      Total cost basis.
+    </ResponseField>
+
+    <ResponseField name="gain_loss_uusdc" type="string">
+      Net short-term gain or loss.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="long_term" type="object">
+  <Expandable title="Long-term fields">
+    <ResponseField name="count" type="integer">
+      Number of long-term dispositions.
+    </ResponseField>
+
+    <ResponseField name="proceeds_uusdc" type="string">
+      Total proceeds.
+    </ResponseField>
+
+    <ResponseField name="cost_uusdc" type="string">
+      Total cost basis.
+    </ResponseField>
+
+    <ResponseField name="gain_loss_uusdc" type="string">
+      Net long-term gain or loss.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+     
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../tax-report \
+  -H "Authorization: Bearer <token>" \
+  -d year=2024
+```
+
+```json Response
+{
+  "year": 2024,
+  "short_term": { "count": 118, "gain_loss_uusdc": "13300000000" },
+  "long_term": { "count": 14, "gain_loss_uusdc": "2600000000" },
+  "fees_uusdc": "3200000000",
+  "net_taxable_uusdc": "15900000000"
+}
+```
+
+</CodeGroup>

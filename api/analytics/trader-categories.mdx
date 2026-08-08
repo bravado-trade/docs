@@ -1,0 +1,50 @@
+---
+title: "{get} /traders/{address}/categories — Per-Category Breakdown"
+sidebarTitle: "GET /traders/{address}/categories"
+description: "Per-category PnL and volume breakdown for the wallet."
+icon:
+  name: "tags"
+  library: "lucide"
+---
+
+Returns per-category PnL and volume breakdown for the wallet.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/categories
+```
+
+### Path Parameters
+
+### Query Parameters
+
+<ParamField query="window" default="all" type="string">
+  Rolling time window. Accepted values: `1h`, `4h`, `24h`, `7d`, `30d`, `90d`, `365d`, `all`.
+</ParamField>
+
+### Response
+
+An array of category breakdown objects.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../categories \
+  -H "Authorization: Bearer <token>" \
+  -d window=90d
+```
+
+```json Response (abbreviated)
+[
+  {
+    "category": "Politics",
+    "realized_pnl": "2100.440000",
+    "volume_usdc": "18400.000000",
+    "trades": 210,
+    "win_rate": "0.7123"
+  }
+]
+```
+
+</CodeGroup>

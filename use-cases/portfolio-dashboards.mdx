@@ -1,0 +1,66 @@
+---
+title: "Portfolio Dashboards and PnL Tracking"
+sidebarTitle: "Portfolio dashboards"
+description: "Build portfolio dashboards and PnL trackers for Polymarket wallets with the Bravado Analytics API."
+icon: "pie-chart"
+---
+
+## The problem
+
+Polymarket's web app shows a user their current positions and cash balance. It does not show cumulative PnL over time, cost basis, category exposure, or realized vs. unrealized breakdowns. Traders who want any of that must either export CSVs or build it themselves.
+
+## What Bravado provides
+
+The Analytics API returns every field a full portfolio dashboard needs, on any Polymarket wallet:
+
+- `GET /traders/{address}/pnl` for lifetime cumulative PnL with realized and unrealized split.
+- `GET /traders/{address}/positions/active` for open positions with cost basis.
+- `GET /traders/{address}/positions/closed` for realized dispositions.
+- `GET /traders/{address}/categories` for exposure by category (sports, politics, crypto, etc.).
+- `GET /traders/{address}/metrics` for win rate, average hold time, and other summary stats.
+
+All PnL numbers are computed under [PMWAS](/concepts/pnl-methodology), so cost basis is consistent across every response.
+
+## Worked example
+
+Assemble a portfolio snapshot for a wallet in a single function:
+
+```python
+import os, requests, concurrent.futures
+
+API = "https://bravado-api-k7kaq.ondigitalocean.app"
+H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+
+def snapshot(addr):
+    def fetch(path):
+        return requests.get(f"{API}{path}", headers=H).json()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+        pnl = ex.submit(fetch, f"/traders/{addr}/pnl")
+        positions = ex.submit(fetch, f"/traders/{addr}/positions/active?limit=100")
+        categories = ex.submit(fetch, f"/traders/{addr}/categories")
+        metrics = ex.submit(fetch, f"/traders/{addr}/metrics")
+
+    return {
+        "pnl": pnl.result(),
+        "positions": positions.result(),
+        "categories": categories.result(),
+        "metrics": metrics.result(),
+    }
+
+print(snapshot("0xabc..."))
+```
+
+Four parallel Analytics calls, one snapshot. Cache aggressively per wallet; these responses are cheap to compute server-side but not free.
+
+## Product patterns
+
+- **Self-service.** User connects their wallet, sees their own dashboard. No auth beyond wallet address.
+- **Multi-wallet.** Watchlist of wallets. Great for portfolio managers.
+- **Comparative.** Two wallets side by side, useful for followers evaluating whether to copy-trade a leader.
+
+## Related
+
+- [Guide: Build a PnL leaderboard](/guides/pnl-leaderboard)
+- [Concept: PnL methodology (PMWAS)](/concepts/pnl-methodology)
+- [Analytics API reference](/api/analytics/overview)

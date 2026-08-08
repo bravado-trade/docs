@@ -1,0 +1,567 @@
+---
+title: "Place and Cancel Orders via the Bravado Trade API v2"
+sidebarTitle: "Orders"
+description: "Place single and batch Polymarket orders — LIMIT, MARKET, TWAP, ICEBERG, PEGGED, and stop variants — and cancel them via the Bravado API."
+icon:
+  name: "shopping-cart"
+  library: "lucide"
+---
+
+The order endpoints let you place, inspect, and cancel orders on the Polymarket CLOB. A single `POST /v2/trade/order` call handles every order type — from a simple limit order to a multi-hour TWAP execution — using a unified request shape. Cancellation endpoints give you granular control to remove one order, a targeted batch, or every open order at once.
+
+---
+
+## POST /v2/trade/order
+
+Places a single order. The `type` field selects the execution strategy; some fields are required or ignored depending on the chosen type (see notes below each parameter).
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+| `Content-Type` | `application/json` |
+
+### Request body
+
+<ParamField body="symbol" type="string" required>
+  Polymarket outcome token ID (hex address). Identifies the specific outcome (e.g. the YES token of a market).
+</ParamField>
+
+<ParamField body="side" type="string" required>
+  `"buy"` or `"sell"`.
+</ParamField>
+
+<ParamField body="type" type="string" required>
+  Execution strategy. One of: `LIMIT` | `MARKET` | `PEGGED` | `TWAP` | `ICEBERG` | `TAKE_PROFIT` | `STOP_LOSS` | `TRAILING_STOP`.
+</ParamField>
+
+<ParamField body="price" type="string">
+  Decimal probability in the range `0.001`–`0.999` (e.g. `"0.72"`). Required for `LIMIT`, `ICEBERG`, `TAKE_PROFIT`, and `STOP_LOSS` orders.
+</ParamField>
+
+<ParamField body="size" type="string">
+  Number of shares as a decimal string (e.g. `"100"`). Required for `LIMIT`, `ICEBERG`, `TAKE_PROFIT`, `STOP_LOSS`, and `TRAILING_STOP` orders, and for `MARKET` **sell** orders.
+</ParamField>
+
+<ParamField body="quote_amount" type="string">
+  US dollar notional as a decimal string. Used as:
+  - **MARKET buy** — total spend in dollars.
+  - **TWAP** — total dollar amount to execute over the strategy duration.
+  - **PEGGED** — alias for `budget_usdc`.
+</ParamField>
+
+<ParamField body="time_in_force" type="string">
+  `GTC` (Good Till Cancelled, default) | `IOC` (Immediate or Cancel) | `FOK` (Fill or Kill). Applies to `LIMIT` and `MARKET` types.
+</ParamField>
+
+<ParamField body="budget_usdc" type="string">
+  Dollar budget for a `PEGGED` buy order. Equivalent to passing `quote_amount` for this order type.
+</ParamField>
+
+<ParamField body="offset_ticks" type="number">
+  `PEGGED` only. Number of CLOB ticks away from the best touch price at which the order rests. Positive values rest behind the touch; `0` rests at the touch.
+</ParamField>
+
+<ParamField body="price_floor" type="number">
+  `PEGGED` only. Minimum price (decimal probability) the pegged order will chase. The order will not follow the touch below this level.
+</ParamField>
+
+<ParamField body="price_ceiling" type="number">
+  `PEGGED` only. Maximum price (decimal probability) the pegged order will chase.
+</ParamField>
+
+<ParamField body="condition_id" type="string">
+  Polymarket condition ID (`0x` + 64 hex characters). Required for `PEGGED` orders.
+</ParamField>
+
+<ParamField body="outcome" type="string">
+  `"yes"` or `"no"`. Required for `PEGGED` orders to determine which side of the condition the order tracks.
+</ParamField>
+
+<ParamField body="execution" type="object">
+  Advanced execution parameters for `TWAP`, `ICEBERG`, and `TRAILING_STOP` orders.
+
+  <Expandable title="execution fields">
+    <ParamField body="duration_sec" type="number">
+      Total strategy duration in seconds (`TWAP`).
+    </ParamField>
+    <ParamField body="interval_sec" type="number">
+      Time between child order placements in seconds (`TWAP`).
+    </ParamField>
+    <ParamField body="clip_size" type="string">
+      Maximum share size of each child order (`ICEBERG`).
+    </ParamField>
+    <ParamField body="randomize_pct" type="number">
+      Random jitter applied to `clip_size` as a percentage, e.g. `10` means ±10% (`ICEBERG`, `TWAP`).
+    </ParamField>
+    <ParamField body="price_tolerance_pct" type="number">
+      Maximum acceptable price slippage as a percentage before a child order is skipped (`TWAP`).
+    </ParamField>
+    <ParamField body="trailing_offset_pct" type="number">
+      Trail distance expressed as a percentage of the reference price (`TRAILING_STOP`).
+    </ParamField>
+    <ParamField body="trailing_offset" type="string">
+      Trail distance expressed as an absolute decimal probability offset (`TRAILING_STOP`). Use either this or `trailing_offset_pct`, not both.
+    </ParamField>
+    <ParamField body="high_water_mark" type="string">
+      Initial reference price for a `TRAILING_STOP`. The stop activates once the price moves this far in your favor.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="take_profit" type="object">
+  Bracket take-profit to attach to a `LIMIT` or `MARKET` buy. Placed as a resting limit sell once the parent order fills.
+
+  <Expandable title="take_profit fields">
+    <ParamField body="price" type="string" required>
+      Exit price as a decimal probability.
+    </ParamField>
+    <ParamField body="size" type="string">
+      Shares to sell. Defaults to full fill size if omitted.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="stop_loss" type="object">
+  Bracket stop-loss to attach to a `LIMIT` or `MARKET` buy. Activates as a market sell when the price touches the trigger.
+
+  <Expandable title="stop_loss fields">
+    <ParamField body="price" type="string" required>
+      Trigger price as a decimal probability.
+    </ParamField>
+    <ParamField body="size" type="string">
+      Shares to sell. Defaults to full fill size if omitted.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="client_order_id" type="string">
+  Your own reference string (max 64 characters). Stored and echoed back; not used for idempotency (use `Idempotency-Key` for that).
+</ParamField>
+
+### Response
+
+<ResponseField name="type" type="string">
+  The order type submitted, e.g. `"LIMIT"`.
+</ResponseField>
+
+<ResponseField name="order_id" type="string">
+  CLOB order ID. Present for `LIMIT`, `MARKET`, `TAKE_PROFIT`, and triggered stops. Absent for managed strategies — use `record_id` instead.
+</ResponseField>
+
+<ResponseField name="record_id" type="string">
+  Strategy record ID. Present for `PEGGED`, `TWAP`, `ICEBERG`, `STOP_LOSS`, and `TRAILING_STOP` orders.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `OPEN` | `FILLED` | `PARTIALLY_FILLED` | `CANCELED` | `ACTIVE` (strategies).
+</ResponseField>
+
+<ResponseField name="side" type="string">
+  `"buy"` or `"sell"`.
+</ResponseField>
+
+<ResponseField name="price" type="string">
+  Limit price as submitted.
+</ResponseField>
+
+<ResponseField name="size" type="string">
+  Total order size in shares.
+</ResponseField>
+
+<ResponseField name="filled_size" type="string">
+  Shares filled at time of response.
+</ResponseField>
+
+<ResponseField name="remaining_size" type="string">
+  Shares still resting on the book.
+</ResponseField>
+
+<ResponseField name="matched_amount" type="string">
+  Dollar value of fills matched so far.
+</ResponseField>
+
+<ResponseField name="builder_code_used" type="string">
+  Builder code credited for this order (may differ from submission if overridden by partner config).
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp of order creation.
+</ResponseField>
+
+<ResponseField name="brackets" type="object">
+  Present when bracket orders were attached. Contains `take_profit` and/or `stop_loss` sub-objects each with `order_id` and `record_id`.
+</ResponseField>
+
+<ResponseField name="warnings" type="array">
+  Non-fatal advisory messages, e.g. `["bracket size capped to fill size"]`.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable status message.
+</ResponseField>
+
+### Examples
+
+<CodeGroup>
+
+```json LIMIT buy
+// POST /v2/trade/order
+// Idempotency-Key: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+
+{
+  "symbol": "0x1234...abcd",
+  "side": "buy",
+  "type": "LIMIT",
+  "price": "0.65",
+  "size": "200",
+  "time_in_force": "GTC"
+}
+```
+
+```json MARKET buy
+// POST /v2/trade/order
+// Idempotency-Key: b2c3d4e5-f6a7-8901-bcde-f01234567891
+
+{
+  "symbol": "0x1234...abcd",
+  "side": "buy",
+  "type": "MARKET",
+  "quote_amount": "50.00"
+}
+```
+
+```json TWAP
+// POST /v2/trade/order
+// Idempotency-Key: c3d4e5f6-a7b8-9012-cdef-012345678902
+
+{
+  "symbol": "0x1234...abcd",
+  "side": "buy",
+  "type": "TWAP",
+  "quote_amount": "1000.00",
+  "execution": {
+    "duration_sec": 3600,
+    "interval_sec": 300,
+    "price_tolerance_pct": 2,
+    "randomize_pct": 10
+  }
+}
+```
+
+</CodeGroup>
+
+**Example response (LIMIT buy)**
+
+```json
+{
+  "type": "LIMIT",
+  "order_id": "0xorder123...abc",
+  "record_id": null,
+  "status": "OPEN",
+  "side": "buy",
+  "price": "0.65",
+  "size": "200",
+  "filled_size": "0",
+  "remaining_size": "200",
+  "matched_amount": "0",
+  "builder_code_used": "bravado",
+  "created_at": "2025-01-15T12:34:56Z",
+  "brackets": null,
+  "warnings": [],
+  "message": "Order placed successfully"
+}
+```
+
+---
+
+## POST /v2/trade/order/batch
+
+Places up to 20 limit orders atomically at distinct price levels. All orders share the same `symbol` and `side`, making this ideal for constructing bid or ask ladders in a single request. If any rung fails validation the entire batch is rejected.
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+| `Content-Type` | `application/json` |
+
+### Request body
+
+<ParamField body="symbol" type="string" required>
+  Polymarket outcome token ID for all orders in the batch.
+</ParamField>
+
+<ParamField body="side" type="string" required>
+  `"buy"` or `"sell"` — applies to every rung.
+</ParamField>
+
+<ParamField body="rungs" type="array" required>
+  Array of up to 20 price/size pairs. Each element must have a unique `price`.
+
+  <Expandable title="rung fields">
+    <ParamField body="price" type="string" required>
+      Limit price as a decimal probability.
+    </ParamField>
+    <ParamField body="size" type="string" required>
+      Number of shares for this rung.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="orders" type="array">
+  One entry per submitted rung, in the same order as the request.
+
+  <Expandable title="order fields">
+    <ResponseField name="order_id" type="string">
+      CLOB order ID for this rung.
+    </ResponseField>
+    <ResponseField name="price" type="string">
+      Confirmed limit price.
+    </ResponseField>
+    <ResponseField name="size" type="string">
+      Total size for this rung.
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      `OPEN` | `FILLED` | `PARTIALLY_FILLED`.
+    </ResponseField>
+    <ResponseField name="filled_size" type="string">
+      Shares immediately filled (if any resting liquidity was crossed).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```json Request — 3-rung bid ladder
+// POST /v2/trade/order/batch
+// Idempotency-Key: d4e5f6a7-b8c9-0123-defa-123456789003
+
+{
+  "symbol": "0x1234...abcd",
+  "side": "buy",
+  "rungs": [
+    { "price": "0.60", "size": "150" },
+    { "price": "0.55", "size": "200" },
+    { "price": "0.50", "size": "300" }
+  ]
+}
+```
+
+```json Response
+{
+  "orders": [
+    {
+      "order_id": "0xorderA...001",
+      "price": "0.60",
+      "size": "150",
+      "status": "OPEN",
+      "filled_size": "0"
+    },
+    {
+      "order_id": "0xorderB...002",
+      "price": "0.55",
+      "size": "200",
+      "status": "OPEN",
+      "filled_size": "0"
+    },
+    {
+      "order_id": "0xorderC...003",
+      "price": "0.50",
+      "size": "300",
+      "status": "OPEN",
+      "filled_size": "0"
+    }
+  ]
+}
+```
+
+</CodeGroup>
+
+---
+
+## GET /v2/trade/orders/open
+
+Returns all currently open CLOB orders on the account. Optionally filter to a single outcome token.
+
+### Query parameters
+
+<ParamField query="token_id" type="string">
+  Filter results to orders on a specific outcome token ID.
+</ParamField>
+
+### Response
+
+<ResponseField name="orders" type="array">
+  Array of open order objects.
+
+  <Expandable title="order fields">
+    <ResponseField name="order_id" type="string">
+      CLOB order ID.
+    </ResponseField>
+    <ResponseField name="asset_id" type="string">
+      Outcome token address this order is on.
+    </ResponseField>
+    <ResponseField name="side" type="string">
+      `"buy"` or `"sell"`.
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      `OPEN` or `PARTIALLY_FILLED`.
+    </ResponseField>
+    <ResponseField name="price" type="string">
+      Limit price as a decimal probability.
+    </ResponseField>
+    <ResponseField name="original_size" type="string">
+      Total shares when the order was placed.
+    </ResponseField>
+    <ResponseField name="size_matched" type="string">
+      Shares filled so far.
+    </ResponseField>
+    <ResponseField name="remaining_size" type="string">
+      Shares still resting on the book.
+    </ResponseField>
+    <ResponseField name="order_type" type="string">
+      `LIMIT` | `TAKE_PROFIT` | `STOP_LOSS` | `ICEBERG_SLICE`.
+    </ResponseField>
+    <ResponseField name="expiration" type="string">
+      Unix timestamp after which the order auto-cancels, or `null` for GTC.
+    </ResponseField>
+    <ResponseField name="created_at" type="string">
+      ISO 8601 creation timestamp.
+    </ResponseField>
+    <ResponseField name="is_take_profit" type="boolean">
+      `true` when this order was placed as a bracket take-profit.
+    </ResponseField>
+    <ResponseField name="is_stop_loss" type="boolean">
+      `true` when this order was placed by a triggered stop-loss strategy.
+    </ResponseField>
+    <ResponseField name="is_pegged" type="boolean">
+      `true` when this order is being managed by a pegged strategy.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## DELETE /v2/trade/orders/{order_id}
+
+Cancels a single open order by its CLOB order ID.
+
+### Path parameters
+
+<ParamField path="order_id" type="string" required>
+  The CLOB order ID to cancel.
+</ParamField>
+
+### Response
+
+<ResponseField name="cancelled" type="array">
+  List of order IDs successfully cancelled.
+</ResponseField>
+
+<ResponseField name="not_cancelled" type="array">
+  List of order IDs that could not be cancelled (e.g. already filled).
+</ResponseField>
+
+<ResponseField name="count" type="number">
+  Total number of successfully cancelled orders.
+</ResponseField>
+
+---
+
+## POST /v2/trade/orders/cancel-batch
+
+Cancels up to 50 orders in a single request. Useful for clearing a subset of a ladder or removing specific bracket orders.
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+| `Content-Type` | `application/json` |
+
+### Request body
+
+<ParamField body="order_ids" type="string[]" required>
+  Array of up to 50 CLOB order IDs to cancel.
+</ParamField>
+
+### Response
+
+<ResponseField name="cancelled" type="array">
+  Order IDs that were successfully cancelled.
+</ResponseField>
+
+<ResponseField name="not_cancelled" type="array">
+  Order IDs that could not be cancelled (already filled, invalid ID, etc.).
+</ResponseField>
+
+<ResponseField name="count" type="number">
+  Number of successfully cancelled orders.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```json Request
+// POST /v2/trade/orders/cancel-batch
+// Idempotency-Key: e5f6a7b8-c9d0-1234-efab-234567890104
+
+{
+  "order_ids": [
+    "0xorderA...001",
+    "0xorderB...002",
+    "0xorderC...003"
+  ]
+}
+```
+
+```json Response
+{
+  "cancelled": ["0xorderA...001", "0xorderB...002"],
+  "not_cancelled": ["0xorderC...003"],
+  "count": 2
+}
+```
+
+</CodeGroup>
+
+---
+
+## POST /v2/trade/orders/cancel-all
+
+Cancels every open CLOB order on the account. No request body is required. This does **not** cancel managed strategy records (TWAP, Iceberg, Pegged, Stops) — use `DELETE /v2/trade/strategies/{id}` for those.
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+
+### Response
+
+<ResponseField name="cancelled" type="array">
+  All order IDs that were cancelled.
+</ResponseField>
+
+<ResponseField name="not_cancelled" type="array">
+  Any order IDs that could not be cancelled.
+</ResponseField>
+
+<ResponseField name="count" type="number">
+  Total orders cancelled.
+</ResponseField>
+
+<Warning>
+  `cancel-all` removes resting bracket orders (take-profits and stop-loss CLOB orders) as well as plain limit orders. If you only want to remove non-bracket orders, use `cancel-batch` with a filtered list.
+</Warning>

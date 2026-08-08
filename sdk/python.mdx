@@ -1,0 +1,115 @@
+---
+title: "Bravado Python SDK"
+sidebarTitle: "Python"
+description: "Install and use the typed Bravado Python SDK for the Trade, Copytrade, and Analytics APIs."
+icon:
+  name: "code"
+  library: "lucide"
+---
+
+<Warning>
+  The official Bravado Python SDK is in development. This page describes the planned surface. Generate a client from the OpenAPI spec if you need typed access today (see [SDK overview](/sdk/overview)).
+</Warning>
+
+{/* TODO: Confirm the PyPI package name (bravado-sdk?), release timeline, and repository URL. */}
+
+## Install
+
+```bash
+pip install bravado-sdk
+```
+
+Requires Python 3.10 or later.
+
+## Initialize
+
+```python
+from bravado import Bravado
+
+bravado = Bravado(api_key="your-bearer-token")
+```
+
+Options:
+
+- `api_key` (required)
+- `base_url` (default `https://bravado-api-k7kaq.ondigitalocean.app`)
+- `timeout` (default 10.0 seconds)
+- `max_retries` (default 3)
+
+An async variant is also available:
+
+```python
+from bravado import AsyncBravado
+
+async with AsyncBravado(api_key="...") as bravado:
+    order = await bravado.trade.place_order(...)
+```
+
+## Place an order
+
+```python
+from decimal import Decimal
+
+order = bravado.trade.place_order(
+    symbol="71321045679252212594626385532706912750332728571942532289631379312455583992646",
+    side="buy",
+    type="MARKET",
+    quote_amount=Decimal("10.00"),
+)
+
+print(order.order_id, order.status)
+```
+
+The SDK generates an `Idempotency-Key` automatically. Pass an explicit key when you need to control retries yourself:
+
+```python
+order = bravado.trade.place_order(
+    symbol=symbol,
+    side="buy",
+    type="MARKET",
+    quote_amount=Decimal("10.00"),
+    idempotency_key="e4b9c1a2-38df-4f77-a3c5-012bd9e8f231",
+)
+```
+
+## Fetch analytics
+
+```python
+pnl = bravado.analytics.get_trader_pnl("0xabc...")
+leaderboard = bravado.analytics.get_leaderboard(window="30d", limit=20)
+```
+
+Every numeric field is returned as `Decimal`, not `float`.
+
+## Copy-trading
+
+```python
+sub = bravado.copytrade.subscribe(
+    leader_address="0xabc...",
+    sizing_mode="proportional",
+    sizing_factor=Decimal("0.10"),
+    max_notional_per_fill=Decimal("100.00"),
+)
+```
+
+## Error handling
+
+```python
+from bravado.exceptions import BravadoError, RateLimitError, ScopeError
+
+try:
+    bravado.trade.place_order(...)
+except RateLimitError:
+    # Retry-After honored automatically before this raises
+    pass
+except ScopeError as e:
+    print("Missing scope:", e.required_scope)
+except BravadoError as e:
+    print(e.status, e.code, e.message)
+```
+
+## Related
+
+- [SDK overview](/sdk/overview)
+- [TypeScript SDK](/sdk/typescript)
+- [Idempotency](/reference/idempotency)

@@ -1,0 +1,53 @@
+---
+title: "GET /traders/{address}/metrics — Performance Metrics (R5/R6/R7)"
+sidebarTitle: "GET /traders/{address}/metrics"
+description: "Low-latency R5/R6/R7 performance and fee metrics without the full R1 disposition set."
+icon:
+  name: "gauge"
+  library: "lucide"
+---
+
+Returns R5, R6, and R7 report metrics without assembling the full R1 disposition set. This is the lowest-latency way to retrieve performance and fee data for a wallet.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/metrics
+```
+
+### Path Parameters
+
+### Query Parameters
+
+ 
+
+### Response — R7 Performance Fields
+
+             
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../metrics \
+  -H "Authorization: Bearer <token>" \
+  -d basis=net
+```
+
+```json Response (abbreviated)
+{
+  "trader": "0xabc...",
+  "r7": {
+    "nav_uusdc": "4200000000",
+    "trading_pnl_uusdc": "14820110000",
+    "roi": "0.3812",
+    "twr": "0.4100",
+    "win_rate": "0.6497"
+  }
+}
+```
+
+</CodeGroup>
+
+<Note>
+  `uusdc` fields are micro-USDC integers. Divide by `1,000,000` to convert to display USDC.
+</Note>

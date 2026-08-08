@@ -1,0 +1,52 @@
+---
+title: "Status and Uptime"
+sidebarTitle: "Status and uptime"
+description: "Bravado API status page, uptime history, and incident notifications."
+icon:
+  name: "activity"
+  library: "lucide"
+---
+
+Bravado publishes real-time status and incident history so integrators can distinguish platform-wide issues from problems specific to their integration.
+
+## Status page
+
+{/* TODO: Confirm the public status page URL (e.g. status.bravadotrade.com) and link it here. */}
+
+The status page shows:
+
+- Current availability of the Trade API, Copytrade API, and Analytics API.
+- Ongoing incidents with live updates.
+- Historical uptime by surface.
+- Scheduled maintenance windows.
+
+## Health endpoint
+
+Every Bravado surface exposes an unauthenticated `GET /healthz` endpoint that returns `200 OK` when healthy. This is the same endpoint the status page probes, so your own monitors can call it to detect issues without waiting for the status page to update.
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/healthz
+```
+
+```json
+{"status": "ok", "version": "2.x.x", "timestamp": "2026-08-08T12:00:00Z"}
+```
+
+See the [Analytics API healthz endpoint](/api/analytics/healthz) for the full schema.
+
+## Incident communication
+
+During an incident, Bravado communicates through:
+
+- The [status page](/reference/status) with rolling updates.
+- The [Changelog](/reference/changelog) for post-incident notes on any behavior changes.
+- Direct email to affected partner accounts for extended incidents.
+
+## Uptime SLA
+
+{/* TODO: Confirm the uptime SLA (99.9%? 99.95%?) and any credit or refund policy for missed SLA. */}
+
+## Related
+
+- [Rate limits](/reference/rate-limits) for backoff strategies during degraded performance.
+- [Changelog](/reference/changelog) for incident post-mortems.

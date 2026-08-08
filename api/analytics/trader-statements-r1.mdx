@@ -1,0 +1,77 @@
+---
+title: "GET /traders/{address}/statements/r1 — R1 Dispositions"
+sidebarTitle: "GET /traders/{address}/statements/r1"
+description: "Paginated R1 Form-8949-style disposition rows for heavy wallets."
+icon:
+  name: "file-text"
+  library: "lucide"
+---
+
+Standalone paginated endpoint for R1 Form-8949-style disposition rows. Use this for heavy wallets where the full [`/statements`](/api/analytics/trader-statements) response is too large.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/statements/r1
+```
+
+### Path Parameters
+
+### Query Parameters
+
+ 
+
+### Response — R1 Disposition Row Fields
+
+ 
+
+<ResponseField name="asset" type="object">
+  <Expandable title="Asset fields">
+    <ResponseField name="market" type="string">
+      Polymarket condition ID.
+    </ResponseField>
+
+    <ResponseField name="outcome_label" type="string">
+      Outcome name.
+    </ResponseField>
+
+    <ResponseField name="token_id" type="string">
+      ERC-1155 token ID.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+            
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../statements/r1 \
+  -H "Authorization: Bearer <token>" \
+  -d limit=50 \
+  -d offset=0
+```
+
+```json Response (abbreviated)
+{
+  "trader": "0xabc...",
+  "total": 842,
+  "limit": 50,
+  "offset": 0,
+  "rows": [
+    {
+      "acquire_tx": "0xacquire...",
+      "dispose_tx": "0xdispose...",
+      "date_acquired": "2024-03-15T09:22:00Z",
+      "date_disposed": "2024-04-02T14:05:00Z",
+      "disposal_kind": "SELL",
+      "gain_loss_uusdc": "135100000",
+      "term": "SHORT",
+      "taxable": true,
+      "evidence_level": "A"
+    }
+  ]
+}
+```
+
+</CodeGroup>

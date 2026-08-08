@@ -1,0 +1,321 @@
+---
+title: "Combo Quote, Accept, and Redeem API Reference"
+sidebarTitle: "Quote / Accept / Redeem"
+description: "POST /v2/trade/combo/quote, /combo/accept, /combo/redeem, and GET /combo/positions — full reference for Bravado's multi-leg parlay API."
+icon:
+  name: "combine"
+  library: "lucide"
+---
+
+These four endpoints cover the full lifecycle of a combo position on Bravado: obtaining a firm RFQ quote, accepting it on-chain before it expires, listing your open and resolved positions, and redeeming a winning combo for pUSD. All mutating endpoints require an `Idempotency-Key` header to prevent duplicate submissions.
+
+---
+
+## POST /v2/trade/combo/quote
+
+Request a firm RFQ quote for a multi-leg parlay. The quote is priced by a live maker counterparty and is valid for approximately 8.5 seconds. Use the returned `combo_order_id` and `quote_id` together when calling `/combo/accept`.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` — must include `trade.combos` scope |
+| `Idempotency-Key` | Yes | Unique string per request (UUID recommended) |
+
+### Request
+
+<ParamField body="leg_position_ids" type="string[]" required>
+  An array of 2–10 YES outcome token IDs, each representing one leg of the parlay. All legs must be on separate markets.
+</ParamField>
+
+<ParamField body="notional_usd" type="number" required>
+  The total amount in US dollars you want to spend on this combo. Minimum `0.01`.
+</ParamField>
+
+<ParamField body="side" type="string">
+  Trade direction. Only `"BUY"` is currently supported. Defaults to `"BUY"` if omitted.
+</ParamField>
+
+### Response
+
+<ResponseField name="combo_order_id" type="string">
+  Unique identifier for this combo order. Pass this value to `/combo/accept` and `/combo/redeem`.
+</ResponseField>
+
+<ResponseField name="quote_id" type="string">
+  Unique identifier for this specific RFQ quote. Required when calling `/combo/accept`. Becomes invalid after `expires_at`.
+</ResponseField>
+
+<ResponseField name="rfq_id" type="string">
+  The underlying RFQ session identifier assigned by the maker infrastructure.
+</ResponseField>
+
+<ResponseField name="price_cents" type="string">
+  The blended price in cents per YES combo share. For example, `"2"` means each share costs $0.02. Returned as a string.
+</ResponseField>
+
+<ResponseField name="maker_amount_usd" type="string">
+  The notional dollars the maker counterparty posts to back this quote. Returned as a string.
+</ResponseField>
+
+<ResponseField name="taker_shares" type="string">
+  The number of combo shares you will receive if you accept this quote. Returned as a string.
+</ResponseField>
+
+<ResponseField name="expires_at" type="string">
+  ISO-8601 datetime after which this quote is no longer valid. You must call `/combo/accept` before this timestamp.
+</ResponseField>
+
+<CodeGroup>
+
+```json Request
+POST /v2/trade/combo/quote
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Idempotency-Key: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+Content-Type: application/json
+
+{
+  "leg_position_ids": [
+    "72481234567890abcdef72481234567890abcdef72481234567890abcdef7248",
+    "9931abcdef1234567890993112345678901234567890abcdef12345678909931"
+  ],
+  "notional_usd": 5,
+  "side": "BUY"
+}
+```
+
+```json Response
+{
+  "combo_order_id": "co_01HX2K8PQRT7VBWN3DYCJM5F6",
+  "quote_id": "qt_01HX2K8PQRT7VBWN3DYCJM5F7",
+  "rfq_id": "rfq_9a3e21bc7f4d0e85c6a12930",
+  "price_cents": "2",
+  "maker_amount_usd": "332.50",
+  "taker_shares": "66.5",
+  "expires_at": "2024-11-15T14:32:17.500Z"
+}
+```
+
+</CodeGroup>
+
+---
+
+## POST /v2/trade/combo/accept
+
+Accept a previously issued quote and execute the combo trade on-chain. You must call this endpoint before the `expires_at` timestamp returned by `/combo/quote`.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` — must include `trade.combos` scope |
+| `Idempotency-Key` | Yes | Unique string per request (UUID recommended) |
+
+### Request
+
+<ParamField body="combo_order_id" type="string" required>
+  The `combo_order_id` returned by `/combo/quote`.
+</ParamField>
+
+<ParamField body="quote_id" type="string" required>
+  The `quote_id` returned by `/combo/quote`. This ties the accept to the specific live quote from the maker.
+</ParamField>
+
+### Response
+
+<ResponseField name="combo_order_id" type="string">
+  The same `combo_order_id` passed in the request, confirming which order was executed.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `"EXECUTED"` when the combo has been successfully submitted on-chain.
+</ResponseField>
+
+<ResponseField name="transaction_hash" type="string">
+  The Polygon transaction hash for the on-chain execution. Use this to verify finality on a block explorer.
+</ResponseField>
+
+<Warning>
+You must call `/combo/accept` before the `expires_at` time returned by `/combo/quote`. If the quote has expired, the API returns `410 QUOTE_EXPIRED`. **Do not retry the stale accept** — call `/combo/quote` again to obtain a fresh price, then accept the new quote.
+</Warning>
+
+<CodeGroup>
+
+```json Request
+POST /v2/trade/combo/accept
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Idempotency-Key: b2c3d4e5-f6a7-8901-bcde-f12345678901
+Content-Type: application/json
+
+{
+  "combo_order_id": "co_01HX2K8PQRT7VBWN3DYCJM5F6",
+  "quote_id": "qt_01HX2K8PQRT7VBWN3DYCJM5F7"
+}
+```
+
+```json Response
+{
+  "combo_order_id": "co_01HX2K8PQRT7VBWN3DYCJM5F6",
+  "status": "EXECUTED",
+  "transaction_hash": "0x4a7b3c2d1e9f8a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2"
+}
+```
+
+</CodeGroup>
+
+---
+
+## POST /v2/trade/combo/redeem
+
+Redeem a winning combo position for pUSD after all legs have resolved in your favor. You can identify the position using either the `combo_order_id` from the original trade or the `combo_position_id` returned by `GET /combo/positions`. Provide one or the other — not both.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` — must include `trade.combos` scope |
+| `Idempotency-Key` | Yes | Unique string per request (UUID recommended) |
+
+### Request
+
+<ParamField body="combo_order_id" type="string">
+  The `combo_order_id` from the `/combo/accept` response. Provide this **or** `combo_position_id`, not both.
+</ParamField>
+
+<ParamField body="combo_position_id" type="string">
+  The `combo_position_id` from `GET /combo/positions`. Useful if you did not store the original order ID. Provide this **or** `combo_order_id`, not both.
+</ParamField>
+
+### Response
+
+<ResponseField name="combo_order_id" type="string">
+  The order identifier for the redeemed combo.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `"REDEEMED"` when pUSD has been successfully credited to your account.
+</ResponseField>
+
+<ResponseField name="payout_usd" type="string">
+  The amount of pUSD paid out to your account. Returned as a string.
+</ResponseField>
+
+<ResponseField name="transaction_hash" type="string">
+  The Polygon transaction hash for the on-chain redemption.
+</ResponseField>
+
+<Note>
+Only positions with status `RESOLVED_WIN` produce a payout. If any single leg resolves against you, the entire combo is worthless — that is correct parlay behavior. Attempting to redeem a `RESOLVED_LOSS` position returns an error.
+</Note>
+
+<CodeGroup>
+
+```json Request (by order ID)
+POST /v2/trade/combo/redeem
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Idempotency-Key: c3d4e5f6-a7b8-9012-cdef-123456789012
+Content-Type: application/json
+
+{
+  "combo_order_id": "co_01HX2K8PQRT7VBWN3DYCJM5F6"
+}
+```
+
+```json Request (by position ID)
+POST /v2/trade/combo/redeem
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Idempotency-Key: d4e5f6a7-b8c9-0123-defa-234567890123
+Content-Type: application/json
+
+{
+  "combo_position_id": "cp_01HX4M9RQST8WCXO4EZDKN6G7"
+}
+```
+
+```json Response
+{
+  "combo_order_id": "co_01HX2K8PQRT7VBWN3DYCJM5F6",
+  "status": "REDEEMED",
+  "payout_usd": "50.00",
+  "transaction_hash": "0x1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2"
+}
+```
+
+</CodeGroup>
+
+---
+
+## GET /v2/trade/combo/positions
+
+List all combo positions for the authenticated user, across all statuses. Use this endpoint to find positions eligible for redemption or to monitor the resolution of in-flight combos.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` — must include `trade.combos` scope |
+
+### Query parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `status` | string | Filter by position status: `OPEN`, `PARTIAL`, `RESOLVED_WIN`, or `RESOLVED_LOSS` |
+| `limit` | integer | Maximum positions to return. Maximum `500`. |
+| `offset` | integer | Pagination offset for retrieving subsequent pages. |
+
+<CodeGroup>
+
+```http Request
+GET /v2/trade/combo/positions?status=RESOLVED_WIN&limit=10
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+```json Response
+{
+  "positions": [
+    {
+      "combo_position_id": "cp_01HX4M9RQST8WCXO4EZDKN6G7",
+      "combo_order_id": "co_01HX2K8PQRT7VBWN3DYCJM5F6",
+      "status": "RESOLVED_WIN",
+      "notional_usd": "5.00",
+      "taker_shares": "66.5",
+      "price_cents": "2",
+      "legs": [
+        {
+          "position_id": "72481234567890abcdef72481234567890abcdef72481234567890abcdef7248",
+          "resolved": true,
+          "outcome": "WIN"
+        },
+        {
+          "position_id": "9931abcdef1234567890993112345678901234567890abcdef12345678909931",
+          "resolved": true,
+          "outcome": "WIN"
+        }
+      ],
+      "created_at": "2024-11-15T14:32:18.000Z",
+      "updated_at": "2024-11-20T09:15:00.000Z"
+    }
+  ],
+  "total": 1,
+  "limit": 10,
+  "offset": 0
+}
+```
+
+</CodeGroup>
+
+---
+
+## Common rejections
+
+<Accordion title="410 QUOTE_EXPIRED — quote window has closed">
+  The ~8.5-second acceptance window for this quote has passed. Call `POST /combo/quote` again to obtain a fresh price, then call `POST /combo/accept` with the new `combo_order_id` and `quote_id`. Never retry a stale accept — the underlying prices may have moved significantly.
+</Accordion>
+
+<Accordion title="422 INSUFFICIENT_BALANCE — not enough pUSD">
+  Your account does not have enough pUSD to cover the `notional_usd` you requested. The error message specifies the exact shortfall in dollars. Reduce `notional_usd` or top up your balance before retrying.
+</Accordion>
+
+<Accordion title="422 NO_LIQUIDITY — no maker responded to the RFQ">
+  No maker counterparty was willing to price the combo at this size. This is most common on thin markets or very large notionals. Wait a moment and retry, or reduce `notional_usd`. If the market is consistently illiquid, consider removing the lowest-volume leg from the combo.
+</Accordion>

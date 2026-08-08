@@ -1,0 +1,137 @@
+---
+title: "Order Types and Execution on Bravado"
+sidebarTitle: "Orders"
+description: "Bravado supports eight order types for trading Polymarket outcome tokens: LIMIT, MARKET, PEGGED, TWAP, ICEBERG, STOP_LOSS, TAKE_PROFIT, and TRAILING_STOP."
+icon: "swap-arrows"
+---
+
+Every order on Bravado flows through a single endpoint — `POST /v2/trade/order` — and a `type` field selects the execution strategy. Eight order types are available, ranging from simple resting limit orders to fully managed strategies like TWAP and trailing stops. Understanding which fields belong to which type, and how each type interacts with the Polymarket CLOB, will save you time debugging unexpected rejections and miscalculated sizes.
+
+<Warning>
+  **Price is a decimal probability, not cents.** A price of `"0.62"` means 62 cents per share. If you send `price: "62"`, the API will return an error because 62 is outside the valid range of 0.001–0.999. Always express prices as decimals.
+</Warning>
+
+## Field units reference
+
+Mismatched units are the single most common source of bugs when integrating the Trade API. Use this table as a reference whenever you build a request payload.
+
+| Field | Unit | Valid example | Common mistake |
+| --- | --- | --- | --- |
+| `price`, `take_profit.price`, `stop_loss.price`, `price_floor`, `price_ceiling` | Decimal probability (0.001–0.999) | `"0.60"` (= 60¢) | Sending `"60"` (cents) |
+| `execution.trailing_offset`, `execution.high_water_mark` | Decimal probability (0.001–0.999) | `"0.05"` | Sending `"5"` |
+| `size`, `execution.clip_size`, bracket `size` | Shares | `"100"` | — |
+| `budget_usdc`, `quote_amount` | US dollars | `"50"` | Micro-units |
+| `offset_ticks` | CLOB ticks (1 tick = 0.1¢) | `0` | — |
+| `execution.trailing_offset_pct`, `execution.randomize_pct`, `execution.price_tolerance_pct` | Percent (0–100) | `5` | Sending `0.05` |
+| `execution.duration_sec` | Seconds | `3600` | Minutes |
+| `execution.interval_sec` | Seconds (minimum 10) | `60` | Values below 10 |
+
+## Order type overview
+
+| Type | Returns | Description |
+| --- | --- | --- |
+| `LIMIT` | `order_id` | Resting limit order posted to the CLOB |
+| `MARKET` | `order_id` | Immediate execution at the best available price |
+| `PEGGED` | `record_id` | Automatically chases the touch price within a budget |
+| `TWAP` | `record_id` | Time-weighted average price spread over a duration |
+| `ICEBERG` | `record_id` | Large order executed as hidden, repeated slices |
+| `STOP_LOSS` | `record_id` | Sell trigger when price falls to a threshold |
+| `TAKE_PROFIT` | `order_id` | Immediate CLOB sell when price rises to a target |
+| `TRAILING_STOP` | `record_id` | Dynamic stop that trails the high-water mark |
+
+## CLOB orders vs. managed strategies
+
+Order types fall into two categories that differ in how you track and cancel them.
+
+**CLOB orders** (`LIMIT`, `MARKET`, `TAKE_PROFIT`) post directly to the Polymarket central limit order book. They return an `order_id` and appear on `GET /v2/trade/orders/open`. Cancel them with `DELETE /v2/trade/orders/{order_id}`.
+
+**Managed strategies** (`PEGGED`, `TWAP`, `ICEBERG`, `STOP_LOSS`, `TRAILING_STOP`) are supervised by the Bravado execution engine, which manages their lifecycle on your behalf. They return a `record_id` and appear on `GET /v2/trade/strategies`. Cancel them with `DELETE /v2/trade/strategies/{record_id}`.
+
+<Note>
+  A `PENDING` status on a managed strategy is **not** a rejection. It means the engine has accepted the strategy and is waiting for market conditions to satisfy its entry criteria. Monitor the strategy record rather than treating `PENDING` as an error state.
+</Note>
+
+### LIMIT order example
+
+```json
+{
+  "type": "LIMIT",
+  "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+  "side": "BUY",
+  "price": "0.62",
+  "size": "100"
+}
+```
+
+### TWAP order example
+
+```json
+{
+  "type": "TWAP",
+  "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+  "side": "BUY",
+  "budget_usdc": "200",
+  "execution": {
+    "duration_sec": 3600,
+    "interval_sec": 60,
+    "price_tolerance_pct": 2
+  }
+}
+```
+
+### TRAILING\_STOP example
+
+```json
+{
+  "type": "TRAILING_STOP",
+  "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+  "side": "SELL",
+  "size": "500",
+  "execution": {
+    "high_water_mark": "0.80",
+    "trailing_offset": "0.05"
+  }
+}
+```
+
+## Bracket orders
+
+A bracket order attaches a `take_profit` and/or `stop_loss` leg to a `LIMIT` or `MARKET` buy entry. When the entry fills, the bracket legs are submitted automatically.
+
+Bracket orders are **best-effort**: if the entry fill succeeds but a bracket leg cannot be submitted (for example, due to a market minimum), the entry is **not** rolled back. You still hold the position — Bravado simply records the bracket failure in the response.
+
+<Warning>
+  Always inspect `warnings[]` and `brackets.take_profit.error` / `brackets.stop_loss.error` in every order response. A missing bracket leg will not surface as an HTTP error — it will only appear in those fields.
+</Warning>
+
+```json
+{
+  "type": "LIMIT",
+  "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+  "side": "BUY",
+  "price": "0.55",
+  "size": "200",
+  "take_profit": {
+    "price": "0.80",
+    "size": "200"
+  },
+  "stop_loss": {
+    "price": "0.40",
+    "size": "200"
+  }
+}
+```
+
+## Market microstructure constraints
+
+Some rejections are enforced by the CLOB or Polymarket protocol — they are not Bravado bugs. The most common ones are:
+
+- **Resting order share minimum**: most markets require at least 5 shares per resting limit order. Sending `size: "1"` on a `LIMIT` order will be rejected.
+- **Market order notional minimum**: `MARKET` orders require a minimum spend of \$1. Sending `budget_usdc: "0.50"` will be rejected.
+- **Iceberg slices are post-only**: each `ICEBERG` slice is submitted as a passive order. For a buy, the slice price must be at or below the current best bid. Aggressive iceberg slices are not supported.
+
+Refer to the [Polymarket CLOB documentation](https://docs.polymarket.com) for the full list of per-market parameters.
+
+<Note>
+  Check `warnings[]` on **every** order response, even successful ones. Warnings surface non-fatal issues such as partial fills, clamped prices, and failed bracket legs that would otherwise be silent.
+</Note>

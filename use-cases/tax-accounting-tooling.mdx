@@ -1,0 +1,80 @@
+---
+title: "Tax and Accounting Tooling for Polymarket"
+sidebarTitle: "Tax and accounting tooling"
+description: "Build tax and accounting products for Polymarket traders with the Bravado Analytics API tax statement endpoints."
+icon:
+  name: "receipt"
+  library: "lucide"
+---
+
+## The problem
+
+Prediction-market gains and losses need to be reported to tax authorities in most jurisdictions. On Polymarket, that means reconstructing every disposition (sale, merge, redemption) with cost basis and proceeds, over an entire tax year, and producing a document a preparer can hand to the tax authority. Wallet-level exports from Polymarket's UI do not contain the required fields.
+
+## What Bravado provides
+
+- **Tax reports** via `GET /traders/{address}/tax-report` with per-disposition detail and summary totals.
+- **R1 statements** via `GET /traders/{address}/statements/r1` for standalone access to disposition rows without the parent wrapper.
+- **Reconciliation statements** via `GET /traders/{address}/reconciliation` cross-checking Bravado's computed balance against on-chain state.
+- **PMWAS methodology** documented in [PnL methodology](/concepts/pnl-methodology) so a preparer can verify the numbers.
+
+## Worked example
+
+Generate a year-end statement CSV for a client wallet:
+
+```python
+import os, requests, csv
+
+API = "https://bravado-api-k7kaq.ondigitalocean.app"
+H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+
+def fetch_r1(addr, year):
+    rows, offset = [], 0
+    while True:
+        r = requests.get(
+            f"{API}/traders/{addr}/statements/r1",
+            params={"year": year, "limit": 1000, "offset": offset},
+            headers=H,
+        ).json()
+        rows.extend(r["dispositions"])
+        if not r["has_more"]:
+            return rows
+        offset += 1000
+
+def to_csv(rows, path):
+    fields = [
+        "acquired_at", "disposed_at", "proceeds", "cost_basis",
+        "realized_pnl", "hold_period", "market_id", "outcome",
+    ]
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        for row in rows:
+            w.writerow({k: row[k] for k in fields})
+
+rows = fetch_r1("0xabc...", 2025)
+to_csv(rows, "client_2025_dispositions.csv")
+print(f"Exported {len(rows)} dispositions")
+```
+
+Each row has enough detail to file a Form 8949-style report.
+
+## Product patterns
+
+- **Turbotax-style import.** Serve dispositions as CSV in the format a specific tax software ingests.
+- **CPA workflow.** Bulk download for a portfolio of client wallets.
+- **Live tax dashboard.** Show projected year-to-date liability with per-market drill-down.
+
+## Verifying the numbers
+
+Every disposition returned by the API can be reconstructed from the underlying fills using the [PMWAS methodology](/concepts/pnl-methodology). If a client's preparer disputes a number, cross-check by pulling the raw fills from `GET /traders/{address}/trades` and applying the standard.
+
+<Warning>
+  Bravado provides accounting data, not tax advice. Confirm the correct treatment of prediction-market gains and losses in your jurisdiction with a qualified tax professional.
+</Warning>
+
+## Related
+
+- [Guide: Generate a US tax statement](/guides/us-tax-statement)
+- [Concept: PnL methodology (PMWAS)](/concepts/pnl-methodology)
+- [Analytics: tax report endpoint](/api/analytics/trader-tax-report)

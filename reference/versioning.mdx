@@ -1,0 +1,70 @@
+---
+title: "Versioning and Deprecation Policy"
+sidebarTitle: "Versioning"
+description: "How the Bravado API is versioned, how long each version is supported, and the notice period before deprecation."
+icon:
+  name: "git-branch"
+  library: "lucide"
+---
+
+Bravado versions its APIs in the URL path. Today, all endpoints live under `/v2/`.
+
+## Current version
+
+**v2** is the current stable version for the Trade API, Copytrade API, and combos. The Analytics API is unversioned in path and follows the same policy.
+
+## Backwards-compatibility guarantees
+
+Within a major version, Bravado makes only **additive** changes:
+
+- New endpoints.
+- New optional request fields.
+- New response fields.
+- New allowed values on existing enums, only when the semantic change is safe for existing clients.
+- New response headers.
+- New HTTP status codes on new failure modes.
+
+Breaking changes within a major version are not shipped. If a breaking change is required, a new major version is introduced (for example, `v3`).
+
+## What is considered breaking
+
+- Removing an endpoint.
+- Removing a request or response field.
+- Changing the type of a request or response field.
+- Making an optional request field required.
+- Changing the semantics of an existing field.
+- Removing an enum value.
+
+## Deprecation policy
+
+When an endpoint or field is scheduled for removal in a future major version, Bravado:
+
+1. Announces the deprecation in the [Changelog](/reference/changelog).
+2. Emits a `Deprecation` and `Sunset` header on responses to the deprecated endpoint.
+3. Keeps the deprecated endpoint working for at least a notice period before removal.
+
+{/* TODO: Confirm the notice period (90 days? 180 days? 12 months?) and whether deprecated endpoints continue to be documented until sunset. */}
+
+## Deprecation headers
+
+```http
+HTTP/1.1 200 OK
+Deprecation: true
+Sunset: Wed, 01 Jan 2026 00:00:00 GMT
+Link: <https://bravado.mintlify.app/api/v3/some-endpoint>; rel="successor-version"
+```
+
+- `Deprecation` signals the endpoint is scheduled for removal.
+- `Sunset` gives the date after which the endpoint may return `410 Gone`.
+- `Link` with `rel="successor-version"` points to the replacement endpoint when one exists.
+
+Client integrations should log warnings when `Deprecation: true` is observed and open a migration issue against the successor.
+
+## Version support horizon
+
+{/* TODO: Confirm the commitment to how long v2 will be supported after v3 GA. Common commitments are 12 or 24 months of co-support. */}
+
+## Related
+
+- [Changelog](/reference/changelog) for the dated list of changes and deprecations.
+- [Status and uptime](/reference/status) for platform incidents that may affect API behavior.

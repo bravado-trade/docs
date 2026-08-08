@@ -1,0 +1,100 @@
+---
+title: "GET /traders/{address}/reconciliation — R8 Certificate"
+sidebarTitle: "GET /traders/{address}/reconciliation"
+description: "R8 reconciliation certificate verifying internal consistency of the wallet's statement."
+icon:
+  name: "shield-check"
+  library: "lucide"
+---
+
+Returns the R8 reconciliation certificate, which verifies the internal consistency of the wallet's statement. Useful for institutional audit workflows.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/reconciliation
+```
+
+### Path Parameters
+
+### Response
+
+  
+
+<ResponseField name="reconciliation_certificate" type="object">
+  R8 certificate fields.
+
+  <Expandable title="Certificate fields">
+    <ResponseField name="I1" type="string">
+      Share-level inventory residual in micro-shares. Must be `"0"`.
+    </ResponseField>
+
+    <ResponseField name="I2" type="string">
+      USDC cost-basis residual. Must be `"0"`.
+    </ResponseField>
+
+    <ResponseField name="I3" type="string">
+      Proceeds residual. Must be `"0"`.
+    </ResponseField>
+
+    <ResponseField name="I4" type="string">
+      Fee attribution residual. Must be `"0"`.
+    </ResponseField>
+
+    <ResponseField name="all_zero" type="boolean">
+      `true` when I1–I4 are all zero.
+    </ResponseField>
+
+    <ResponseField name="capital_conservation" type="object">
+      I5 gate. Present only for wallets passing the institutional audit threshold.
+
+      <Expandable title="Capital conservation fields">
+        <ResponseField name="capital_ceiling_ok" type="boolean">
+          Must be `true` to pass the I5 gate.
+        </ResponseField>
+
+        <ResponseField name="i5_residual" type="string">
+          Residual of the capital conservation equation. Must be `"0"`.
+        </ResponseField>
+
+        <ResponseField name="measured_ending_equity_uusdc" type="string">
+          Measured ending NAV.
+        </ResponseField>
+
+        <ResponseField name="measured_net_external_capital_uusdc" type="string">
+          Net deposits minus withdrawals over period.
+        </ResponseField>
+
+        <ResponseField name="total_economic_return_uusdc" type="string">
+          Total return used in the I5 equation.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../reconciliation \
+  -H "Authorization: Bearer <token>"
+```
+
+```json Response
+{
+  "trader": "0xabc...",
+  "period": { "from": "2023-01-01T00:00:00Z", "to": "2025-01-15T00:00:00Z" },
+  "batch_block": 67204810,
+  "reconciliation_certificate": {
+    "I1": "0", "I2": "0", "I3": "0", "I4": "0",
+    "all_zero": true,
+    "capital_conservation": {
+      "capital_ceiling_ok": true,
+      "i5_residual": "0"
+    }
+  },
+  "i5_audit": true
+}
+```
+
+</CodeGroup>

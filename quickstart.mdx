@@ -1,0 +1,230 @@
+---
+title: "Get Started with Bravado in 5 Minutes"
+sidebarTitle: "Quick Start"
+description: "Make your first Bravado API call — verify your credentials, check your balances, and place a market order on Polymarket in under 5 minutes."
+icon:
+  name: "zap"
+  library: "lucide"
+---
+
+This guide walks you through the minimum steps to go from a fresh API key to a live Polymarket order. You'll verify your credentials, inspect your balances, place a market order, and confirm it shows up in your positions — all via the Bravado Trade API v2.
+
+<Note>
+  All requests to Bravado require a Bearer token in the `Authorization` header. Read the [Authentication](/authentication) page for a full breakdown of API keys, scopes, and error handling.
+</Note>
+
+<Steps>
+  <Step title="Get your API key">
+    Sign in to the [Bravado Portal](https://portal.bravadotrade.com/) and create a new API key. The portal shows the **Bearer token** in full once, at creation time, so copy it into your secrets manager immediately.
+
+    Each token carries a set of **scopes** that control which endpoints you can call. A typical key includes:
+
+    - `trade.read` — read balances, positions, and orders
+    - `trade.execute` — place and manage orders
+    - `trade.cancel` — cancel open orders and strategies
+
+    Store your token securely — treat it like a password. Never commit it to source control or expose it in client-side code.
+
+    ```bash
+    # Set it as an environment variable for the examples below
+    export BRAVADO_API_KEY="your-bearer-token-here"
+    ```
+  </Step>
+  <Step title="Verify your credentials">
+    Call `GET /v2/trade/account` to confirm your token is valid and inspect what your key is bound to.
+
+    ```bash
+    curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account \
+      -H "Authorization: Bearer $BRAVADO_API_KEY"
+    ```
+
+    A successful response looks like this:
+
+    ```json
+    {
+      "partner": "acme-trading",
+      "binding": "user",
+      "wallet": "0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+      "api_key": {
+        "id": "ak_01hx9z2q3r4s5t6u7v8w9x0y",
+        "scopes": ["trade.read", "trade.execute", "trade.cancel"],
+        "created_at": "2024-11-01T09:00:00Z"
+      },
+      "onboarding_status": "complete"
+    }
+    ```
+
+    If you see `"onboarding_status": "pending"`, your wallet hasn't been fully provisioned yet — reach out to the Bravado team before proceeding.
+  </Step>
+  <Step title="Check your balance">
+    Before placing an order, verify you have collateral available. Call `GET /v2/trade/balances` to see your current funds.
+
+    ```bash
+    curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/balances \
+      -H "Authorization: Bearer $BRAVADO_API_KEY"
+    ```
+
+    Example response:
+
+    ```json
+    {
+      "pusd": "47.820000",
+      "usdc_e": "5.000000",
+      "total_collateral_equivalent": "52.820000",
+      "wallet": "0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"
+    }
+    ```
+
+    - `pusd` — pUSD held in your Polymarket trading wallet, ready to use immediately.
+    - `usdc_e` — Bridged USDC.e on Polygon, not yet deposited.
+    - `total_collateral_equivalent` — Sum of all collateral expressed in USD equivalent.
+
+    All values are strings — parse them as `BigDecimal` before doing arithmetic.
+  </Step>
+  <Step title="Place a market order">
+    Now place a market buy order. You need the **token ID** of the outcome you want to trade — this is the Polymarket ERC-1155 token ID for a specific outcome (YES or NO) on a specific market.
+
+    <Tip>
+      Include an `Idempotency-Key` header on every mutating request. If the request times out or your network drops, you can safely retry with the same key — Bravado will return the original response instead of creating a duplicate order. Use a UUID v4 generated fresh for each intended order.
+    </Tip>
+
+    <CodeGroup>
+
+    ```bash cURL
+    curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order \
+      -H "Authorization: Bearer $BRAVADO_API_KEY" \
+      -H "Content-Type: application/json" \
+      -H "Idempotency-Key: e4b9c1a2-38df-4f77-a3c5-012bd9e8f231" \
+      -d '{
+        "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+        "side": "buy",
+        "type": "MARKET",
+        "quote_amount": "10"
+      }'
+    ```
+
+    ```python Python
+    import requests
+    import uuid
+    
+    url = "https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order"
+    
+    headers = {
+        "Authorization": f"Bearer {BRAVADO_API_KEY}",
+        "Content-Type": "application/json",
+        "Idempotency-Key": str(uuid.uuid4()),
+    }
+    
+    payload = {
+        "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+        "side": "buy",
+        "type": "MARKET",
+        "quote_amount": "10",
+    }
+    
+    response = requests.post(url, json=payload, headers=headers)
+    order = response.json()
+    print(order)
+    ```
+
+    ```javascript JavaScript
+    import crypto from "crypto";
+    
+    const response = await fetch(
+      "https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          symbol:
+            "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+          side: "buy",
+          type: "MARKET",
+          quote_amount: "10",
+        }),
+      }
+    );
+    
+    const order = await response.json();
+    console.log(order);
+    ```
+
+    </CodeGroup>
+
+    **Request fields:**
+
+    | Field | Type | Description |
+    | --- | --- | --- |
+    | `symbol` | string | The Polymarket outcome token ID to trade |
+    | `side` | string | `"buy"` or `"sell"` |
+    | `type` | string | Order type — `"MARKET"` here |
+    | `quote_amount` | string | Amount of collateral (USD) to spend |
+
+    Example response:
+
+    ```json
+    {
+      "order_id": "ord_01hxab2c3d4e5f6g7h8i9j0k",
+      "status": "filled",
+      "side": "buy",
+      "type": "MARKET",
+      "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+      "quote_amount": "10",
+      "filled_size": "16.129032",
+      "matched_amount": "10.000000",
+      "average_price": "0.62",
+      "created_at": "2024-11-15T14:32:05Z",
+      "updated_at": "2024-11-15T14:32:05Z"
+    }
+    ```
+
+    - `filled_size` — number of outcome tokens you received.
+    - `matched_amount` — collateral actually spent (equals `quote_amount` for a fully filled market order).
+    - `average_price` — effective fill price per token, here `$0.62`.
+  </Step>
+  <Step title="Check your positions">
+    Confirm the order appears in your open positions by calling `GET /v2/trade/positions`.
+
+    ```bash
+    curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions \
+      -H "Authorization: Bearer $BRAVADO_API_KEY"
+    ```
+
+    Example response:
+
+    ```json
+    {
+      "positions": [
+        {
+          "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+          "market_id": "0xabc123def456abc123def456abc123def456abc123def456abc123def456abc12345",
+          "outcome": "YES",
+          "size": "16.129032",
+          "average_entry_price": "0.62",
+          "current_price": "0.63",
+          "unrealized_pnl": "0.161290",
+          "collateral_value": "10.161290",
+          "side": "long"
+        }
+      ],
+      "total_unrealized_pnl": "0.161290",
+      "total_collateral_value": "10.161290"
+    }
+    ```
+
+    Your position shows `16.129032` YES tokens at an average entry price of `$0.62`. The `unrealized_pnl` reflects the mark-to-market gain since your fill.
+  </Step>
+</Steps>
+
+## Next steps
+
+You've placed your first Polymarket order through Bravado. From here you can:
+
+- Explore advanced order types like TWAP, ICEBERG, and TRAILING\_STOP in the [Place an Order guide](/guides/place-an-order).
+- Mirror a top trader automatically with the [Copytrade API](/guides/copy-trading).
+- Pull wallet-level PnL and build a leaderboard with the [Analytics API](/concepts/analytics).
+- Provision sub-users for a white-label integration using the [User Provisioning guide](/api/trade/account).

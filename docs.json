@@ -1,0 +1,144 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Bravado",
+  "theme": "luma",
+  "colors": {
+    "primary": "#27D79B",
+    "light": "#27D79B",
+    "dark": "#27D79B"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "authentication",
+              "build-with-ai"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/orders",
+              "concepts/positions",
+              "concepts/analytics",
+              "concepts/copytrade"
+            ]
+          },
+          {
+            "group": "Use Cases",
+            "pages": [
+              "use-cases/algorithmic-trading-bots",
+              "use-cases/copy-trading",
+              "use-cases/portfolio-dashboards",
+              "use-cases/ai-agents",
+              "use-cases/quant-research",
+              "use-cases/tax-accounting-tooling"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdk/overview",
+              "sdk/typescript",
+              "sdk/python"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "reference/errors",
+              "reference/rate-limits",
+              "reference/pagination",
+              "reference/numeric-conventions",
+              "reference/idempotency",
+              "reference/versioning",
+              "reference/changelog",
+              "reference/status"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Trade API",
+            "pages": [
+              "api/trade/overview",
+              "api/trade/orders",
+              "api/trade/positions",
+              "api/trade/strategies",
+              "api/trade/account",
+              "api/trade/withdraw"
+            ]
+          },
+          {
+            "group": "Combos API",
+            "pages": [
+              "api/combos/overview",
+              "api/combos/quote-accept-redeem"
+            ]
+          },
+          {
+            "group": "Copytrade API",
+            "pages": [
+              "api/copytrade/overview",
+              "api/copytrade/subscriptions",
+              "api/copytrade/simulation"
+            ]
+          },
+          {
+            "group": "Analytics API",
+            "pages": [
+              "api/analytics/overview",
+              "api/analytics/healthz",
+              "api/analytics/leaderboard",
+              "api/analytics/leaderboard-volume",
+              "api/analytics/trader",
+              "api/analytics/trader-pnl",
+              "api/analytics/trader-positions",
+              "api/analytics/trader-positions-active",
+              "api/analytics/trader-positions-closed",
+              "api/analytics/trader-trades",
+              "api/analytics/trader-categories",
+              "api/analytics/trader-usdc-balance",
+              "api/analytics/trader-statements",
+              "api/analytics/trader-statements-r1",
+              "api/analytics/trader-metrics",
+              "api/analytics/trader-reconciliation",
+              "api/analytics/trader-tax-report",
+              "api/analytics/trades",
+              "api/analytics/entity"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/bravado"
+    }
+  },
+  "logo": {
+    "light": "/logo/wordmark-light.svg",
+    "dark": "/logo/wordmark-dark.svg"
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude"
+    ],
+    "display": "header"
+  }
+}

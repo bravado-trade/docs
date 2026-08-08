@@ -1,0 +1,114 @@
+---
+title: "Bravado API Errors: Status Codes and Troubleshooting"
+sidebarTitle: "Error reference"
+description: "HTTP status codes returned by the Bravado API with causes, example responses, and recommended actions for each error type you may encounter."
+icon: "sensor-alert"
+---
+
+Bravado uses standard HTTP status codes to indicate the success or failure of every request. When a request fails, the response body always contains a JSON object with a single `error` field describing what went wrong. Successful responses never include an `error` key, but may include a `warnings` array — always check for warnings on mutation requests.
+
+## Error response format
+
+Every non-2xx response from the Bravado API follows this shape:
+
+```json
+{"error": "invalid window"}
+```
+
+The `error` value is a human-readable string. Your code should branch on the HTTP status code first, then inspect the `error` string for fine-grained handling.
+
+## HTTP status codes
+
+| Status | Meaning | Common cause |
+| --- | --- | --- |
+| 400 Bad Request | Invalid request parameters | Wrong `window` value, price out of range, missing required field |
+| 401 Unauthorized | Missing or invalid Bearer token | No `Authorization` header, expired or revoked token |
+| 403 Forbidden | Valid token, insufficient scope | Calling `/withdraw` without the `trade.withdraw` scope |
+| 404 Not Found | Resource doesn't exist | An `order_id` that doesn't belong to your account |
+| 409 Conflict | Duplicate resource | Creating a copytrade for a leader where one already exists |
+| 410 Gone | Quote expired | Accepting a combo quote after its `expires_at` timestamp |
+| 422 Unprocessable Entity | Business rule violation | Insufficient balance, no liquidity, order crosses the book |
+| 429 Too Many Requests | Rate limit exceeded | Too many requests per minute for your API key |
+| 500 Internal Server Error | Server-side error | Unexpected server fault — retry with exponential backoff |
+| 503 Service Unavailable | Service temporarily unavailable | Data not yet available for this wallet; retry later |
+
+## Common error messages
+
+The table above covers status codes. These are the specific `error` string values you're most likely to encounter, along with their causes and fixes.
+
+<Accordion title='"price must be a decimal probability 0.001–0.999; received 72 — did you mean 0.72?"'>
+  You sent a price in cents instead of as a decimal probability. Bravado prices are always in the range `0.001`–`0.999`, representing a probability (e.g. `0.62` means 62 cents / 62% implied probability). Divide your cents value by 100 before sending.
+</Accordion>
+
+<Accordion title='"order crosses book"'>
+  Your iceberg slice was priced above the current ask. Iceberg orders must be passive (post-only); they cannot be priced to immediately fill against resting liquidity. Lower the price so it rests on the order book rather than crossing it.
+</Accordion>
+
+<Accordion title='"Not enough shares to place this sell — holding X…"'>
+  The size you specified for a `TAKE_PROFIT` or `STOP_LOSS` order exceeds your current share balance in that market. Reduce the order size to be less than or equal to your holding `X`.
+</Accordion>
+
+<Accordion title='"QUOTE_EXPIRED"'>
+  You attempted to accept a combo quote after the 8.5-second acceptance window had elapsed. Re-request a fresh quote via `POST /v2/trade/combo/quote` and accept it promptly.
+</Accordion>
+
+<Accordion title='"INSUFFICIENT_BALANCE"'>
+  Your wallet does not have enough USDC to cover the combo notional (`notional_usd`) plus the estimated fee. Add funds or reduce the combo size before retrying.
+</Accordion>
+
+<Accordion title='"NO_LIQUIDITY"'>
+  No maker could be found to quote the requested combo legs at the time of the request. Retry after a short delay or reduce the size of your combo request.
+</Accordion>
+
+<Accordion title='"available=false" (503 response body)'>
+  The data for this wallet is not yet available. Tax statement and PMWAS endpoints may require some processing time after wallet activity before results are ready. Poll the endpoint periodically and handle the 503 gracefully until `available` becomes `true`.
+</Accordion>
+
+## Warnings vs errors
+
+A `200 OK` response does not always mean everything succeeded completely. Bravado may return partial results with warnings attached.
+
+- **Order placement responses** can include a top-level `warnings` array describing non-fatal issues (e.g. a bracket leg that was skipped due to market conditions).
+- **Bracket orders** surface leg-level failures in `bracket.take_profit.error` and `bracket.stop_loss.error`. A `200` with one of these fields set means the primary order was placed but the bracket leg was not.
+
+```json
+{
+  "order_id": "abc123",
+  "warnings": ["take_profit leg could not be placed: insufficient liquidity"],
+  "bracket": {
+    "take_profit": { "error": "insufficient liquidity" },
+    "stop_loss":   { "order_id": "def456" }
+  }
+}
+```
+
+<Note>
+  Always check `warnings[]` and `bracket.*.error` on every order placement response, even when the HTTP status is `200`.
+</Note>
+
+## 429 Too Many Requests
+
+When you exceed your API key's rate limit, Bravado returns `429 Too Many Requests` with a `Retry-After` header indicating how many seconds to wait before retrying.
+
+- Read the `Retry-After` header and wait at least that long before your next request.
+- Do **not** implement tight retry loops that immediately re-send on 429 — this will prolong your rate-limited state.
+- Add random jitter to your backoff to avoid thundering-herd retries in multi-threaded environments.
+
+See the [Rate Limits](/reference/rate-limits) page for a full retry strategy with code examples.
+
+<Warning>
+  Retrying a 429 immediately without honouring `Retry-After` will not succeed and may extend the duration of your rate limit penalty.
+</Warning>
+
+## 503 PMWAS unavailable
+
+Tax statement and PMWAS endpoints return `503 Service Unavailable` with `available: false` in the response body when the data for a wallet is not yet ready:
+
+```json
+{
+  "available": false,
+  "error": "PMWAS data not yet available for this wallet"
+}
+```
+
+Data for these endpoints may not be available immediately. Availability varies by wallet activity — if you receive a `503`, the data is not ready yet. Implement polling with a reasonable interval (e.g. every few minutes) and surface a "processing" state to your users rather than treating this as a hard error.

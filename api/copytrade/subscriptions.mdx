@@ -1,0 +1,545 @@
+---
+title: "Copytrade Subscription Endpoints API Reference"
+sidebarTitle: "Subscriptions"
+description: "POST, GET, PATCH, and DELETE endpoints for managing Bravado copytrade subscriptions, including sizing config, filters, and risk controls."
+icon:
+  name: "bell"
+  library: "lucide"
+---
+
+These endpoints let you create, read, update, and delete copytrade subscriptions for the authenticated user. A subscription binds a follower to a leader wallet and defines exactly how fills should be sized, filtered, and risk-managed. All mutating requests require an `Idempotency-Key` header. Numeric response fields are returned as JSON strings.
+
+---
+
+## POST /v2/trade/copytrade
+
+Create a new copytrade subscription. The subscription starts in `ACTIVE` status by default and immediately begins monitoring the leader wallet for new fills. A `409 CONFLICT` is returned if an `ACTIVE` subscription for this `leader_address` already exists for the bound user.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` |
+| `Idempotency-Key` | Yes | Unique string per request (UUID recommended) |
+
+### Required fields
+
+<ParamField body="leader_address" type="string" required>
+  The Polygon wallet address of the trader you want to mirror. Must be a valid checksummed or lowercase hex address.
+</ParamField>
+
+<ParamField body="buy_order_type" type="string" required>
+  Which of the leader's buy order types to copy. One of `"MARKET"`, `"LIMIT"`, or `"ALL"`.
+</ParamField>
+
+<ParamField body="buy_size_mode" type="string" required>
+  How to calculate the follower's buy order size. One of `"PCT_OF_LEADER_TRADE"`, `"FIXED_USD_PER_TRADE"`, or `"PCT_OF_FOLLOWER_AVAILABLE"`.
+</ParamField>
+
+<ParamField body="buy_size_value" type="number" required>
+  The numeric value for the chosen `buy_size_mode`. For `PCT_*` modes this is a percentage (e.g. `50` for 50%); for `FIXED_USD_PER_TRADE` this is a dollar amount (e.g. `10`).
+</ParamField>
+
+<ParamField body="buy_insufficient_usdc_action" type="string" required>
+  What to do when the follower's balance is insufficient to fill the calculated buy size. `"BUY_MAX"` spends whatever is available; `"SKIP"` skips the copy entirely.
+</ParamField>
+
+<ParamField body="sell_order_type" type="string" required>
+  Which of the leader's sell order types to copy. One of `"MARKET"`, `"LIMIT"`, or `"ALL"`.
+</ParamField>
+
+<ParamField body="sell_size_mode" type="string" required>
+  How to calculate the follower's sell order size. One of `"PCT_OF_LEADER_TRADE"`, `"FIXED_USD_PER_TRADE"`, `"PCT_OF_FOLLOWER_AVAILABLE"`, `"MAX"`, or `"PCT_OF_MAX"`.
+</ParamField>
+
+<ParamField body="sell_insufficient_shares_action" type="string" required>
+  What to do when the follower does not have enough shares to match the calculated sell size. `"SELL_MAX"` sells all available shares; `"SKIP"` skips the copy.
+</ParamField>
+
+### Optional fields
+
+<ParamField body="leader_username" type="string">
+  A human-readable label for the leader (e.g. their Polymarket username). Stored for display purposes only.
+</ParamField>
+
+<ParamField body="status" type="string">
+  Initial status of the subscription. Defaults to `"ACTIVE"`. Pass `"PAUSED"` to create an inactive subscription you activate later.
+</ParamField>
+
+<ParamField body="market_ids_include" type="string[]">
+  Allowlist of Polymarket market IDs. When set, only fills on these markets are copied.
+</ParamField>
+
+<ParamField body="market_ids_exclude" type="string[]">
+  Blocklist of Polymarket market IDs. Fills on these markets are never copied.
+</ParamField>
+
+<ParamField body="tags_include" type="string[]">
+  Only copy fills on markets that carry at least one of these category tags (e.g. `["Sports", "Politics"]`).
+</ParamField>
+
+<ParamField body="tags_exclude" type="string[]">
+  Never copy fills on markets that carry any of these category tags.
+</ParamField>
+
+<ParamField body="buy_enabled" type="boolean">
+  Set to `false` to stop copying the leader's buys while still copying sells. Defaults to `true`.
+</ParamField>
+
+<ParamField body="buy_min_trade_size" type="number">
+  Minimum leader buy size in USD. Fills below this threshold are not copied.
+</ParamField>
+
+<ParamField body="buy_max_trade_size" type="number">
+  Maximum leader buy size in USD. Fills above this threshold are not copied.
+</ParamField>
+
+<ParamField body="buy_time_in_force" type="string">
+  Order time-in-force for copied buys. `"GTC"` (Good-Till-Cancelled) or `"FOK"` (Fill-Or-Kill). Defaults to `"GTC"`.
+</ParamField>
+
+<ParamField body="buy_min_for_percent" type="number">
+  Minimum computed buy size in USD when using a `PCT_*` buy mode. Prevents tiny fractional fills.
+</ParamField>
+
+<ParamField body="sell_enabled" type="boolean">
+  Set to `false` to stop copying the leader's sells. Defaults to `true`.
+</ParamField>
+
+<ParamField body="sell_size_value" type="number">
+  The numeric value for the chosen `sell_size_mode`. Required when `sell_size_mode` is not `"MAX"`.
+</ParamField>
+
+<ParamField body="is_simulation" type="boolean">
+  When `true`, all copied fills are paper trades — no real orders are placed and no capital is spent. Defaults to `false`.
+</ParamField>
+
+<ParamField body="copy_start_date" type="string">
+  ISO-8601 datetime. Leader fills before this timestamp are ignored. Pass `null` to copy from immediately.
+</ParamField>
+
+<ParamField body="copy_end_date" type="string">
+  ISO-8601 datetime. Leader fills after this timestamp are ignored. Pass `null` for no end date.
+</ParamField>
+
+<ParamField body="take_profit_levels" type="object[]">
+  Array of take-profit rules. Each rule is applied to every copied position.
+
+  <Expandable title="take_profit_levels fields">
+    <ParamField body="trigger_bps" type="integer">
+      Unrealized gain in basis points that triggers this rule (e.g. `5000` = 50% gain).
+    </ParamField>
+    <ParamField body="portion_bps" type="integer">
+      Portion of the position to sell when triggered (e.g. `10000` = 100%).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="stop_loss_levels" type="object[]">
+  Array of stop-loss rules. Each rule is applied to every copied position.
+
+  <Expandable title="stop_loss_levels fields">
+    <ParamField body="trigger_bps" type="integer">
+      Unrealized loss in basis points that triggers this rule (e.g. `2000` = 20% loss).
+    </ParamField>
+    <ParamField body="portion_bps" type="integer">
+      Portion of the position to sell when triggered (e.g. `10000` = 100%).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="close_at_price_cents" type="integer">
+  Close the entire position when the market price reaches this value in cents. Must be between `1` and `9999`.
+</ParamField>
+
+<ParamField body="max_hold_seconds" type="integer">
+  Force-close the position after this many seconds from entry, regardless of current price.
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  The unique ID of the newly created subscription. Use this as the `{id}` path parameter in all subsequent requests.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  The initial status of the subscription — `"ACTIVE"` or `"PAUSED"` based on what you passed.
+</ResponseField>
+
+<CodeGroup>
+
+```json Request
+POST /v2/trade/copytrade
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Idempotency-Key: e5f6a7b8-c9d0-1234-efab-345678901234
+Content-Type: application/json
+
+{
+  "leader_address": "0xAbCd1234EfAb5678AbCd1234EfAb5678AbCd1234",
+  "leader_username": "sharpshooter_99",
+  "buy_order_type": "ALL",
+  "buy_size_mode": "PCT_OF_LEADER_TRADE",
+  "buy_size_value": 50,
+  "buy_insufficient_usdc_action": "BUY_MAX",
+  "sell_order_type": "ALL",
+  "sell_size_mode": "MAX",
+  "sell_insufficient_shares_action": "SELL_MAX",
+  "buy_min_trade_size": 5,
+  "buy_max_trade_size": 500,
+  "take_profit_levels": [
+    { "trigger_bps": 10000, "portion_bps": 5000 },
+    { "trigger_bps": 20000, "portion_bps": 10000 }
+  ],
+  "stop_loss_levels": [
+    { "trigger_bps": 3000, "portion_bps": 10000 }
+  ],
+  "tags_exclude": ["Adult"],
+  "copy_start_date": "2024-11-01T00:00:00Z",
+  "copy_end_date": null
+}
+```
+
+```json Response
+{
+  "id": "ct_01HX6N0QRST9XDYP5FZELOH8I",
+  "status": "ACTIVE"
+}
+```
+
+</CodeGroup>
+
+---
+
+## GET /v2/trade/copytrade
+
+List all `ACTIVE` and `PAUSED` subscriptions for the authenticated user. Soft-deleted subscriptions are excluded.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` |
+
+### Response
+
+<ResponseField name="copytrades" type="object[]">
+  Array of subscription objects, each containing the full configuration as provided at creation plus system fields (`id`, `status`, `created_at`, `updated_at`).
+</ResponseField>
+
+<CodeGroup>
+
+```http Request
+GET /v2/trade/copytrade
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+```json Response
+{
+  "copytrades": [
+    {
+      "id": "ct_01HX6N0QRST9XDYP5FZELOH8I",
+      "status": "ACTIVE",
+      "leader_address": "0xAbCd1234EfAb5678AbCd1234EfAb5678AbCd1234",
+      "leader_username": "sharpshooter_99",
+      "buy_order_type": "ALL",
+      "buy_size_mode": "PCT_OF_LEADER_TRADE",
+      "buy_size_value": "50",
+      "buy_insufficient_usdc_action": "BUY_MAX",
+      "sell_order_type": "ALL",
+      "sell_size_mode": "MAX",
+      "sell_insufficient_shares_action": "SELL_MAX",
+      "is_simulation": false,
+      "created_at": "2024-11-01T10:00:00Z",
+      "updated_at": "2024-11-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+</CodeGroup>
+
+---
+
+## PATCH /v2/trade/copytrade/{id}
+
+Partially update an existing subscription. Only the fields you include in the request body are changed — all other fields remain at their current values. You can update any optional or required field except `leader_address`.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` |
+| `Idempotency-Key` | Yes | Unique string per request |
+
+### Path parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | The subscription ID returned by `POST /v2/trade/copytrade` |
+
+### Request
+
+All fields are optional. Include only the fields you want to update. Refer to the `POST /v2/trade/copytrade` optional fields list for descriptions of each field.
+
+### Response
+
+The full updated subscription object, reflecting all changes.
+
+<CodeGroup>
+
+```json Request
+PATCH /v2/trade/copytrade/ct_01HX6N0QRST9XDYP5FZELOH8I
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Idempotency-Key: f6a7b8c9-d0e1-2345-fabc-456789012345
+Content-Type: application/json
+
+{
+  "buy_size_value": 25,
+  "buy_max_trade_size": 250,
+  "stop_loss_levels": [
+    { "trigger_bps": 5000, "portion_bps": 10000 }
+  ]
+}
+```
+
+```json Response
+{
+  "id": "ct_01HX6N0QRST9XDYP5FZELOH8I",
+  "status": "ACTIVE",
+  "leader_address": "0xAbCd1234EfAb5678AbCd1234EfAb5678AbCd1234",
+  "leader_username": "sharpshooter_99",
+  "buy_order_type": "ALL",
+  "buy_size_mode": "PCT_OF_LEADER_TRADE",
+  "buy_size_value": "25",
+  "buy_max_trade_size": "250",
+  "buy_insufficient_usdc_action": "BUY_MAX",
+  "sell_order_type": "ALL",
+  "sell_size_mode": "MAX",
+  "sell_insufficient_shares_action": "SELL_MAX",
+  "stop_loss_levels": [
+    { "trigger_bps": 5000, "portion_bps": 10000 }
+  ],
+  "is_simulation": false,
+  "updated_at": "2024-11-15T16:45:00Z"
+}
+```
+
+</CodeGroup>
+
+---
+
+## DELETE /v2/trade/copytrade/{id}
+
+Soft-delete a subscription. The subscription is deactivated and removed from the active list, but all execution history and PnL data are preserved. You can still query historical fills via `GET /copytrade/history` after deletion.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` |
+
+### Path parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | The subscription ID to delete |
+
+### Response
+
+<ResponseField name="ok" type="boolean">
+  `true` when the subscription has been successfully soft-deleted.
+</ResponseField>
+
+<CodeGroup>
+
+```http Request
+DELETE /v2/trade/copytrade/ct_01HX6N0QRST9XDYP5FZELOH8I
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+```json Response
+{
+  "ok": true
+}
+```
+
+</CodeGroup>
+
+---
+
+## PATCH /v2/trade/copytrade/{id}/status
+
+Transition a subscription between `ACTIVE`, `PAUSED`, and `DISABLED` states without modifying any other configuration.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` |
+| `Idempotency-Key` | Yes | Unique string per request |
+
+### Path parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | The subscription ID |
+
+### Request
+
+<ParamField body="status" type="string" required>
+  Target status. One of `"ACTIVE"`, `"PAUSED"`, or `"DISABLED"`.
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  The subscription ID.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  The new status of the subscription.
+</ResponseField>
+
+<CodeGroup>
+
+```json Request
+PATCH /v2/trade/copytrade/ct_01HX6N0QRST9XDYP5FZELOH8I/status
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Idempotency-Key: a7b8c9d0-e1f2-3456-abcd-567890123456
+Content-Type: application/json
+
+{
+  "status": "PAUSED"
+}
+```
+
+```json Response
+{
+  "id": "ct_01HX6N0QRST9XDYP5FZELOH8I",
+  "status": "PAUSED"
+}
+```
+
+</CodeGroup>
+
+---
+
+## GET /v2/trade/copytrade/history
+
+Retrieve the execution history of all copied trades for the authenticated user, across all subscriptions.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` |
+
+### Query parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | integer | Maximum records to return. Maximum `200`. |
+
+### Response
+
+<ResponseField name="history" type="object[]">
+  Array of copied-trade records.
+
+  <Expandable title="history item fields">
+    <ResponseField name="id" type="string">Unique ID of this history record.</ResponseField>
+    <ResponseField name="copytrade_id" type="string">The subscription that triggered this copy.</ResponseField>
+    <ResponseField name="leader_address" type="string">The leader's Polygon wallet address.</ResponseField>
+    <ResponseField name="user_wallet" type="string">The follower's Polygon wallet address.</ResponseField>
+    <ResponseField name="market_id" type="string">Polymarket market ID where the fill occurred.</ResponseField>
+    <ResponseField name="event_slug" type="string">Polymarket event slug for the market.</ResponseField>
+    <ResponseField name="market_title" type="string">Human-readable market title.</ResponseField>
+    <ResponseField name="side" type="string">`"BUY"` or `"SELL"`.</ResponseField>
+    <ResponseField name="order_type" type="string">`"MARKET"` or `"LIMIT"`.</ResponseField>
+    <ResponseField name="amount" type="string">Order size in USD. Returned as a string.</ResponseField>
+    <ResponseField name="price" type="string">Fill price in cents. Returned as a string.</ResponseField>
+    <ResponseField name="is_simulation" type="boolean">Whether this was a paper trade.</ResponseField>
+    <ResponseField name="created_at" type="string">ISO-8601 timestamp of the fill.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<CodeGroup>
+
+```http Request
+GET /v2/trade/copytrade/history?limit=5
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+```json Response
+{
+  "history": [
+    {
+      "id": "ch_01HX7P1QRSU0YEZO6GAFMP9J",
+      "copytrade_id": "ct_01HX6N0QRST9XDYP5FZELOH8I",
+      "leader_address": "0xAbCd1234EfAb5678AbCd1234EfAb5678AbCd1234",
+      "user_wallet": "0xDeF09876AbCd5432DeF09876AbCd5432DeF09876",
+      "market_id": "0x1234abcd5678efab1234abcd5678efab1234abcd5678efab1234abcd5678efab",
+      "event_slug": "us-presidential-election-2024",
+      "market_title": "Will Candidate X win the 2024 election?",
+      "side": "BUY",
+      "order_type": "MARKET",
+      "amount": "12.50",
+      "price": "62",
+      "is_simulation": false,
+      "created_at": "2024-11-15T14:00:00Z"
+    }
+  ]
+}
+```
+
+</CodeGroup>
+
+---
+
+## GET /v2/trade/copytrade/pnl
+
+Retrieve realized profit and loss for the authenticated user across all copytrade subscriptions, split between real and simulation fills.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` |
+
+### Response
+
+<ResponseField name="realized_pnl_24h" type="string">
+  Realized PnL from real trades over the last 24 hours, in USD. Returned as a string.
+</ResponseField>
+
+<ResponseField name="realized_pnl_lifetime" type="string">
+  Total realized PnL from real trades since account creation, in USD. Returned as a string.
+</ResponseField>
+
+<ResponseField name="simulation" type="object">
+  PnL figures for simulation (paper) trades only.
+
+  <Expandable title="simulation fields">
+    <ResponseField name="realized_pnl_24h" type="string">Simulation realized PnL over the last 24 hours.</ResponseField>
+    <ResponseField name="realized_pnl_lifetime" type="string">Simulation realized PnL lifetime total.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<CodeGroup>
+
+```http Request
+GET /v2/trade/copytrade/pnl
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+```json Response
+{
+  "realized_pnl_24h": "34.75",
+  "realized_pnl_lifetime": "412.30",
+  "simulation": {
+    "realized_pnl_24h": "150.00",
+    "realized_pnl_lifetime": "2340.00"
+  }
+}
+```
+
+</CodeGroup>

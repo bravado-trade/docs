@@ -1,0 +1,82 @@
+---
+title: "Quant Research and Historical Analysis"
+sidebarTitle: "Quant research"
+description: "Pull historical Polymarket trade, position, and PnL data for quant research and backtesting with the Bravado Analytics API."
+icon:
+  name: "flask-conical"
+  library: "lucide"
+---
+
+## The problem
+
+Quantitative research on Polymarket requires clean historical fill data, position snapshots at arbitrary points in time, and PnL series that reconcile with wallet state. Reconstructing this from on-chain logs is possible but expensive: parsing conditional-token events, joining against order-book snapshots, and handling neg-risk mechanics is a several-week engineering project.
+
+## What Bravado provides
+
+- **Full historical fills** for any wallet via `GET /traders/{address}/trades` with cursor pagination.
+- **Position reconstruction** at any timestamp via `GET /traders/{address}/positions` with time range filters.
+- **PnL time series** via `GET /traders/{address}/pnl` with configurable bucketing.
+- **Universe-level data** via `GET /trades` for global fill data across wallets.
+- All PnL computed under [PMWAS](/concepts/pnl-methodology), so backtests reconcile with the live Analytics endpoints.
+
+## Worked example
+
+Pull all fills for a leaderboard cohort and load them into a dataframe:
+
+```python
+import os, requests, pandas as pd
+
+API = "https://bravado-api-k7kaq.ondigitalocean.app"
+H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+
+def all_trades(addr):
+    rows = []
+    cursor_ts, cursor_log = None, None
+    while True:
+        params = {"limit": 500}
+        if cursor_ts:
+            params["cursor_ts"] = cursor_ts
+            params["next_cursor_log_idx"] = cursor_log
+
+        r = requests.get(f"{API}/traders/{addr}/trades", params=params, headers=H).json()
+        rows.extend(r["trades"])
+        if not r["next_cursor"]:
+            break
+        cursor_ts = r["next_cursor"]
+        cursor_log = r.get("next_cursor_log_idx")
+    return rows
+
+# Top 50 traders by 30-day PnL.
+leaderboard = requests.get(f"{API}/leaderboard?window=30d&limit=50", headers=H).json()
+
+frames = []
+for t in leaderboard["traders"]:
+    trades = all_trades(t["address"])
+    df = pd.DataFrame(trades)
+    df["wallet"] = t["address"]
+    frames.append(df)
+
+all_df = pd.concat(frames, ignore_index=True)
+all_df.to_parquet("polymarket_top50_fills.parquet")
+```
+
+The resulting parquet has every fill for every wallet, with columns for `symbol`, `side`, `size`, `price`, `fee`, `block_timestamp`, and market metadata. Feed it directly to a Jupyter notebook or a research feature store.
+
+## Common research patterns
+
+- **Alpha decay.** Track leader wallets' PnL post-signal and correlate with mirroring latency.
+- **Fee sensitivity.** Simulate strategies at different fee levels using PMWAS cost-basis math.
+- **Liquidity modeling.** Cross-reference fill sizes against depth snapshots to model slippage.
+- **Neg-risk arbitrage.** Detect stale prices across a neg-risk basket where the YES-share sum diverges from \$1.
+
+## Notes on data
+
+- Numeric fields are strings. Cast to `Decimal` before arithmetic, not `float`. See [Numeric conventions](/reference/numeric-conventions).
+- Cursor pagination is stable against new inserts. Backfill jobs can resume from a persisted cursor.
+- Fees are itemized per fill.
+
+## Related
+
+- [Concept: PnL methodology (PMWAS)](/concepts/pnl-methodology)
+- [Reference: Pagination](/reference/pagination)
+- [Analytics API reference](/api/analytics/overview)

@@ -1,0 +1,31 @@
+---
+title: "GET /trades — Trade Log by Query Parameter"
+sidebarTitle: "GET /trades"
+description: "Trade log for a wallet supplied as a query parameter. Alternative to /traders/{address}/trades."
+icon:
+  name: "list"
+  library: "lucide"
+---
+
+Returns the same trade log as [`/traders/{address}/trades`](/api/analytics/trader-trades), but the wallet address is passed as a query parameter instead of a path segment. Response shape is identical.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/trades
+```
+
+### Query Parameters
+
+    
+
+### Response
+
+Same shape as [/traders/](/api/analytics/trader-trades#response){address}[/trades](/api/analytics/trader-trades#response).
+
+### Example
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/trades \
+  -H "Authorization: Bearer <token>" \
+  -d address=0xabc... \
+  -d limit=100
+```

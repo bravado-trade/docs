@@ -1,0 +1,80 @@
+---
+title: "GET /leaderboard/volume — Polymarket Volume Leaderboard"
+sidebarTitle: "GET /leaderboard/volume"
+description: "Returns traders ranked by USDC trading volume for the requested rolling window."
+icon: "0"
+---
+
+Returns traders ranked by USDC trading volume for the requested window.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume
+```
+
+### Query Parameters
+
+### Response
+
+<ResponseField name="results" type="array">
+  <Expandable title="VolumeLeaderboardRow fields">
+    <ResponseField name="rank" type="integer">
+      1-based rank.
+    </ResponseField>
+
+    <ResponseField name="trader" type="string">
+      Polygon wallet address.
+    </ResponseField>
+
+    <ResponseField name="username" type="string | null">
+      Polymarket display name.
+    </ResponseField>
+
+    <ResponseField name="avatar" type="string | null">
+      Avatar image URL.
+    </ResponseField>
+
+    <ResponseField name="bravado_user_id" type="string | null">
+      Internal Bravado user identifier.
+    </ResponseField>
+
+    <ResponseField name="volume_usdc" type="string">
+      Total USDC notional traded.
+    </ResponseField>
+
+    <ResponseField name="volume_shares" type="string">
+      Total shares traded.
+    </ResponseField>
+
+    <ResponseField name="trades" type="integer">
+      Trade events in the window.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume \
+  -H "Authorization: Bearer <token>" \
+  -d window=30d
+```
+
+```json Response (abbreviated)
+{
+  "mode": "volume",
+  "window": "30d",
+  "results": [
+    {
+      "rank": 1,
+      "trader": "0xdef789...abc012",
+      "username": "volumeking",
+      "volume_usdc": "2145000.000000",
+      "trades": 4820
+    }
+  ]
+}
+```
+
+</CodeGroup>

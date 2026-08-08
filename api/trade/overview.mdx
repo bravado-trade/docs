@@ -1,0 +1,65 @@
+---
+title: "Bravado Trade API v2: Endpoints and Integration Guide"
+sidebarTitle: "Overview"
+description: "The Bravado Trade API v2 provides consolidated order execution, position management, balances, and user provisioning for Polymarket on Polygon."
+icon:
+  name: "book-open"
+  library: "lucide"
+---
+
+The Bravado Trade API v2 is the single integration point for building Polymarket trading applications on Polygon. It exposes order placement (including algorithmic order types such as TWAP, Iceberg, and Pegged), position lifecycle management (redeem, split, merge), account inspection, and partner user provisioning — all behind a consistent REST interface using Polygon-native pUSD collateral.
+
+## Base URL
+
+```
+https://bravado-api-k7kaq.ondigitalocean.app
+```
+
+All Trade API paths are prefixed with `/v2/trade/`.
+
+## Authentication
+
+Every request must carry a Bearer token in the `Authorization` header:
+
+```http
+Authorization: Bearer <token>
+```
+
+Mutating requests (POST, DELETE) additionally require an `Idempotency-Key` header containing a unique string (UUID recommended). Replaying the same key within the idempotency window returns the cached response without re-executing the operation.
+
+<Note>
+All numeric fields in API responses are returned as **JSON strings** to preserve decimal precision. Parse them with an arbitrary-precision decimal library rather than native floats.
+</Note>
+
+## Endpoint Summary
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v2/trade/order` | Place a single order (LIMIT / MARKET / PEGGED / TWAP / ICEBERG / STOP_LOSS / TAKE_PROFIT / TRAILING_STOP) |
+| `POST` | `/v2/trade/order/batch` | Place up to 20 limit orders atomically (bid/ask ladder) |
+| `GET` | `/v2/trade/orders/open` | List all open CLOB orders |
+| `DELETE` | `/v2/trade/orders/{order_id}` | Cancel a single open order |
+| `POST` | `/v2/trade/orders/cancel-batch` | Cancel up to 50 orders by ID |
+| `POST` | `/v2/trade/orders/cancel-all` | Cancel every open order on the account |
+| `GET` | `/v2/trade/positions` | List active or closed outcome token positions |
+| `POST` | `/v2/trade/positions/redeem` | Redeem a resolved CTF position to pUSD |
+| `POST` | `/v2/trade/positions/split` | Split pUSD into a complete outcome set |
+| `POST` | `/v2/trade/positions/merge` | Merge a complete outcome set back to pUSD |
+| `GET` | `/v2/trade/strategies` | List managed strategies (TWAP, Iceberg, Pegged, Stops) |
+| `DELETE` | `/v2/trade/strategies/{id}` | Cancel a managed strategy by record ID |
+| `GET` | `/v2/trade/account` | Account snapshot — partner, wallet, API key scopes |
+| `GET` | `/v2/trade/balances` | Collateral balances (pUSD and USDC.e) |
+| `GET` | `/v2/trade/balances/withdrawable` | All ERC20 balances available to withdraw |
+| `POST` | `/v2/trade/withdraw` | Withdraw pUSD (or any ERC20) to an external Polygon address |
+| `GET` | `/v2/trade/activity` | Trade activity timeline with pagination |
+| `POST` | `/v2/trade/users` | Provision a partner-scoped user (white-label flow) |
+
+## Sections
+
+Explore the detailed reference for each area of the API:
+
+- **[Orders](/api/trade/orders)** — place, query, and cancel individual or batched orders across all supported order types.
+- **[Positions](/api/trade/positions)** — inspect open and closed positions and perform on-chain lifecycle actions (redeem, split, merge).
+- **[Strategies](/api/trade/strategies)** — monitor and cancel long-running managed strategies such as TWAP, Iceberg, Pegged, and stop orders.
+- **[Account](/api/trade/account)** — retrieve your account snapshot, collateral balances, and trade activity history.
+- **[Withdraw](/api/trade/withdraw)** — move pUSD or other ERC20 tokens from your deposit wallet to any Polygon address.

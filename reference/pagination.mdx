@@ -1,0 +1,189 @@
+---
+title: "Bravado API Pagination: Offset, Cursor, and R1 Styles"
+sidebarTitle: "Pagination"
+description: "Bravado uses two pagination styles: offset/limit for most endpoints and cursor-based pagination for trade history and activity timelines."
+icon:
+  name: "chevrons-left-right"
+  library: "lucide"
+---
+
+Bravado uses two distinct pagination patterns depending on the nature of the data being returned. Most list endpoints use classic offset/limit pagination, which is simple to implement and supports random access. Trade history and activity timeline endpoints use cursor-based pagination, which is more efficient for large, append-only datasets and guarantees you won't miss records if new data arrives between pages.
+
+## Offset/limit pagination
+
+For most list endpoints, you control pagination using `limit` and `offset` query parameters. The response includes metadata fields that tell you how many total records exist and whether there are more pages to fetch.
+
+**Endpoints that use offset/limit:**
+- `GET /leaderboard`
+- `GET /traders/{address}/positions`
+- `GET /v2/trade/positions`
+- `GET /v2/trade/combo/positions`
+- PMWAS statement endpoints (with `r1_limit` / `r1_offset` — see [PMWAS R1 pagination](#pmwas-r1-pagination))
+
+**Example request:**
+
+```http
+GET /traders/0xabc.../positions?limit=100&offset=0 HTTP/1.1
+Authorization: Bearer <token>
+```
+
+**Example response:**
+
+```json
+{
+  "positions": [...],
+  "total": 342,
+  "limit": 100,
+  "offset": 0,
+  "has_more": true
+}
+```
+
+Use `total`, `limit`, and `offset` to determine whether another page exists. Stop when `offset + limit >= total` (or when `has_more` is `false`).
+
+**Python iteration example:**
+
+```python
+offset = 0
+limit = 100
+
+while True:
+    resp = get(f"/traders/{address}/positions?limit={limit}&offset={offset}")
+    data = resp.json()
+
+    process(data["positions"])
+
+    if offset + limit >= data["total"]:
+        break
+
+    offset += limit
+```
+
+<Tip>
+Request the largest page size your use case allows to minimise the number of round trips. See the [page size limits table](#page-size-limits) below for per-endpoint maximums.
+</Tip>
+
+## Cursor-based pagination
+
+Trade history and activity timeline endpoints use cursor-based pagination. Instead of an offset, you pass a cursor value returned by the previous response to fetch the next page. This approach is safe against data mutations between pages and handles high-volume datasets efficiently.
+
+### Trade history cursors
+
+`GET /traders/{address}/trades` and `GET /trades` use a compound cursor made up of two fields:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `cursor_ts` | integer | Exclusive upper bound on `block_timestamp` — pass the `next_cursor` from the previous response |
+| `next_cursor_log_idx` | integer | Secondary cursor to disambiguate when multiple trades share the same `block_timestamp` |
+
+The response includes `next_cursor` (a `block_timestamp` value) and `next_cursor_log_idx`. When `next_cursor` is `null`, you have reached the end of the dataset.
+
+**Python iteration example:**
+
+```python
+cursor_ts = None
+cursor_log_idx = None
+
+while True:
+    params = {"limit": 100}
+    if cursor_ts is not None:
+        params["cursor_ts"] = cursor_ts
+    if cursor_log_idx is not None:
+        params["next_cursor_log_idx"] = cursor_log_idx
+
+    resp = get(f"/traders/{address}/trades", params=params)
+    data = resp.json()
+
+    process(data["trades"])
+
+    if not data["next_cursor"]:
+        break
+
+    cursor_ts = data["next_cursor"]
+    cursor_log_idx = data.get("next_cursor_log_idx")
+```
+
+<Note>
+Always pass both `cursor_ts` and `next_cursor_log_idx` together when available. Omitting `next_cursor_log_idx` when multiple trades share the same timestamp can cause duplicates or skipped records.
+</Note>
+
+### Activity timeline cursor
+
+`GET /v2/trade/activity` uses an opaque string cursor rather than a timestamp integer. Treat the `next_cursor` value as opaque — do not parse or construct it manually.
+
+**Example request (first page):**
+
+```http
+GET /v2/trade/activity?limit=50 HTTP/1.1
+Authorization: Bearer <token>
+```
+
+**Example response:**
+
+```json
+{
+  "activity": [...],
+  "next_cursor": "eyJvZmZzZXQiOjUwfQ=="
+}
+```
+
+**Example request (next page):**
+
+```http
+GET /v2/trade/activity?limit=50&cursor=eyJvZmZzZXQiOjUwfQ== HTTP/1.1
+Authorization: Bearer <token>
+```
+
+When `next_cursor` is `null` or absent, you have fetched all available activity.
+
+**Python iteration example:**
+
+```python
+cursor = None
+
+while True:
+    params = {"limit": 50}
+    if cursor:
+        params["cursor"] = cursor
+
+    resp = get("/v2/trade/activity", params=params)
+    data = resp.json()
+
+    process(data["activity"])
+
+    cursor = data.get("next_cursor")
+    if not cursor:
+        break
+```
+
+## PMWAS R1 pagination
+
+The PMWAS statements endpoint has a nested pagination layer for R1 disposition rows within each statement. Use `r1_limit` and `r1_offset` to page through disposition rows independently of the top-level statement pages.
+
+```http
+GET /traders/{address}/statements?limit=10&offset=0&r1_limit=500&r1_offset=0 HTTP/1.1
+Authorization: Bearer <token>
+```
+
+Check `has_more_r1` in the response to determine whether additional R1 rows exist for the current statement page.
+
+For direct access to R1 rows without the parent statement wrapper, use the standalone endpoint:
+
+```http
+GET /traders/{address}/statements/r1?limit=500&offset=0 HTTP/1.1
+Authorization: Bearer <token>
+```
+
+## Page size limits
+
+Requesting more than the maximum allowed limit for an endpoint will result in a `400 Bad Request`. Use these maximums as your target batch size when iterating through large datasets.
+
+| Endpoint | Max `limit` |
+|----------|------------|
+| `GET /leaderboard` | 500 |
+| `GET /traders/{address}/positions` | 1000 |
+| `GET /traders/{address}/trades` | 500 |
+| `GET /v2/trade/positions` | 500 |
+| `GET /v2/trade/activity` | 200 |
+| `GET /v2/trade/combo/positions` | 500 |
+| `GET /traders/{address}/statements` (R1 rows) | 5000 |

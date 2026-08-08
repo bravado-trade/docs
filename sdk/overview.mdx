@@ -1,0 +1,61 @@
+---
+title: "Bravado SDKs"
+sidebarTitle: "Overview"
+description: "Typed client libraries for the Bravado APIs in TypeScript and Python."
+icon:
+  name: "package"
+  library: "lucide"
+---
+
+Bravado will ship typed client libraries for TypeScript and Python covering the Trade, Copytrade, and Analytics APIs. The SDKs are generated from the OpenAPI spec, so every endpoint documented on this site is available as a typed method.
+
+<Warning>
+  The official Bravado SDKs are in development. This page and its sub-pages describe the planned surface. If you need typed access today, generate a client from the OpenAPI spec (see below) or use the REST endpoints directly.
+</Warning>
+
+{/* TODO: Confirm SDK release timeline and package names, then remove the warning above. */}
+
+## Languages
+
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="js" href="/sdk/typescript">
+    Node.js and modern browsers. Full type coverage of requests and responses.
+  </Card>
+
+  <Card title="Python" icon="python" href="/sdk/python">
+    Sync and async clients. Pydantic-typed request and response models.
+  </Card>
+</CardGroup>
+
+## Design principles
+
+Both SDKs share the same design:
+
+- **1:1 endpoint coverage.** Every REST endpoint has a method with the same name.
+- **Strong types on numeric fields.** Prices, sizes, and PnL values are exposed as `Decimal` (Python) and `string` in TypeScript with a helper to convert to arbitrary-precision math. Numbers are never returned as floats. See [Numeric conventions](/reference/numeric-conventions).
+- **Automatic idempotency.** Every mutating method accepts an optional `idempotency_key`. If omitted, the SDK generates one and passes it through. Retries reuse the key automatically. See [Idempotency](/reference/idempotency).
+- **Retry with backoff.** Built-in exponential backoff with jitter on 429 and 5xx responses. `Retry-After` headers are honored.
+- **Configurable base URL.** Point at production, staging, or a local mock.
+
+## Generating a client today
+
+Until the official SDKs ship, you can generate a client from the OpenAPI spec using the generator of your choice.
+
+{/* TODO: Publish the OpenAPI spec at a stable URL (e.g. https://bravado.mintlify.app/openapi.yaml) and document it here. */}
+
+Once the spec is available, standard generators work:
+
+```bash
+# TypeScript
+npx openapi-typescript https://bravado.mintlify.app/openapi.yaml -o bravado.d.ts
+
+# Python
+pip install openapi-python-client
+openapi-python-client generate --url https://bravado.mintlify.app/openapi.yaml
+```
+
+## Related
+
+- [TypeScript SDK](/sdk/typescript)
+- [Python SDK](/sdk/python)
+- [Build with AI](/build-with-ai)

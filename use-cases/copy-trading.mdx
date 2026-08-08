@@ -1,0 +1,84 @@
+---
+title: "Copy-Trading and Social Trading Products"
+sidebarTitle: "Copy and social trading"
+description: "Build a copy-trading or social trading product on Polymarket with the Bravado Copytrade API."
+icon:
+  name: "users-round"
+  library: "lucide"
+---
+
+## The problem
+
+Retail interest in prediction markets is high but sophistication is uneven. A product that lets a user pick a top trader and automatically mirror their fills combines a proven UX pattern (Etoro-style copy trading) with a market that has no native copy-trading feature. Building this from scratch requires watching every fill on-chain, replaying it against a follower wallet, handling partial fills, and reconciling.
+
+## What Bravado provides
+
+The Copytrade API is a purpose-built engine that:
+
+- Subscribes a follower wallet to a leader wallet's fills.
+- Mirrors each leader fill according to configurable sizing modes: `proportional`, `fixed`, or `capped`.
+- Enforces per-fill and per-day notional limits.
+- Restricts mirroring by category, market, or outcome.
+- Emits mirrored fill events with cross-references to the leader's original fill.
+
+Polymarket does not offer a native equivalent. Every copy-trading product on Polymarket is running its own version of this engine or is using Bravado.
+
+## Worked example
+
+Provision a follower, subscribe to a leader, and print mirrored fills:
+
+```python
+import os, uuid, time, requests
+
+API = "https://bravado-api-k7kaq.ondigitalocean.app"
+KEY = os.environ["BRAVADO_API_KEY"]
+H = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
+
+def new_key():
+    return {"Idempotency-Key": str(uuid.uuid4())}
+
+# 1. Pick a leader from the leaderboard.
+leaderboard = requests.get(f"{API}/leaderboard?window=30d&order=pnl&limit=1", headers=H).json()
+leader = leaderboard["traders"][0]["address"]
+
+# 2. Subscribe with proportional sizing and a per-fill cap.
+sub = requests.post(f"{API}/v2/trade/copytrade/subscriptions", headers={**H, **new_key()}, json={
+    "leader_address": leader,
+    "sizing_mode": "proportional",
+    "sizing_factor": "0.10",
+    "max_notional_per_fill": "100.00",
+    "daily_notional_limit": "1000.00",
+}).json()
+
+# 3. Stream mirrored fills.
+seen = set()
+while True:
+    fills = requests.get(
+        f"{API}/v2/trade/copytrade/subscriptions/{sub['subscription_id']}/fills?limit=100",
+        headers=H,
+    ).json()
+
+    for f in fills["fills"]:
+        if f["fill_id"] in seen:
+            continue
+        seen.add(f["fill_id"])
+        print(f"[{f['created_at']}] mirrored leader fill {f['leader_fill_id']}: "
+              f"{f['side']} {f['filled_size']} @ ${f['average_price']}")
+    time.sleep(5)
+```
+
+## Product patterns
+
+Two common product shapes on top of the Copytrade API:
+
+1. **Follow-a-trader.** User picks one leader from a curated list. Simple, low-cognitive-load onboarding.
+2. **Basket.** User subscribes to many leaders at once with different sizing weights. Reduces single-trader risk.
+
+Both are single-API-call operations once a follower is provisioned. See the [guide](/guides/copy-trading-bot-50-lines) for a starter implementation.
+
+## Related
+
+- [Guide: Build a copy-trading bot in 50 lines](/guides/copy-trading-bot-50-lines)
+- [Guide: Track a whale wallet and mirror its fills](/guides/track-whale-wallet)
+- [Concept: Copy trading](/concepts/copytrade)
+- [Copytrade API reference](/api/copytrade/overview)

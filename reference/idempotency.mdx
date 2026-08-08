@@ -1,0 +1,113 @@
+---
+title: "Idempotency"
+sidebarTitle: "Idempotency"
+description: "Full semantics of Idempotency-Key on the Bravado API: format, retention, replay behavior, and conflict handling."
+icon:
+  name: "refresh-cw"
+  library: "lucide"
+---
+
+Every mutating request to Bravado (`POST`, `PATCH`, `DELETE`) requires an `Idempotency-Key` header. This lets you safely retry after network failures without creating duplicate orders, cancellations, withdrawals, or copy-trade subscriptions.
+
+## Key format
+
+- Send `Idempotency-Key: <uuid>` where `<uuid>` is a UUID v4.
+- Generate a fresh UUID for every distinct logical operation.
+- Reuse the same UUID only when retrying a request that failed with a network error or timeout.
+- Keys are 36 characters and must match the UUID v4 canonical format.
+
+```text
+Idempotency-Key: e4b9c1a2-38df-4f77-a3c5-012bd9e8f231
+```
+
+## Scope
+
+Idempotency keys are scoped to your API key. The same UUID sent under a different token is a different key.
+
+Keys are also scoped to the target endpoint. The same UUID sent to two different endpoints is treated as two separate operations.
+
+## Retention window
+
+Idempotency keys are retained on the Bravado side for a bounded window. Retries received within the window return the original response with `Idempotent-Replayed: true` set. Retries received after the window has expired are treated as a fresh request and can create a new operation.
+
+{/* TODO: Confirm the exact retention window (24h, 7d, 30d?). Document the header emitted when a key has expired so clients can distinguish expiration from a genuine new request. */}
+
+## Replay behavior
+
+On a successful match against a prior request:
+
+- The response body is exactly the original response.
+- The HTTP status is the original status.
+- The response includes `Idempotent-Replayed: true`.
+- No new operation is executed.
+
+## Conflicting payloads
+
+If you reuse an idempotency key but change the request body, Bravado returns:
+
+```http
+HTTP/1.1 409 Conflict
+Content-Type: application/json
+
+{"error": "idempotency_key_conflict", "message": "Request body differs from the original request for this key."}
+```
+
+Rules:
+
+- Do not reuse a key for a semantically different operation.
+- Do generate a new UUID for each new intended operation.
+
+## When to retry
+
+Retry with the same key when:
+
+- The network dropped mid-request and you never received a response.
+- You received a `5xx` response.
+- You received a `429` with `Retry-After` (retry after honoring the header).
+
+Do not retry with the same key when:
+
+- You received a `4xx` response other than `429`. Fix the request first, then submit with a new key.
+- Enough time has passed that the key may have expired (see retention window above).
+
+## Example
+
+Placing an order with retry-safe idempotency:
+
+```python
+import requests
+import uuid
+import time
+
+url = "https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order"
+key = str(uuid.uuid4())
+payload = {"symbol": "71321...", "side": "buy", "type": "MARKET", "quote_amount": "10"}
+
+for attempt in range(3):
+    try:
+        r = requests.post(
+            url,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {API_KEY}",
+                "Idempotency-Key": key,
+                "Content-Type": "application/json",
+            },
+            timeout=10,
+        )
+        if r.status_code < 500:
+            break
+    except requests.exceptions.RequestException:
+        pass
+    time.sleep(2 ** attempt)
+
+print(r.status_code, r.headers.get("Idempotent-Replayed"), r.json())
+```
+
+The same `key` is reused across all three attempts. If the first attempt landed and the response was lost, the retry returns the same order with `Idempotent-Replayed: true`.
+
+## Related
+
+- [Rate limits](/reference/rate-limits) for the retry policy that pairs with idempotency.
+- [Error reference](/reference/errors) for the error responses you may see on retry.
+- [Safe retries with Idempotency-Key](/guides/safe-retries-idempotency) for a full worked guide.

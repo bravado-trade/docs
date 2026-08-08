@@ -1,0 +1,428 @@
+---
+title: "Account Snapshot, Balances, and Activity API Reference"
+sidebarTitle: "Account"
+description: "GET /v2/trade/account, /balances, /balances/withdrawable, and /activity endpoints for inspecting your Bravado integration account."
+icon:
+  name: "user"
+  library: "lucide"
+---
+
+The account endpoints give you a complete view of your Bravado integration: who owns it, what wallets are associated, which API scopes are active, how much collateral you hold, and a full timeline of on-chain and trading activity. You can also provision partner-scoped sub-users for white-label flows directly from this surface.
+
+---
+
+## GET /v2/trade/account
+
+Returns a snapshot of your account configuration, including the partner that owns the API key, the wallet addresses Bravado manages for you, and the permissions granted to the current key.
+
+### Response
+
+<ResponseField name="partner" type="object">
+  The partner entity that owns this integration.
+
+  <Expandable title="partner fields">
+    <ResponseField name="id" type="string">
+      Unique partner ID.
+    </ResponseField>
+    <ResponseField name="slug" type="string">
+      URL-safe partner identifier.
+    </ResponseField>
+    <ResponseField name="display_name" type="string">
+      Human-readable partner name shown in the Bravado dashboard.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="binding" type="object">
+  The user binding associating your API key with a specific Bravado user account.
+
+  <Expandable title="binding fields">
+    <ResponseField name="id" type="string">
+      Internal binding ID.
+    </ResponseField>
+    <ResponseField name="partner_user_id" type="string">
+      Your own user reference string as supplied during provisioning.
+    </ResponseField>
+    <ResponseField name="bravado_user_id" type="string">
+      Bravado-assigned user ID for this binding.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="api_key" type="object">
+  Metadata about the API key used in this request.
+
+  <Expandable title="api_key fields">
+    <ResponseField name="id" type="string">
+      API key ID.
+    </ResponseField>
+    <ResponseField name="scopes" type="array">
+      List of permission scopes granted, e.g. `["trade.read", "trade.execute", "trade.withdraw"]`.
+    </ResponseField>
+    <ResponseField name="rate_limit_per_min" type="number">
+      Maximum requests per minute allowed on this key.
+    </ResponseField>
+    <ResponseField name="last4" type="string">
+      Last 4 characters of the key value, for identification.
+    </ResponseField>
+    <ResponseField name="builder_code_override" type="string">
+      If set, this builder code is used on all orders placed with this key, overriding any value in the request body.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="wallet" type="object">
+  The on-chain wallet addresses associated with this account.
+
+  <Expandable title="wallet fields">
+    <ResponseField name="eoa_address" type="string">
+      Externally Owned Account address controlled by Bravado's signing key.
+    </ResponseField>
+    <ResponseField name="safe_address" type="string">
+      Gnosis Safe (proxy wallet) address where collateral and positions are held.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="builder_code_resolved" type="string">
+  The effective builder code that will be used on orders. Reflects any `builder_code_override` on the key, falling back to the partner default.
+</ResponseField>
+
+<ResponseField name="notional_cap_usdc" type="string">
+  Maximum open notional exposure in USDC allowed by the partner configuration. `null` means uncapped.
+</ResponseField>
+
+<ResponseField name="onboarding_status" type="string">
+  `COMPLETE` when the account is fully set up and ready to trade. Other values indicate a pending step (e.g. `PENDING_WALLET`).
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "partner": {
+    "id": "partner_abc123",
+    "slug": "my-trading-app",
+    "display_name": "My Trading App"
+  },
+  "binding": {
+    "id": "binding_xyz789",
+    "partner_user_id": "user-001",
+    "bravado_user_id": "bvd_user_456def"
+  },
+  "api_key": {
+    "id": "key_ghi012",
+    "scopes": ["trade.read", "trade.execute"],
+    "rate_limit_per_min": 300,
+    "last4": "7k9z",
+    "builder_code_override": null
+  },
+  "wallet": {
+    "eoa_address": "0xEOA...aabbcc",
+    "safe_address": "0xSafe...ddeeff"
+  },
+  "builder_code_resolved": "bravado-default",
+  "notional_cap_usdc": "50000.00",
+  "onboarding_status": "COMPLETE"
+}
+```
+
+---
+
+## GET /v2/trade/balances
+
+Returns your current collateral balances in pUSD and USDC.e, along with a combined total and the timestamp of the snapshot.
+
+### Response
+
+<ResponseField name="pusd" type="string">
+  pUSD balance as a decimal string. pUSD is the primary collateral for V2 CLOB trading on Polymarket.
+</ResponseField>
+
+<ResponseField name="usdc_e" type="string">
+  Bridged USDC.e balance as a decimal string. This is legacy collateral; you may want to convert it to pUSD via the CLOB or a split/merge workflow.
+</ResponseField>
+
+<ResponseField name="total_collateral_equivalent" type="string">
+  Sum of pUSD and USDC.e expressed in USD-equivalent terms.
+</ResponseField>
+
+<ResponseField name="as_of" type="number">
+  Unix timestamp (seconds) when the balance snapshot was taken.
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "pusd": "1250.75",
+  "usdc_e": "0.00",
+  "total_collateral_equivalent": "1250.75",
+  "as_of": 1736942400
+}
+```
+
+<Note>
+  pUSD is the V2 active collateral accepted by the Polymarket CLOB. If you hold a USDC.e balance, you can deposit pUSD to replace it; new orders require pUSD.
+</Note>
+
+---
+
+## GET /v2/trade/balances/withdrawable
+
+Returns all ERC20 token balances in your deposit wallet that are available for withdrawal. Use the `token` address from this response as the `token` field in `POST /v2/trade/withdraw` to move a specific asset.
+
+### Response
+
+<ResponseField name="balances" type="array">
+  All ERC20 tokens with a non-zero balance in your deposit wallet.
+
+  <Expandable title="balance fields">
+    <ResponseField name="token" type="string">
+      ERC20 contract address on Polygon. Pass this to `/withdraw` to move this asset.
+    </ResponseField>
+    <ResponseField name="symbol" type="string">
+      Token symbol, e.g. `"pUSD"`, `"USDC.e"`, `"WMATIC"`.
+    </ResponseField>
+    <ResponseField name="decimals" type="number">
+      Token decimal places (e.g. `6` for pUSD/USDC).
+    </ResponseField>
+    <ResponseField name="balance" type="string">
+      Raw on-chain balance in base units as a string.
+    </ResponseField>
+    <ResponseField name="value_usd" type="string">
+      Estimated USD value of this balance.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "balances": [
+    {
+      "token": "0xpUSDcontract...1111",
+      "symbol": "pUSD",
+      "decimals": 6,
+      "balance": "1250750000",
+      "value_usd": "1250.75"
+    },
+    {
+      "token": "0xUSDCeContract...2222",
+      "symbol": "USDC.e",
+      "decimals": 6,
+      "balance": "0",
+      "value_usd": "0.00"
+    }
+  ]
+}
+```
+
+---
+
+## GET /v2/trade/activity
+
+Returns a paginated timeline of all account activity including trades, on-chain operations, and reward events. Use `next_cursor` for forward pagination.
+
+### Query parameters
+
+<ParamField query="type" type="string">
+  Filter to a single activity type. Accepted values:
+  `TRADE_BUY` | `TRADE_SELL` | `REDEEM` | `REWARD` | `MAKER_REBATE` | `REFERRAL_REWARD` | `SPLIT` | `MERGE` | `CONVERSION` | `DEPOSIT` | `WITHDRAW`.
+</ParamField>
+
+<ParamField query="limit" type="number">
+  Number of records to return per page. Maximum `200`.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Opaque pagination cursor from a previous response's `next_cursor`. Omit to start from the most recent activity.
+</ParamField>
+
+### Response
+
+<ResponseField name="activities" type="array">
+  Ordered list of activity records, newest first.
+
+  <Expandable title="activity fields">
+    <ResponseField name="type" type="string">
+      Activity type (see query parameter values above).
+    </ResponseField>
+    <ResponseField name="timestamp" type="string">
+      ISO 8601 timestamp of the activity.
+    </ResponseField>
+    <ResponseField name="transaction_hash" type="string">
+      Polygon transaction hash for on-chain activities. `null` for off-chain events (e.g. `MAKER_REBATE`).
+    </ResponseField>
+    <ResponseField name="market" type="object">
+      Market context for trade and position activities.
+
+      <Expandable title="market fields">
+        <ResponseField name="title" type="string">
+          Market title.
+        </ResponseField>
+        <ResponseField name="slug" type="string">
+          Polymarket URL slug.
+        </ResponseField>
+        <ResponseField name="condition_id" type="string">
+          Condition ID.
+        </ResponseField>
+        <ResponseField name="outcome" type="string">
+          Outcome label (e.g. `"Yes"`).
+        </ResponseField>
+        <ResponseField name="icon" type="string">
+          URL of the market's icon image.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="side" type="string">
+      `"buy"` or `"sell"` for trade activities. `null` for non-trade events.
+    </ResponseField>
+    <ResponseField name="price" type="string">
+      Fill price as a decimal probability. Present for `TRADE_BUY` and `TRADE_SELL`.
+    </ResponseField>
+    <ResponseField name="shares" type="string">
+      Number of shares involved. Present for trade and position activities.
+    </ResponseField>
+    <ResponseField name="amount_usdc" type="string">
+      Dollar value of the activity (spend, payout, rebate, etc.).
+    </ResponseField>
+    <ResponseField name="from_asset" type="string">
+      Source asset symbol for conversion/deposit activities.
+    </ResponseField>
+    <ResponseField name="to_asset" type="string">
+      Destination asset symbol for conversion/deposit activities.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="next_cursor" type="string">
+  Opaque cursor string to pass as `?cursor=` in your next request to retrieve the following page. `null` when you have reached the end of the timeline.
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "activities": [
+    {
+      "type": "TRADE_BUY",
+      "timestamp": "2025-01-15T12:34:56Z",
+      "transaction_hash": "0xtrade...hash01",
+      "market": {
+        "title": "Will the Fed cut rates in Q1 2025?",
+        "slug": "fed-rate-cut-q1-2025",
+        "condition_id": "0xcondition...001",
+        "outcome": "Yes",
+        "icon": "https://polymarket.com/icons/fed.png"
+      },
+      "side": "buy",
+      "price": "0.65",
+      "shares": "200",
+      "amount_usdc": "130.00",
+      "from_asset": null,
+      "to_asset": null
+    },
+    {
+      "type": "MAKER_REBATE",
+      "timestamp": "2025-01-15T12:34:58Z",
+      "transaction_hash": null,
+      "market": null,
+      "side": null,
+      "price": null,
+      "shares": null,
+      "amount_usdc": "0.02",
+      "from_asset": null,
+      "to_asset": null
+    }
+  ],
+  "next_cursor": "eyJvZmZzZXQiOjJ9"
+}
+```
+
+---
+
+## POST /v2/trade/users
+
+Provisions a new partner-scoped user for white-label integrations. Each user gets their own Bravado account with a dedicated Safe proxy wallet, allowing you to manage isolated balances and positions per end user. The call is idempotent on the combination of `(partner_id, partner_user_id)`.
+
+<Warning>
+  This endpoint requires a **master API key** with no fixed user binding. It cannot be called with a user-bound key. Contact your Bravado integration manager to obtain a master key.
+</Warning>
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <master_token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+| `Content-Type` | `application/json` |
+
+### Request body
+
+<ParamField body="partner_user_id" type="string" required>
+  Your own stable identifier for this user (e.g. a UUID from your user database). Must be unique within your partner account.
+</ParamField>
+
+<ParamField body="email" type="string">
+  User's email address. Optional; stored for support and notification purposes.
+</ParamField>
+
+### Response
+
+<ResponseField name="bravado_user_id" type="string">
+  Bravado-assigned unique ID for the new user.
+</ResponseField>
+
+<ResponseField name="partner_user_id" type="string">
+  Echo of the `partner_user_id` you submitted.
+</ResponseField>
+
+<ResponseField name="eoa_address" type="string">
+  The Externally Owned Account address assigned to this user.
+</ResponseField>
+
+<ResponseField name="safe_address" type="string">
+  The Gnosis Safe proxy wallet address where this user's collateral and positions will be held.
+</ResponseField>
+
+<ResponseField name="created" type="boolean">
+  `true` if a new user was created (HTTP 201). `false` if this `partner_user_id` already existed and the existing account was returned (HTTP 200).
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```json Request
+// POST /v2/trade/users
+// Idempotency-Key: d0e1f2a3-b4c5-6789-3def-789012345609
+
+{
+  "partner_user_id": "user-42",
+  "email": "alice@example.com"
+}
+```
+
+```json Response — 201 Created
+{
+  "bravado_user_id": "bvd_user_789ghi",
+  "partner_user_id": "user-42",
+  "eoa_address": "0xEOAnew...112233",
+  "safe_address": "0xSafeNew...445566",
+  "created": true
+}
+```
+
+```json Response — 200 Already exists
+{
+  "bravado_user_id": "bvd_user_789ghi",
+  "partner_user_id": "user-42",
+  "eoa_address": "0xEOAnew...112233",
+  "safe_address": "0xSafeNew...445566",
+  "created": false
+}
+```
+
+</CodeGroup>

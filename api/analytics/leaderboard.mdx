@@ -1,0 +1,132 @@
+---
+title: "leaderboard"
+sidebarTitle: "GET /leaderboard"
+description: "Returns traders ranked by realized PnL for the requested rolling window, computed under PMWAS."
+icon:
+  name: "trophy"
+  library: "lucide"
+---
+
+Returns traders on Polymarket ranked by realized PnL for the requested window. All PnL values are computed under [PMWAS](/concepts/pnl-methodology). For volume-ranked results, use [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume).
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard
+```
+
+### Query Parameters
+
+<ParamField query="window" default="30d" type="string">
+  Rolling time window over which to compute PnL. One of `24h`, `7d`, `30d`, `all`.
+</ParamField>
+
+<ParamField query="limit" default="100" type="integer">
+  Number of traders to return. Maximum 500.
+</ParamField>
+
+<ParamField query="offset" default="0" type="integer">
+  Offset for pagination. See [Pagination](/reference/pagination).
+</ParamField>
+
+### Response
+
+<ResponseField name="results" type="array">
+  <Expandable title="LeaderboardRow fields">
+    <ResponseField name="rank" type="integer">
+      1-based rank in the window.
+    </ResponseField>
+
+    <ResponseField name="trader" type="string">
+      Polygon wallet address.
+    </ResponseField>
+
+    <ResponseField name="username" type="string | null">
+      Polymarket display name if the wallet has one.
+    </ResponseField>
+
+    <ResponseField name="avatar" type="string | null">
+      Avatar image URL.
+    </ResponseField>
+
+    <ResponseField name="bravado_user_id" type="string | null">
+      Internal Bravado user identifier if this wallet is provisioned through Bravado.
+    </ResponseField>
+
+    <ResponseField name="pnl_usdc" type="string">
+      Realized PnL in USDC over the window, net of fees. String for precision.
+    </ResponseField>
+
+    <ResponseField name="volume_usdc" type="string">
+      Total USDC notional traded in the window.
+    </ResponseField>
+
+    <ResponseField name="trades" type="integer">
+      Trade events in the window.
+    </ResponseField>
+
+    <ResponseField name="win_rate" type="string">
+      Fraction of closed positions with positive realized PnL. String between "0" and "1".
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="window" type="string">
+  Echo of the window parameter used for the response.
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Total number of traders matching the window.
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean">
+  True if additional pages exist.
+</ResponseField>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | Invalid `window`, `limit`, or `offset` value |
+| `401 Unauthorized` | Missing or invalid Bearer token |
+| `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` header |
+
+See the [Error reference](/reference/errors).
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard \
+  -H "Authorization: Bearer <token>" \
+  -d window=30d \
+  -d limit=20
+```
+
+```json Response (abbreviated)
+{
+  "window": "30d",
+  "results": [
+    {
+      "rank": 1,
+      "trader": "0xabc123...def456",
+      "username": "topPlayer",
+      "avatar": "https://polymarket.com/avatars/topPlayer.png",
+      "bravado_user_id": null,
+      "pnl_usdc": "42580.120000",
+      "volume_usdc": "1250000.000000",
+      "trades": 218,
+      "win_rate": "0.61"
+    }
+  ],
+  "total": 100,
+  "has_more": true
+}
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume) for volume-ranked results.
+- [`GET /traders/{address}`](/api/analytics/trader) for per-trader detail.
+- [Guide: Build a PnL leaderboard](/guides/pnl-leaderboard).

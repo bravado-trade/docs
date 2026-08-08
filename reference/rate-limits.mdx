@@ -1,0 +1,121 @@
+---
+title: "Bravado API Rate Limits, Backoff, and Retry Strategy"
+sidebarTitle: "Rate Limits"
+description: "Bravado enforces per-API-key rate limits. Learn your rate limit, how to handle 429 responses, and best practices for building resilient integrations."
+icon:
+  name: "gauge"
+  library: "lucide"
+---
+
+Bravado enforces rate limits on a per-API-key basis to ensure fair and stable access for all integrations. Your specific limit is tied to your account tier and is visible in your account snapshot — you can retrieve it programmatically at any time without hitting a separate billing dashboard.
+
+## Finding your rate limit
+
+Call `GET /v2/trade/account` to retrieve your current API key metadata, including your rate limit:
+
+```http
+GET /v2/trade/account HTTP/1.1
+Authorization: Bearer <token>
+```
+
+The response includes an `api_key` object with a `rate_limit_per_min` field:
+
+```json
+{
+  "api_key": {
+    "rate_limit_per_min": 120,
+    "key_prefix": "bvd_live_****",
+    "scopes": ["trade.read", "trade.write"]
+  }
+}
+```
+
+In this example, your key is permitted 120 requests per minute across all Bravado endpoints combined.
+
+## When you hit the limit
+
+When you exceed your rate limit, Bravado responds with:
+
+- **HTTP status:** `429 Too Many Requests`
+- **Response header:** `Retry-After: <seconds>` — the number of seconds you must wait before retrying
+- **Response body:** `{"error": "rate limit exceeded"}`
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 12
+Content-Type: application/json
+
+{"error": "rate limit exceeded"}
+```
+
+<Warning>
+Never retry a 429 response immediately in a tight loop. Doing so will not succeed and may extend the window during which your key is rate limited.
+</Warning>
+
+## Retry strategy
+
+The recommended approach is exponential backoff with jitter, with the `Retry-After` header taking precedence over any computed delay.
+
+**Python**
+
+```python
+import time
+import random
+
+def call_with_retry(fn, max_attempts=5):
+    for attempt in range(max_attempts):
+        resp = fn()
+        if resp.status_code != 429:
+            return resp
+        # Honour Retry-After if present; otherwise back off exponentially
+        retry_after = int(resp.headers.get("Retry-After", 2 ** attempt))
+        jitter = random.uniform(0, 1)
+        time.sleep(retry_after + jitter)
+    raise Exception("Max retries exceeded")
+```
+
+**JavaScript / Node.js**
+
+```javascript
+async function callWithRetry(fn, maxAttempts = 5) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const resp = await fn();
+    if (resp.status !== 429) return resp;
+
+    const retryAfter = parseInt(resp.headers.get("Retry-After") ?? String(2 ** attempt), 10);
+    const jitter = Math.random(); // 0–1 seconds
+    await new Promise((resolve) => setTimeout(resolve, (retryAfter + jitter) * 1000));
+  }
+  throw new Error("Max retries exceeded");
+}
+```
+
+<Tip>
+Apply this wrapper to all mutating requests (`POST`, `DELETE`, `PATCH`). For read-only `GET` requests you can use a lighter strategy — a single retry after the `Retry-After` delay is usually sufficient.
+</Tip>
+
+## Idempotency keys and safe retries
+
+All mutating requests should include an `Idempotency-Key` header. If your request times out or you receive a transient error before you know whether it succeeded, you can safely resend the identical request with the same key — Bravado will deduplicate it server-side and return the original result without creating a duplicate order or withdrawal.
+
+```http
+POST /v2/trade/order HTTP/1.1
+Authorization: Bearer <token>
+Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+Content-Type: application/json
+```
+
+- Use **UUID v4** values to guarantee uniqueness across requests.
+- The same key is safe to reuse only for the same logical operation. Generate a new UUID for every distinct request.
+- Idempotency keys are scoped to your API key, so there is no collision risk across accounts.
+
+<Note>
+Idempotency keys protect against double-submission during network retries. They do not bypass rate limits — a deduplicated replay still counts as a request if the original already succeeded.
+</Note>
+
+## Best practices
+
+- **Batch cancellations** — use `DELETE /v2/trade/orders` (cancel-all) instead of looping individual cancel requests. A single call consumes one rate-limit slot regardless of how many open orders you have.
+- **Use strategies for high-frequency fills** — if you need many small orders placed at regular intervals, use the `interval_sec` field on execution strategies rather than calling the orders endpoint in a loop.
+- **Monitor proactively** — poll `GET /v2/trade/account` periodically to confirm your `rate_limit_per_min` hasn't changed and to detect unexpected spikes in your usage patterns.
+- **Share limits across threads** — if your integration is multi-threaded or runs multiple processes, coordinate request counting centrally (e.g. via a token-bucket in Redis) to avoid one thread consuming the budget of another.

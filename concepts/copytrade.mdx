@@ -1,0 +1,184 @@
+---
+title: "How Copy Trading Works on Bravado"
+sidebarTitle: "Copy Trading"
+description: "Bravado's copy-trading engine mirrors a leader trader's fills on a follower's wallet in real time, with configurable sizing modes and risk controls."
+icon:
+  name: "users"
+  library: "lucide"
+---
+
+Copy trading on Bravado subscribes your wallet to a leader's trading activity so that every fill the leader receives is automatically mirrored on your account. The engine monitors the Polymarket CLOB in real time — when the leader's order fills, Bravado immediately executes an equivalent trade on your behalf, applying your configured sizing rules and risk controls before the order touches the market. All copy-trade configuration happens through endpoints under `/v2/trade/copytrade`.
+
+<Note>
+  Use **simulation mode** to paper-trade a leader's strategy before committing real capital. Simulation tracks all fills against live CLOB prices without executing on-chain transactions, giving you a realistic preview of how a strategy would have performed.
+</Note>
+
+## How it works
+
+<Steps>
+  <Step title="Leader places a trade">
+    The leader submits an order on Polymarket through any interface — the Bravado API, the Polymarket web app, or any other client.
+  </Step>
+  <Step title="Engine detects the fill">
+    Bravado's real-time fill monitor detects the on-chain order fill for the leader wallet and parses the trade details: market, outcome, side, size, and price.
+  </Step>
+  <Step title="Sizing and filtering applied">
+    The engine applies your subscription's sizing mode, market filters, and date filters to determine whether to copy the trade and at what size.
+  </Step>
+  <Step title="Order executed on follower wallet">
+    If the trade passes all filters, Bravado submits a market order on your wallet. The fill happens at the live CLOB price at execution time, which may differ slightly from the leader's fill price.
+  </Step>
+</Steps>
+
+You control which direction to copy (buys only, sells only, or both), what size to trade, and which markets to include or exclude.
+
+## Sizing modes
+
+Sizing modes define how Bravado calculates the notional size of each copied trade. Buy-side and sell-side modes are configured independently.
+
+| Mode | Side | Behavior |
+|---|---|---|
+| `PCT_OF_LEADER_TRADE` | Buy | Trade a fixed percentage of the leader's notional spend |
+| `PCT_OF_LEADER_TRADE` | Sell | Sell a fixed percentage of the leader's share quantity |
+| `FIXED_USD_PER_TRADE` | Buy | Spend a fixed USDC amount on every copied buy, regardless of leader size |
+| `PCT_OF_FOLLOWER_AVAILABLE` | Buy | Spend a percentage of your currently available pUSD balance |
+| `MAX` | Sell | Sell your entire share balance in that outcome token |
+| `PCT_OF_MAX` | Sell | Sell a percentage of your current share balance |
+
+```json
+{
+  "leader_wallet": "0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+  "buy_sizing": {
+    "mode": "PCT_OF_LEADER_TRADE",
+    "value": 50
+  },
+  "sell_sizing": {
+    "mode": "MAX"
+  }
+}
+```
+
+## Filters
+
+Filters let you limit which of the leader's trades your subscription copies.
+
+<Accordion title="Market filters">
+  - **`market_ids_include`**: Only copy trades in the listed market IDs. All other markets are ignored.
+  - **`market_ids_exclude`**: Copy all trades except those in the listed market IDs. Useful for excluding specific markets while still following the leader broadly.
+
+  `market_ids_include` and `market_ids_exclude` are mutually exclusive — supply one or the other, not both.
+</Accordion>
+
+<Accordion title="Tag filters">
+  - **`tags_include`**: Only copy trades in markets tagged with at least one of the listed tags (e.g., `["politics", "crypto"]`).
+  - **`tags_exclude`**: Skip trades in markets that carry any of the listed tags.
+</Accordion>
+
+<Accordion title="Date filters">
+  - **`copy_start_date`**: Ignore any leader fills before this ISO 8601 timestamp.
+  - **`copy_end_date`**: Stop copying leader fills after this timestamp. The subscription remains active but stops mirroring trades.
+</Accordion>
+
+## Risk controls
+
+Risk controls run on your existing copied positions after they fill. They do not affect the initial copy trade execution.
+
+<CardGroup cols={2}>
+  <Card title="Take-profit levels">
+    An array of `{ trigger_bps, portion_bps }` objects. When the outcome token price rises by `trigger_bps` basis points above your average cost, Bravado sells `portion_bps` of your remaining shares.
+
+    ```json
+    "take_profit_levels": [
+      { "trigger_bps": 2000, "portion_bps": 5000 },
+      { "trigger_bps": 5000, "portion_bps": 10000 }
+    ]
+    ```
+  </Card>
+  <Card title="Stop-loss levels">
+    An array of `{ trigger_bps, portion_bps }` objects. When the token price falls by `trigger_bps` basis points below your average cost, Bravado sells `portion_bps` of your remaining shares.
+
+    ```json
+    "stop_loss_levels": [
+      { "trigger_bps": 3000, "portion_bps": 10000 }
+    ]
+    ```
+  </Card>
+  <Card title="Close at price">
+    `close_at_price`: automatically close the entire copied position when the token price reaches this decimal probability value (0.001–0.999).
+
+    ```json
+    "close_at_price": "0.85"
+    ```
+  </Card>
+  <Card title="Max hold duration">
+    `max_hold_seconds`: automatically close the position after this many seconds, regardless of price. Useful for avoiding exposure to slow-resolving markets.
+
+    ```json
+    "max_hold_seconds": 86400
+    ```
+  </Card>
+</CardGroup>
+
+## Insufficient funds handling
+
+If your wallet lacks sufficient pUSD to fully fund a copied buy at the configured size, the `buy_insufficient_usdc_action` field controls the fallback behavior:
+
+| Value | Behavior |
+|---|---|
+| `BUY_MAX` | Execute the largest buy your available balance allows |
+| `SKIP` | Skip the trade entirely and log it as unfunded |
+
+Set this field at subscription creation time to avoid silent skips on underfunded accounts.
+
+## Simulation mode
+
+Simulation mode lets you paper-trade a leader subscription without executing any real on-chain transactions. All copied fills are recorded against live CLOB midpoint prices, giving you a realistic equity curve for the strategy.
+
+Enable simulation at subscription creation:
+
+```json
+{
+  "leader_wallet": "0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+  "is_simulation": true,
+  "buy_sizing": {
+    "mode": "FIXED_USD_PER_TRADE",
+    "value": 100
+  }
+}
+```
+
+<Note>
+  Simulation is the best way to evaluate a leader before committing real funds. Run a simulation for several days across different market conditions, then review the paper equity curve at `GET /v2/trade/copytrade/simulation` before switching `is_simulation` to `false`.
+</Note>
+
+View your paper portfolio at any time:
+
+```bash
+GET /v2/trade/copytrade/simulation
+```
+
+Reset the simulation to start a fresh evaluation:
+
+```bash
+POST /v2/trade/copytrade/{id}/simulation/reset
+```
+
+Resetting clears all paper fills and restarts the equity curve from zero — useful when you change sizing or filter parameters and want a clean comparison.
+
+## Subscription lifecycle
+
+A copy-trade subscription moves through three statuses. Use `PATCH /v2/trade/copytrade/{id}/status` to transition between them.
+
+```
+ACTIVE → PAUSED → ACTIVE
+ACTIVE → DISABLED
+PAUSED → DISABLED
+```
+
+| Status | Behavior |
+|---|---|
+| `ACTIVE` | Copying leader fills in real time |
+| `PAUSED` | Monitoring suspended; existing positions and risk controls remain active |
+| `DISABLED` | Permanently stopped; cannot be re-activated |
+
+Pause a subscription when you want to temporarily stop copying new trades without losing your configuration. Disable it only when you intend to permanently remove it.

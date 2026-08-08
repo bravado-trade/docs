@@ -1,0 +1,54 @@
+---
+title: "GET /entity/{owner} — Multi-Wallet Entity Rollup"
+sidebarTitle: "GET /entity/{owner}"
+description: "Aggregates R5/R6/R7 metrics across all controlled wallets registered under a beneficial owner."
+icon:
+  name: "building"
+  library: "lucide"
+---
+
+Returns a multi-wallet entity rollup for a beneficial owner, aggregating R5, R6, and R7 metrics across all controlled wallets registered under the owner identifier.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/entity/{owner}
+```
+
+### Path Parameters
+
+<ParamField path="owner" type="string" required>
+  Beneficial owner identifier. Contact Bravado to register a multi-wallet entity and obtain an owner ID.
+</ParamField>
+
+### Response
+
+Response structure mirrors [`/metrics`](/api/analytics/trader-metrics) but aggregates figures across all member wallets. The `member_wallets` array lists the addresses included.
+
+Returns `503` with `{"available": false}` when data is not yet available for any member wallet.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://bravado-api-k7kaq.ondigitalocean.app/entity/owner_01HXYZ \
+  -H "Authorization: Bearer <token>"
+```
+
+```json Response (abbreviated)
+{
+  "owner": "owner_01HXYZ",
+  "member_wallets": [
+    "0xabc...",
+    "0x999..."
+  ],
+  "r7": {
+    "nav_uusdc": "9800000000",
+    "trading_pnl_uusdc": "22100000000",
+    "roi": "0.4210",
+    "twr": "0.4580",
+    "win_rate": "0.6612"
+  }
+}
+```
+
+</CodeGroup>

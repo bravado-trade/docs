@@ -1,0 +1,68 @@
+---
+title: "Build with AI"
+sidebarTitle: "Build with AI"
+description: "Point your coding agents at the Bravado docs, use llms.txt, and integrate the Bravado MCP server for AI-native development."
+icon: "openai"
+---
+
+Bravado is built to be consumed by AI-native tooling. This page shows how to point a coding assistant, an autonomous agent, or an MCP-aware client at the Bravado docs and API.
+
+## Machine-readable docs
+
+Every page on this site is available as raw Markdown:
+
+- Append `.md` to any docs URL to get the raw source. For example, `https://bravado.mintlify.app/quickstart.md`.
+- `https://bravado.mintlify.app/llms.txt` lists every page for LLM crawlers.
+- `https://bravado.mintlify.app/llms-full.txt` concatenates the entire docs site in one file, suitable for pasting into a long-context model.
+
+Point Claude, Cursor, or any other assistant at either URL when you want it to have full context on Bravado without scraping.
+
+## Copy any page as Markdown or open in an assistant
+
+Every page has a **Copy** button in the contextual menu. Options include:
+
+- **Copy page as Markdown** for pasting into a prompt.
+- **View as Markdown** to see the raw source in a new tab.
+- **Open in ChatGPT** to load the page into ChatGPT.
+- **Open in Claude** to load the page into Claude.
+
+## Pointing a coding agent at Bravado
+
+For **Cursor**, **Windsurf**, or **Claude Code**, add the docs to the workspace context:
+
+```text
+https://bravado.mintlify.app/llms-full.txt
+```
+
+The agent will then have the entire API surface, all concepts, and all guides in its context window when generating Bravado code.
+
+For **ChatGPT** or **Claude web**, use the "Open in ChatGPT" / "Open in Claude" button on any specific page you need the model to reason about.
+
+## MCP server
+
+Bravado will expose a hosted **Model Context Protocol (MCP)** server so agent frameworks that speak MCP (Claude Desktop, some IDE extensions, custom agent runtimes) can call Bravado tools directly without a REST wrapper.
+
+{/* TODO: Confirm the MCP server URL, transport (stdio / SSE / HTTP), tool list, and auth model. Update this section with connection instructions once available. */}
+
+Expected tools include:
+
+- `place_order`, `cancel_order`, `get_positions`, `get_balances` on the Trade surface.
+- `subscribe_copytrade`, `unsubscribe_copytrade` on the Copytrade surface.
+- `get_leaderboard`, `get_trader_pnl`, `get_trader_positions` on the Analytics surface.
+
+## Safety patterns for autonomous agents
+
+When wiring an agent to Bravado's trading endpoints:
+
+1. **Cap notional per tool call.** Enforce the cap in your tool wrapper, not the prompt.
+2. **Require idempotency at the tool layer.** Generate the UUID inside the tool. See [Idempotency](/reference/idempotency).
+3. **Sandbox first.** Test agents against a follower wallet with a small balance.
+4. **Log every call.** Every mutating call includes an idempotency key. Log per-agent, per-session for review.
+
+See the [AI agents use case](/use-cases/ai-agents) for a worked example.
+
+## Related
+
+- [AI agents use case](/use-cases/ai-agents)
+- [Idempotency](/reference/idempotency)
+- [Authentication](/authentication)

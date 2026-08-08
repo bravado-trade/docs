@@ -1,0 +1,27 @@
+---
+title: "GET /traders/{address}/positions/closed — Closed Positions"
+sidebarTitle: "GET /traders/{address}/positions/closed"
+description: "The wallet's closed positions."
+icon:
+  name: "circle-check"
+  library: "lucide"
+---
+
+Returns only the wallet's closed positions. Response shape matches [/positions](/api/analytics/trader-positions).
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/positions/closed
+```
+
+### Path Parameters
+
+### Response
+
+Array of position objects. See [/positions field reference](/api/analytics/trader-positions#response-position-fields).
+
+### Example
+
+```bash cURL
+curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../positions/closed \
+  -H "Authorization: Bearer <token>"
+```

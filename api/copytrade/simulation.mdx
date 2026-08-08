@@ -1,0 +1,175 @@
+---
+title: "Copytrade Simulation Portfolio API Reference"
+sidebarTitle: "Simulation"
+description: "GET /v2/trade/copytrade/simulation and POST /simulation/reset — view and reset the paper trading portfolio for a copytrade subscription."
+icon:
+  name: "play"
+  library: "lucide"
+---
+
+Simulation mode lets you test a copytrade strategy without risking real capital. When you create a subscription with `is_simulation: true`, every copied fill is recorded as a paper trade — positions are tracked, PnL is calculated using live CLOB midpoint prices, and execution history is preserved, all without placing real on-chain orders. Use these endpoints to inspect your paper portfolio and wipe it clean when you want to start a fresh backtest.
+
+---
+
+## GET /v2/trade/copytrade/simulation
+
+Returns the current simulation paper account for the authenticated user, including the paper cash balance, all open paper positions marked to live market prices, and realized PnL from closed paper positions.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` |
+
+### Response
+
+<ResponseField name="initial_balance_usdc" type="string">
+  The starting paper USDC balance when the simulation began. Returned as a string.
+</ResponseField>
+
+<ResponseField name="cash_usdc" type="string">
+  Remaining paper cash not deployed into open positions. Returned as a string.
+</ResponseField>
+
+<ResponseField name="realized_pnl" type="string">
+  Total realized PnL from paper positions that have been closed or resolved. Returned as a string.
+</ResponseField>
+
+<ResponseField name="unrealized_pnl" type="string">
+  Unrealized PnL across all open paper positions, marked to the live CLOB midpoint price. Returned as a string. May be `null` if midpoint data is momentarily unavailable.
+</ResponseField>
+
+<ResponseField name="equity_usdc" type="string">
+  Total paper account equity: `cash_usdc` plus the current market value of all open positions. Returned as a string. May be `null` if any position's midpoint is unavailable.
+</ResponseField>
+
+<ResponseField name="positions" type="object[]">
+  Array of open paper positions.
+
+  <Expandable title="positions fields">
+    <ResponseField name="token_id" type="string">
+      The Polymarket outcome token ID for this position.
+    </ResponseField>
+    <ResponseField name="shares" type="string">
+      Number of paper shares held. Returned as a string.
+    </ResponseField>
+    <ResponseField name="avg_cost" type="string">
+      Average cost per share in cents across all fills for this position. Returned as a string.
+    </ResponseField>
+    <ResponseField name="cost_basis" type="string">
+      Total paper USD spent to acquire the current position (`shares × avg_cost`). Returned as a string.
+    </ResponseField>
+    <ResponseField name="mark_price" type="string | null">
+      Current CLOB midpoint price in cents used to mark this position to market. `null` if the midpoint was momentarily unavailable when the snapshot was taken.
+    </ResponseField>
+    <ResponseField name="market_value" type="string | null">
+      Current marked market value of the position in USD (`shares × mark_price`). `null` when `mark_price` is `null`.
+    </ResponseField>
+    <ResponseField name="unrealized_pnl" type="string | null">
+      Unrealized gain or loss on this position (`market_value − cost_basis`). `null` when `mark_price` is `null`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Note>
+`mark_price`, `market_value`, and `unrealized_pnl` at the position level are `null` when the CLOB midpoint was momentarily unavailable at snapshot time. The top-level `unrealized_pnl` and `equity_usdc` fields are similarly `null` if any constituent position is missing a midpoint. Retry after a brief delay to get a fully priced snapshot.
+</Note>
+
+<CodeGroup>
+
+```http Request
+GET /v2/trade/copytrade/simulation
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+```json Response
+{
+  "initial_balance_usdc": "1000.00",
+  "cash_usdc": "742.30",
+  "realized_pnl": "18.50",
+  "unrealized_pnl": "24.80",
+  "equity_usdc": "785.60",
+  "positions": [
+    {
+      "token_id": "72481234567890abcdef72481234567890abcdef72481234567890abcdef7248",
+      "shares": "150.00",
+      "avg_cost": "42",
+      "cost_basis": "63.00",
+      "mark_price": "57",
+      "market_value": "85.50",
+      "unrealized_pnl": "22.50"
+    },
+    {
+      "token_id": "9931abcdef1234567890993112345678901234567890abcdef12345678909931",
+      "shares": "50.00",
+      "avg_cost": "35",
+      "cost_basis": "17.50",
+      "mark_price": "38",
+      "market_value": "19.00",
+      "unrealized_pnl": "1.50"
+    },
+    {
+      "token_id": "aabb1234ccdd5678aabb1234ccdd5678aabb1234ccdd5678aabb1234ccdd5678",
+      "shares": "200.00",
+      "avg_cost": "68",
+      "cost_basis": "136.00",
+      "mark_price": null,
+      "market_value": null,
+      "unrealized_pnl": null
+    }
+  ]
+}
+```
+
+</CodeGroup>
+
+---
+
+## POST /v2/trade/copytrade/{id}/simulation/reset
+
+Deletes all paper fill history for a specific copytrade subscription, resetting the paper portfolio to a clean slate. Use this when you want to re-test a strategy from scratch after changing the subscription config. Only paper (simulation) fills are affected — real fills are never touched by this operation.
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | `Bearer <token>` |
+
+### Path parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | The copytrade subscription ID whose simulation history you want to clear |
+
+### Request body
+
+No request body is required.
+
+### Response
+
+<ResponseField name="deleted_count" type="integer">
+  The number of paper fill records that were deleted from the simulation history.
+</ResponseField>
+
+<Note>
+This operation only clears paper fills associated with the specified subscription ID. Real (non-simulation) fills, PnL records, and any other subscription data are never affected. The subscription itself remains active and continues to paper-trade after the reset.
+</Note>
+
+<CodeGroup>
+
+```http Request
+POST /v2/trade/copytrade/ct_01HX6N0QRST9XDYP5FZELOH8I/simulation/reset
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+```json Response
+{
+  "deleted_count": 47
+}
+```
+
+</CodeGroup>
+
+<Tip>
+After a reset, the paper balance returns to `initial_balance_usdc` and all open paper positions are cleared. If you also updated the subscription's sizing config before resetting, the new parameters take effect immediately for all future paper fills.
+</Tip>

@@ -1,0 +1,36 @@
+---
+title: "GET /traders/{address}/positions — All Positions"
+sidebarTitle: "GET /traders/{address}/positions"
+description: "Open and closed positions for the wallet, paginated."
+icon:
+  name: "layers"
+  library: "lucide"
+---
+
+Returns open and closed positions for the wallet. Use [/positions/active](/api/analytics/trader-positions-active) or [/positions/closed](/api/analytics/trader-positions-closed) to fetch each subset directly.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/positions
+```
+
+### Path Parameters
+
+### Query Parameters
+
+<ParamField query="include_closed" default="true" type="boolean">
+  When `false`, returns only open positions (equivalent to `/positions/active`).
+</ParamField>
+
+ 
+
+### Response — Position Fields
+
+             
+
+### Example
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../positions \
+  -H "Authorization: Bearer <token>" \
+  -d limit=50
+```

@@ -1,0 +1,123 @@
+---
+title: "GET /traders/{address}/statements — Full PMWAS Statement"
+sidebarTitle: "GET /traders/{address}/statements"
+description: "Complete §20 PMWAS statement containing all eight reports (R1–R8) for a wallet."
+icon:
+  name: "file-text"
+  library: "lucide"
+---
+
+Returns the complete §20 wallet statement containing all eight reports (R1–R8).
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/statements
+```
+
+### Report Overview
+
+| Report | Description |
+| --- | --- |
+| R1 | Form-8949-style dispositions: per-lot gain/loss, term, cost basis method |
+| R2 | Income: liquidity rewards, maker rebates, referral rewards |
+| R3 | Open positions with mark price and valuation confidence |
+| R4 | Capital flows: deposits, withdrawals, transfers |
+| R5 | Realized PnL summary by market |
+| R6 | Fee breakdown by role |
+| R7 | Performance metrics: NAV, PnL, ROI, TWR, MWR, win rate |
+| R8 | Reconciliation certificate |
+
+### Path Parameters
+
+### Query Parameters
+
+<ParamField query="r1_limit" default="500" type="integer">
+  Maximum R1 rows to include. Maximum `5000`. For wallets with many dispositions, use `has_more_r1` and [`/statements/r1`](/api/analytics/trader-statements-r1) to paginate.
+</ParamField>
+
+  
+
+### Response
+
+    
+
+<ResponseField name="statement" type="object">
+  The complete §20 statement object.
+
+  <Expandable title="Statement fields">
+    <ResponseField name="period" type="object">
+      `{from, to}` ISO 8601 range.
+    </ResponseField>
+
+    <ResponseField name="disclosure" type="object">
+      Accounting policy declaration.
+
+      <Expandable title="Disclosure fields">
+        <ResponseField name="cost_basis_method" type="string">
+          `FIFO`, `LIFO`, `WAC`, or `SPECID`.
+        </ResponseField>
+
+        <ResponseField name="jurisdiction_profile" type="string">
+          e.g. `"US_INDIVIDUAL"`.
+        </ResponseField>
+
+        <ResponseField name="long_term_threshold_days" type="integer">
+          Days for long-term qualification.
+        </ResponseField>
+
+        <ResponseField name="wash_sale_enabled" type="boolean">
+          Whether wash sale rules applied.
+        </ResponseField>
+
+        <ResponseField name="price_source" type="string">
+          Source of mark prices.
+        </ResponseField>
+
+        <ResponseField name="valuation_timestamp" type="string">
+          ISO 8601 UTC of mark price snapshot.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="reconciliation_certificate" type="object">
+      R8 certificate. See [/reconciliation](/api/analytics/trader-reconciliation).
+    </ResponseField>
+
+    <ResponseField name="reports" type="object">
+      Map of `r1`–`r8` to report objects.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Note>
+  Formal accounting endpoints require wallet data to be fully indexed. A `503` with `{"available": false}` means data is not yet ready. Retry in a few minutes.
+</Note>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../statements \
+  -H "Authorization: Bearer <token>" \
+  -d r1_limit=100 \
+  -d basis=net
+```
+
+```json Response (abbreviated)
+{
+  "trader": "0xabc...",
+  "has_more_r1": true,
+  "r1_total": 842,
+  "statement": {
+    "period": { "from": "2023-01-01T00:00:00Z", "to": "2025-01-15T00:00:00Z" },
+    "disclosure": {
+      "cost_basis_method": "FIFO",
+      "jurisdiction_profile": "US_INDIVIDUAL",
+      "long_term_threshold_days": 365
+    },
+    "reconciliation_certificate": { "I1": "0", "I2": "0", "I3": "0", "I4": "0", "all_zero": true }
+  }
+}
+```
+
+</CodeGroup>

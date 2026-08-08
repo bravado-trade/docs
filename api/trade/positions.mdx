@@ -1,0 +1,390 @@
+---
+title: "Position Management API — Redeem, Split, and Merge"
+sidebarTitle: "Positions"
+description: "GET /v2/trade/positions, POST /v2/trade/positions/redeem, /split, and /merge endpoints for managing Polymarket outcome token positions."
+icon:
+  name: "layers"
+  library: "lucide"
+---
+
+Polymarket positions are ERC-1155 conditional tokens (CTF) held in your proxy wallet. The positions endpoints let you inspect open and closed holdings and perform on-chain lifecycle actions: redeeming a resolved market for pUSD payout, splitting pUSD into a complete outcome set to gain exposure simultaneously, or merging a complete set back to recover pUSD. All on-chain operations are submitted by Bravado on your behalf and confirmed before the response returns.
+
+---
+
+## GET /v2/trade/positions
+
+Returns a paginated list of outcome token positions associated with your account.
+
+### Query parameters
+
+<ParamField query="status" type="string">
+  Filter by position status. `active` (default) returns positions with a non-zero current balance and a live mark price. `closed` returns fully exited or redeemed positions with realized PnL.
+</ParamField>
+
+<ParamField query="limit" type="number">
+  Maximum number of results to return per page. Defaults to `50`.
+</ParamField>
+
+<ParamField query="offset" type="number">
+  Zero-based offset for pagination.
+</ParamField>
+
+### Response
+
+<ResponseField name="positions" type="array">
+  Array of position objects.
+
+  <Expandable title="position fields">
+    <ResponseField name="status" type="string">
+      `active` or `closed`.
+    </ResponseField>
+    <ResponseField name="proxy_wallet" type="string">
+      The Safe proxy wallet address holding this position.
+    </ResponseField>
+    <ResponseField name="token_id" type="string">
+      ERC-1155 outcome token ID.
+    </ResponseField>
+    <ResponseField name="condition_id" type="string">
+      Polymarket condition ID (`0x` + 64 hex characters).
+    </ResponseField>
+    <ResponseField name="size" type="string">
+      Current share balance as a decimal string.
+    </ResponseField>
+    <ResponseField name="avg_price" type="string">
+      Volume-weighted average entry price as a decimal probability.
+    </ResponseField>
+    <ResponseField name="current_value" type="string">
+      Mark-to-market value in US dollars at the current mid-price. Present for `active` positions only.
+    </ResponseField>
+    <ResponseField name="cur_price" type="string">
+      Current mid-price from the CLOB as a decimal probability. Present for `active` positions only.
+    </ResponseField>
+    <ResponseField name="initial_value" type="string">
+      Dollar cost basis of the position (size × avg_price).
+    </ResponseField>
+    <ResponseField name="cash_pnl" type="string">
+      Unrealized profit/loss in dollars (current_value − initial_value). Present for `active` positions only.
+    </ResponseField>
+    <ResponseField name="percent_pnl" type="string">
+      Unrealized PnL as a percentage of initial_value. Present for `active` positions only.
+    </ResponseField>
+    <ResponseField name="realized_pnl" type="string">
+      Dollar PnL locked in through partial exits or redemption. Always present; most meaningful for `closed` positions.
+    </ResponseField>
+    <ResponseField name="percent_realized_pnl" type="string">
+      Realized PnL as a percentage of initial_value.
+    </ResponseField>
+    <ResponseField name="total_bought" type="string">
+      Total dollar spend on this position across all fills.
+    </ResponseField>
+    <ResponseField name="redeemable" type="boolean">
+      `true` when the market has resolved and this position can be redeemed for pUSD.
+    </ResponseField>
+    <ResponseField name="mergeable" type="boolean">
+      `true` when you hold all outcome tokens for this condition and can merge back to pUSD.
+    </ResponseField>
+    <ResponseField name="negative_risk" type="boolean">
+      `true` for negative-risk (multi-outcome) markets.
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      Human-readable market title.
+    </ResponseField>
+    <ResponseField name="slug" type="string">
+      URL slug for the market on Polymarket.
+    </ResponseField>
+    <ResponseField name="outcome" type="string">
+      Outcome label, e.g. `"Yes"` or `"No"`.
+    </ResponseField>
+    <ResponseField name="outcome_index" type="number">
+      Zero-based index of this outcome within the condition.
+    </ResponseField>
+    <ResponseField name="end_date" type="string">
+      ISO 8601 scheduled resolution date of the market.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Note>
+  Active positions include a live `cur_price` mark sourced from the CLOB mid-quote. Closed positions omit mark-price fields and populate `realized_pnl` instead.
+</Note>
+
+### Example
+
+```json
+{
+  "positions": [
+    {
+      "status": "active",
+      "proxy_wallet": "0xSafe...1234",
+      "token_id": "0xtoken...abcd",
+      "condition_id": "0xcondition...0000000000000000000000000000000000000000000000000000000001",
+      "size": "500",
+      "avg_price": "0.58",
+      "current_value": "315.00",
+      "cur_price": "0.63",
+      "initial_value": "290.00",
+      "cash_pnl": "25.00",
+      "percent_pnl": "8.62",
+      "realized_pnl": "0",
+      "percent_realized_pnl": "0",
+      "total_bought": "290.00",
+      "redeemable": false,
+      "mergeable": false,
+      "negative_risk": false,
+      "title": "Will the Fed cut rates in Q1 2025?",
+      "slug": "fed-rate-cut-q1-2025",
+      "outcome": "Yes",
+      "outcome_index": 0,
+      "end_date": "2025-03-31T23:59:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## POST /v2/trade/positions/redeem
+
+Redeems a resolved Conditional Token Framework (CTF) position and delivers the pUSD payout to your proxy wallet. The call is synchronous — it waits for the Polygon transaction to confirm before returning. Winning positions receive a payout of 1 pUSD per share; losing positions receive 0.
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+| `Content-Type` | `application/json` |
+
+### Request body
+
+<ParamField body="condition_id" type="string" required>
+  The condition to redeem, formatted as `0x` followed by exactly 64 hex characters.
+</ParamField>
+
+<ParamField body="outcome_index" type="number" required>
+  Zero-based index of the outcome token you hold (e.g. `0` for the first outcome, `1` for the second).
+</ParamField>
+
+<ParamField body="neg_risk_market" type="boolean" required>
+  Set to `true` for negative-risk (multi-outcome) markets. Set to `false` for standard binary markets.
+</ParamField>
+
+<ParamField body="amount" type="string">
+  Number of shares to redeem as a decimal string. Omit to redeem your entire position.
+</ParamField>
+
+### Response
+
+<ResponseField name="transaction_hash" type="string">
+  Polygon transaction hash of the on-chain redemption.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `STATE_CONFIRMED` once the transaction is included in a block.
+</ResponseField>
+
+<ResponseField name="condition_id" type="string">
+  Echo of the submitted condition ID.
+</ResponseField>
+
+<ResponseField name="outcome_index" type="number">
+  Echo of the submitted outcome index.
+</ResponseField>
+
+<ResponseField name="neg_risk_market" type="boolean">
+  Echo of the submitted flag.
+</ResponseField>
+
+<ResponseField name="payout_base_units" type="string">
+  pUSD payout in 6-decimal base units as a string (e.g. `"500000000"` = 500 pUSD). Returns `"0"` for a losing position.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```json Request
+// POST /v2/trade/positions/redeem
+// Idempotency-Key: f6a7b8c9-d0e1-2345-fab0-345678901205
+
+{
+  "condition_id": "0xcondition...0000000000000000000000000000000000000000000000000000000001",
+  "outcome_index": 0,
+  "neg_risk_market": false
+}
+```
+
+```json Response
+{
+  "transaction_hash": "0xtxhash...abcdef",
+  "state": "STATE_CONFIRMED",
+  "condition_id": "0xcondition...0000000000000000000000000000000000000000000000000000000001",
+  "outcome_index": 0,
+  "neg_risk_market": false,
+  "payout_base_units": "500000000"
+}
+```
+
+</CodeGroup>
+
+<Tip>
+  Convert `payout_base_units` to a human-readable dollar amount by dividing by `1_000_000` (6 decimals). A value of `"500000000"` equals **500 pUSD**.
+</Tip>
+
+---
+
+## POST /v2/trade/positions/split
+
+Splits pUSD collateral into one share of every outcome token in a condition. After splitting, you hold a complete outcome set — useful for then selling one side on the CLOB while retaining the other. Splitting is the on-chain equivalent of buying both sides simultaneously.
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+| `Content-Type` | `application/json` |
+
+### Request body
+
+<ParamField body="condition_id" type="string" required>
+  The condition to split into (`0x` + 64 hex characters).
+</ParamField>
+
+<ParamField body="amount" type="string" required>
+  pUSD amount to split, as a decimal string (e.g. `"100.00"`). You will receive `amount` shares of each outcome token.
+</ParamField>
+
+<ParamField body="neg_risk_market" type="boolean" required>
+  `true` for negative-risk markets; `false` for standard binary markets.
+</ParamField>
+
+### Response
+
+<ResponseField name="transaction_hash" type="string">
+  Polygon transaction hash.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `STATE_CONFIRMED` once the transaction is mined.
+</ResponseField>
+
+<ResponseField name="condition_id" type="string">
+  Echo of the submitted condition ID.
+</ResponseField>
+
+<ResponseField name="amount" type="string">
+  Echo of the submitted pUSD amount split.
+</ResponseField>
+
+<ResponseField name="neg_risk_market" type="boolean">
+  Echo of the submitted flag.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```json Request
+// POST /v2/trade/positions/split
+// Idempotency-Key: a7b8c9d0-e1f2-3456-0abc-456789012306
+
+{
+  "condition_id": "0xcondition...0000000000000000000000000000000000000000000000000000000001",
+  "amount": "100.00",
+  "neg_risk_market": false
+}
+```
+
+```json Response
+{
+  "transaction_hash": "0xtxhash...split01",
+  "state": "STATE_CONFIRMED",
+  "condition_id": "0xcondition...0000000000000000000000000000000000000000000000000000000001",
+  "amount": "100.00",
+  "neg_risk_market": false
+}
+```
+
+</CodeGroup>
+
+---
+
+## POST /v2/trade/positions/merge
+
+Merges a complete set of outcome tokens back into pUSD collateral. You must hold at least `amount` shares of every outcome in the condition. This is the reverse of splitting and lets you exit a delta-neutral position without hitting the CLOB.
+
+**Required headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>` |
+| `Idempotency-Key` | Unique string (UUID recommended) |
+| `Content-Type` | `application/json` |
+
+### Request body
+
+<ParamField body="condition_id" type="string" required>
+  The condition whose outcome tokens you are merging (`0x` + 64 hex characters).
+</ParamField>
+
+<ParamField body="amount" type="string" required>
+  Number of complete outcome sets to merge, as a decimal string. You receive this many pUSD in return.
+</ParamField>
+
+<ParamField body="neg_risk_market" type="boolean" required>
+  `true` for negative-risk markets; `false` for standard binary markets.
+</ParamField>
+
+### Response
+
+<ResponseField name="transaction_hash" type="string">
+  Polygon transaction hash.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `STATE_CONFIRMED` once the transaction is mined.
+</ResponseField>
+
+<ResponseField name="condition_id" type="string">
+  Echo of the submitted condition ID.
+</ResponseField>
+
+<ResponseField name="amount" type="string">
+  Echo of the submitted share set count.
+</ResponseField>
+
+<ResponseField name="neg_risk_market" type="boolean">
+  Echo of the submitted flag.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```json Request
+// POST /v2/trade/positions/merge
+// Idempotency-Key: b8c9d0e1-f2a3-4567-1bcd-567890123407
+
+{
+  "condition_id": "0xcondition...0000000000000000000000000000000000000000000000000000000001",
+  "amount": "100",
+  "neg_risk_market": false
+}
+```
+
+```json Response
+{
+  "transaction_hash": "0xtxhash...merge01",
+  "state": "STATE_CONFIRMED",
+  "condition_id": "0xcondition...0000000000000000000000000000000000000000000000000000000001",
+  "amount": "100",
+  "neg_risk_market": false
+}
+```
+
+</CodeGroup>
+
+<Note>
+  The `amount` field for merge represents the number of **complete outcome sets** (one share of each outcome), not a dollar amount. Merging `100` sets of a binary market burns 100 YES tokens and 100 NO tokens and returns 100 pUSD.
+</Note>

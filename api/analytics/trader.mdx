@@ -1,0 +1,90 @@
+---
+title: "GET /traders/{address} — Trader Profile Summary"
+sidebarTitle: "GET /traders/{address}"
+description: "Wallet performance summary: PnL, volume, position counts, streaks, and identity fields."
+icon:
+  name: "user"
+  library: "lucide"
+---
+
+Returns the performance summary for a single wallet, including PnL, volume, position counts, streak data, and identity fields.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}
+```
+
+### Path Parameters
+
+<ParamField path="address" type="string" required>
+  Polygon wallet address in `0x…` format. Case-insensitive.
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="window" default="all" type="string">
+  Rolling time window. Accepted values: `1h`, `4h`, `24h`, `7d`, `30d`, `90d`, `365d`, `all`.
+</ParamField>
+
+<ParamField query="basis" default="net" type="string">
+  `net` deducts fees from `realized_pnl` and `total_pnl`; `gross` reports pre-fee figures.
+</ParamField>
+
+<ParamField query="income" default="total" type="string">
+  `total` returns a single `income` aggregate; `detail` expands into `maker_rebate`, `reward_income`, and `liquidity_reward`; `none` omits income fields.
+</ParamField>
+
+### Response
+
+                                 
+
+<ResponseField name="combo" type="object">
+  Present only when the wallet has Combos activity.
+
+  <Expandable title="Combo block fields">
+    <ResponseField name="realized_uusdc" type="string">
+      Realized PnL from Combos in micro-USDC.
+    </ResponseField>
+
+    <ResponseField name="unrealized_uusdc" type="string">
+      Unrealized PnL from open Combos in micro-USDC.
+    </ResponseField>
+
+    <ResponseField name="fees_uusdc" type="string">
+      Fees paid on Combos trades in micro-USDC.
+    </ResponseField>
+
+    <ResponseField name="quality" type="string">
+      Data quality indicator for Combos attribution.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc123def456abc123def456abc123def456abc1 \
+  -H "Authorization: Bearer <token>" \
+  -d window=30d \
+  -d basis=net \
+  -d income=detail
+```
+
+```json Response (abbreviated)
+{
+  "trader": "0xabc123def456abc123def456abc123def456abc1",
+  "username": "sharpshooter",
+  "realized_pnl": "3420.110000",
+  "unrealized_pnl": "210.440000",
+  "total_pnl": "3630.550000",
+  "fees": "88.200000",
+  "volume": "32100.000000",
+  "active_positions": 5,
+  "total_trades": 390,
+  "win_rate": "0.6497",
+  "window": "30d"
+}
+```
+
+</CodeGroup>

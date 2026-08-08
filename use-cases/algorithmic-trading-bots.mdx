@@ -1,0 +1,83 @@
+---
+title: "Algorithmic Trading Bots on Polymarket"
+sidebarTitle: "Algorithmic trading bots"
+description: "Execute algorithmic strategies on Polymarket's thin prediction-market order books with Bravado's TWAP, Iceberg, and Pegged order types."
+icon:
+  name: "bot"
+  library: "lucide"
+---
+
+## The problem
+
+Polymarket order books are thin. Common markets have $$2,000 to $$10,000 of depth at top-of-book. A serious algorithmic trader running signal-driven strategies needs execution primitives beyond LIMIT and MARKET, or they eat the entire cost of their edge in slippage.
+
+## What Bravado provides
+
+The Trade API v2 exposes six order types beyond the exchange native LIMIT and MARKET:
+
+- **TWAP** to schedule fills over time.
+- **ICEBERG** to hide displayed size while filling continuously.
+- **PEGGED** to track top-of-book without manual repricing.
+- **STOP\_LOSS**, **TAKE\_PROFIT**, **TRAILING\_STOP** for server-side conditional exits.
+
+All six execute server-side on Bravado's engine on top of the Polymarket CLOB. That means you don't need to run your own execution loop, hold state during retries, or reason about partial fills across a schedule.
+
+## Worked example
+
+Signal fires, size the position, execute with TWAP \+ ICEBERG, and set a trailing stop for the exit. All in one flow:
+
+```python
+import os, uuid, requests
+
+API = "https://bravado-api-k7kaq.ondigitalocean.app"
+KEY = os.environ["BRAVADO_API_KEY"]
+H = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
+
+def new_key():
+    return {"Idempotency-Key": str(uuid.uuid4())}
+
+symbol = "71321045679252212594626385532706912750332728571942532289631379312455583992646"
+target_size = "20000"
+
+# 1. Enter with TWAP + ICEBERG.
+entry = requests.post(f"{API}/v2/trade/order", headers={**H, **new_key()}, json={
+    "symbol": symbol,
+    "side": "buy",
+    "type": "TWAP",
+    "size": target_size,
+    "limit_price": "0.65",
+    "twap": {"duration_sec": 1800, "interval_sec": 60, "randomize": True},
+    "iceberg": {"display_size": "150"},
+}).json()
+
+parent_id = entry["order_id"]
+print(f"Entry: {parent_id}")
+
+# 2. Attach a trailing stop for the exit.
+exit_stop = requests.post(f"{API}/v2/trade/order", headers={**H, **new_key()}, json={
+    "symbol": symbol,
+    "side": "sell",
+    "type": "TRAILING_STOP",
+    "size": target_size,
+    "trailing": {"delta": "0.03"},
+    "trigger_after_order_id": parent_id,
+}).json()
+
+print(f"Trailing stop: {exit_stop['order_id']}")
+```
+
+Two API calls: enter and exit. Bravado handles the child orders, repost logic, and trigger conditions.
+
+## Why this is different on Polymarket
+
+Two constraints matter specifically for prediction markets:
+
+1. **Books are shallow.** Splitting size across time and hiding the visible slice is more impactful than in equities.
+2. **Prices are bounded 0 to 1.** A trailing stop of $$0.03 on a $$0.62 share is a 5 percent move, which is normal daily volatility on many markets. Set your stops accordingly.
+
+## Related
+
+- [Guide: Execute a large position with TWAP \+ Iceberg](/guides/large-position-twap-iceberg)
+- [Concept: Orders](/concepts/orders)
+- [Concept: CLOB](/concepts/clob)
+- [Trade API reference](/api/trade/overview)

@@ -1,0 +1,150 @@
+{
+  "projectType": "api-service",
+  "projectName": "Bravado",
+  "projectDescription": "Bravado is a Polymarket trading infrastructure API for partners — providing order execution, trader analytics, and copy-trading on Polygon.",
+  "theme": "luma",
+  "primaryColor": "#ef7025",
+  "lightColor": "#eec9bc",
+  "darkColor": "#4fa1ab",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/orders",
+              "concepts/positions",
+              "concepts/analytics",
+              "concepts/copytrade"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/place-an-order",
+              "guides/advanced-orders",
+              "guides/combos",
+              "guides/copy-trading",
+              "guides/trader-analytics"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/errors",
+              "reference/rate-limits",
+              "reference/pagination",
+              "reference/numeric-conventions"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Trade API",
+            "pages": [
+              "api/trade/overview",
+              "api/trade/orders",
+              "api/trade/positions",
+              "api/trade/strategies",
+              "api/trade/account",
+              "api/trade/withdraw"
+            ]
+          },
+          {
+            "group": "Combos API",
+            "pages": [
+              "api/combos/overview",
+              "api/combos/quote-accept-redeem"
+            ]
+          },
+          {
+            "group": "Copytrade API",
+            "pages": [
+              "api/copytrade/overview",
+              "api/copytrade/subscriptions",
+              "api/copytrade/simulation"
+            ]
+          },
+          {
+            "group": "Analytics API",
+            "pages": [
+              "api/analytics/overview",
+              "api/analytics/leaderboard",
+              "api/analytics/trader-profile",
+              "api/analytics/tax-statements"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Consolidated order endpoint supporting LIMIT, MARKET, PEGGED, TWAP, ICEBERG, STOP_LOSS, TAKE_PROFIT, and TRAILING_STOP order types",
+    "Protective bracket orders (take-profit and stop-loss) attached to LIMIT/MARKET buys",
+    "Multi-leg RFQ combo/parlay positions (2–10 legs)",
+    "Copy-trading engine that mirrors leader fills with configurable sizing modes",
+    "Paper/simulation trading for back-testing copy strategies without real capital",
+    "Trader analytics: PnL leaderboards, wallet profiles, cumulative PnL series, and positions",
+    "PMWAS tax statements: Form-8949-style dispositions, realized summaries, fee breakdowns, reconciliation certificates",
+    "Partner user provisioning (white-label embedded wallets on Polymarket)"
+  ],
+  "publicApiSurface": [
+    "POST /v2/trade/order",
+    "POST /v2/trade/order/batch",
+    "GET /v2/trade/orders/open",
+    "DELETE /v2/trade/orders/{order_id}",
+    "POST /v2/trade/orders/cancel-batch",
+    "POST /v2/trade/orders/cancel-all",
+    "GET /v2/trade/positions",
+    "POST /v2/trade/positions/redeem",
+    "POST /v2/trade/positions/split",
+    "POST /v2/trade/positions/merge",
+    "GET /v2/trade/strategies",
+    "DELETE /v2/trade/strategies/{id}",
+    "GET /v2/trade/account",
+    "GET /v2/trade/balances",
+    "GET /v2/trade/balances/withdrawable",
+    "POST /v2/trade/withdraw",
+    "GET /v2/trade/activity",
+    "POST /v2/trade/users",
+    "POST /v2/trade/combo/quote",
+    "POST /v2/trade/combo/accept",
+    "POST /v2/trade/combo/redeem",
+    "GET /v2/trade/combo/positions",
+    "POST /v2/trade/copytrade",
+    "GET /v2/trade/copytrade",
+    "PATCH /v2/trade/copytrade/{id}",
+    "DELETE /v2/trade/copytrade/{id}",
+    "PATCH /v2/trade/copytrade/{id}/status",
+    "GET /v2/trade/copytrade/history",
+    "GET /v2/trade/copytrade/pnl",
+    "GET /v2/trade/copytrade/simulation",
+    "POST /v2/trade/copytrade/{id}/simulation/reset",
+    "GET /leaderboard",
+    "GET /leaderboard/volume",
+    "GET /traders/{address}",
+    "GET /traders/{address}/pnl",
+    "GET /traders/{address}/positions",
+    "GET /traders/{address}/trades",
+    "GET /traders/{address}/categories",
+    "GET /traders/{address}/statements",
+    "GET /traders/{address}/metrics",
+    "GET /traders/{address}/reconciliation",
+    "GET /traders/{address}/tax-report",
+    "GET /trades",
+    "GET /healthz"
+  ]
+}

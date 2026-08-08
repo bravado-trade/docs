@@ -1,0 +1,171 @@
+---
+title: "Numeric and Timestamp Conventions in the Bravado API"
+sidebarTitle: "Numeric Conventions"
+description: "Bravado encodes all numeric values as JSON strings for precision. Learn price units, micro-USDC fields, timestamp formats, and parsing recommendations."
+icon:
+  name: "hash"
+  library: "lucide"
+---
+
+Bravado encodes all numeric fields — including prices, balances, PnL, volume, and share counts — as JSON strings rather than native JSON numbers. This is intentional: JavaScript's `Number` type (IEEE 754 double-precision float) loses precision on integers larger than 2⁵³ and on decimal values that cannot be represented exactly in binary floating point. By using strings, Bravado lets your application choose the right numeric type for its environment.
+
+## Why strings?
+
+Financial applications require exact arithmetic. A balance of `"1234567.890123"` USDC must round-trip without loss. Native JSON number parsing in JavaScript would silently corrupt values like this:
+
+```javascript
+// ❌ Dangerous — precision lost
+JSON.parse('{"balance": 1234567.890123}').balance
+// => 1234567.8901230002  (IEEE 754 rounding error)
+
+// ✅ Safe — parse as string, then use decimal library
+import Decimal from "decimal.js";
+const balance = new Decimal(response.balance); // exact
+```
+
+Always parse numeric string fields with a `Decimal` / `BigDecimal` type before performing any arithmetic.
+
+## Request field units
+
+The table below covers every numeric field you send in request bodies or query parameters. The "Common Mistake" column highlights the most frequent source of integration bugs.
+
+<Warning>
+Sending `price: 62` instead of `price: "0.62"` is the single most common integration error. Prices are decimal probabilities in the range 0–1, not cents.
+</Warning>
+
+| Field | Unit | Example value | Common mistake |
+|-------|------|---------------|----------------|
+| `price` | Decimal probability `0.001`–`0.999` | `"0.62"` (= 62¢) | Sending `"62"` (cents) |
+| `size` | Shares (string) | `"100"` | — |
+| `quote_amount` | US dollars | `"10"` | Sending micro-units |
+| `budget_usdc` | US dollars | `"50"` | Sending micro-units |
+| `price_floor` | Decimal probability `0`–`1` | `0.05` | Sending cents (`5`) |
+| `price_ceiling` | Decimal probability `0`–`1` | `0.95` | Sending cents (`95`) |
+| `offset_ticks` | CLOB ticks (1 tick = 0.1¢) | `0` | — |
+| `execution.trailing_offset_pct` | Percent `0`–`100` | `5` | — |
+| `execution.duration_sec` | Seconds | `3600` | — |
+| `execution.interval_sec` | Seconds (minimum 10) | `60` | — |
+| `notional_usd` (combo) | US dollars | `5` | — |
+
+### Price in depth
+
+All market prices on Polymarket are expressed as decimal probabilities between 0 and 1. A YES share trading at 62 cents has a price of `0.62`. The API enforces the range `0.001`–`0.999`; values outside this range return a `400` with the message:
+
+```
+"price must be a decimal probability 0.001–0.999; received 72 — did you mean 0.72?"
+```
+
+If you see this error, check whether your price source is returning cents (0–100) and divide by 100 before sending.
+
+## Response field units
+
+Response fields follow a consistent naming convention that signals their unit.
+
+| Field pattern | Unit | Example |
+|---------------|------|---------|
+| `realized_pnl`, `unrealized_pnl`, `volume`, `fees` | USDC (6-decimal string) | `"1234.567890"` |
+| `balance_usdc`, `pusd` | USDC (6-decimal string) | `"500.000000"` |
+| `payout_base_units` | pUSD integer (6 decimals) | `"1000000"` = 1.0 pUSD |
+| `shares`, `size` | Share count (string) | `"250"` |
+| Fields ending in `_uusdc` | Micro-USDC integer string | `"1234567"` = $1.234567 |
+| Fields ending in `_ushare` | Micro-share integer string | `"500000"` = 0.5 shares |
+
+## Micro-USDC (uusdc)
+
+Some Analytics API and PMWAS fields express values in **micro-USDC** — integers where 1 USDC = 1,000,000 units. These fields always end in `_uusdc` or `_ushare`.
+
+```json
+{
+  "fees_uusdc": "1234567",
+  "volume_uusdc": "50000000"
+}
+```
+
+To convert to display USDC, divide by `1,000,000`:
+
+```python
+from decimal import Decimal
+
+fees_uusdc = Decimal(response["fees_uusdc"])
+fees_usdc = fees_uusdc / Decimal("1000000")  # => Decimal("1.234567")
+```
+
+<Note>
+Standard PnL and balance fields on the trading endpoints (`/v2/trade/...`) are already in USDC with 6 decimal places — no conversion needed. Only fields explicitly suffixed `_uusdc` or `_ushare` require the ÷ 1,000,000 step.
+</Note>
+
+## Timestamps
+
+Bravado uses different timestamp formats depending on the field's purpose. You can identify the format from the field name:
+
+| Field pattern | Format | Example |
+|---------------|--------|---------|
+| `block_timestamp`, `timestamp`, `created_at` (integer) | Unix seconds (integer) | `1720000000` |
+| Fields ending in `_utc` | ISO-8601 / RFC 3339 UTC string | `"2024-07-03T12:00:00Z"` |
+| Fields ending in `_iso` | ISO-8601 string | `"2024-07-03T12:00:00Z"` |
+| `refreshed_at`, `fetched_at` | RFC 3339 UTC string | `"2024-07-03T12:00:00.000Z"` |
+| `expires_at` (combo quotes) | ISO-8601 instant | `"2024-07-03T12:00:08.500Z"` |
+| `date_acquired`, `date_sold` | ISO-8601 date | `"2024-07-03"` |
+
+**Converting a Unix-seconds timestamp in Python:**
+
+```python
+from datetime import datetime, timezone
+
+block_timestamp = 1720000000
+dt = datetime.fromtimestamp(block_timestamp, tz=timezone.utc)
+# => datetime(2024, 7, 3, 6, 13, 20, tzinfo=timezone.utc)
+```
+
+**Converting a Unix-seconds timestamp in JavaScript:**
+
+```javascript
+const blockTimestamp = 1720000000;
+const dt = new Date(blockTimestamp * 1000); // multiply by 1000 for ms
+// => 2024-07-03T06:13:20.000Z
+```
+
+<Note>
+Combo quote `expires_at` values are ISO-8601 instants with millisecond precision. Parse them with a full datetime parser, not a simple integer comparison.
+</Note>
+
+## Parsing recommendations
+
+Follow these language-specific patterns to safely handle all numeric fields returned by the Bravado API.
+
+**Python**
+
+```python
+from decimal import Decimal, getcontext
+
+# Set precision high enough for your calculations
+getcontext().prec = 28
+
+data = response.json()
+
+realized_pnl  = Decimal(data["realized_pnl"])    # e.g. Decimal("1234.567890")
+current_price = Decimal(data["price"])             # e.g. Decimal("0.620000")
+size          = Decimal(data["size"])              # e.g. Decimal("100")
+
+# Micro-USDC conversion
+fees_uusdc = Decimal(data["fees_uusdc"]) / Decimal("1000000")
+```
+
+**JavaScript / TypeScript**
+
+```typescript
+import Decimal from "decimal.js"; // npm install decimal.js
+
+const data = await resp.json();
+
+const realizedPnl  = new Decimal(data.realized_pnl);   // exact
+const currentPrice = new Decimal(data.price);
+const size         = new Decimal(data.size);
+
+// Micro-USDC conversion
+const feesUsdc = new Decimal(data.fees_uusdc).div(1_000_000);
+```
+
+<Warning>
+Never parse Bravado numeric strings with `parseFloat()`, `float()`, or native JSON number parsing. These types cannot represent 6-decimal USDC values exactly and will silently introduce rounding errors in balance and PnL calculations.
+</Warning>

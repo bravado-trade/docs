@@ -1,0 +1,104 @@
+---
+title: "GET /traders/{address}/trades — Trade Log"
+sidebarTitle: "GET /traders/{address}/trades"
+description: "Paginated log of all trade events for a wallet in reverse chronological order."
+icon:
+  name: "list"
+  library: "lucide"
+---
+
+Returns a paginated log of all trade events for the wallet in reverse chronological order.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/trades
+```
+
+### Path Parameters
+
+### Query Parameters
+
+  
+
+<ParamField query="type" type="string">
+  Filter by event type: `TRADE`, `REDEEM`, `REWARD`, `MAKER_REBATE`, `REFERRAL_REWARD`, `SPLIT`, `MERGE`, `CONVERSION`, `DEPOSIT`, `WITHDRAW`.
+</ParamField>
+
+### Response
+
+<ResponseField name="trades" type="array">
+  <Expandable title="Trade event fields">
+    <ResponseField name="block_timestamp" type="integer">
+      Unix timestamp of the block.
+    </ResponseField>
+
+    <ResponseField name="ts" type="string">
+      ISO 8601 UTC string.
+    </ResponseField>
+
+    <ResponseField name="tx_hash" type="string">
+      Polygon transaction hash.
+    </ResponseField>
+
+    <ResponseField name="market_id" type="string">
+      Polymarket condition ID.
+    </ResponseField>
+
+    <ResponseField name="question" type="string">
+      Market question.
+    </ResponseField>
+
+    <ResponseField name="category" type="string">
+      Market category.
+    </ResponseField>
+
+    <ResponseField name="outcome" type="string">
+      Outcome label.
+    </ResponseField>
+
+    <ResponseField name="token_id" type="string">
+      ERC-1155 token ID.
+    </ResponseField>
+
+    <ResponseField name="side" type="string">
+      `"BUY"` or `"SELL"`.
+    </ResponseField>
+
+    <ResponseField name="shares" type="string">
+      Number of shares.
+    </ResponseField>
+
+    <ResponseField name="usdc_amount" type="string">
+      USDC value exchanged.
+    </ResponseField>
+
+    <ResponseField name="price_cents" type="string">
+      Implied price in cents (0–100).
+    </ResponseField>
+
+    <ResponseField name="event_type" type="string">
+      Event classification.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+ 
+
+### Pagination Example
+
+<CodeGroup>
+
+```bash First page
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../trades \
+  -H "Authorization: Bearer <token>" \
+  -d limit=100
+```
+
+```bash Next page
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../trades \
+  -H "Authorization: Bearer <token>" \
+  -d limit=100 \
+  -d cursor_ts=1736800000 \
+  -d cursor_log_idx=42
+```
+
+</CodeGroup>

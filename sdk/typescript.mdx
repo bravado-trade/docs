@@ -1,0 +1,111 @@
+---
+title: "Bravado TypeScript SDK"
+sidebarTitle: "TypeScript"
+description: "Install and use the typed Bravado TypeScript SDK for the Trade, Copytrade, and Analytics APIs."
+icon:
+  name: "braces"
+  library: "lucide"
+---
+
+<Warning>
+  The official Bravado TypeScript SDK is in development. This page describes the planned surface. Generate a client from the OpenAPI spec if you need typed access today (see [SDK overview](/sdk/overview)).
+</Warning>
+
+{/* TODO: Confirm the npm package name (@bravado/sdk?), release timeline, and repository URL. */}
+
+## Install
+
+```bash npm
+npm install @bravado/sdk
+```
+
+```bash pnpm
+pnpm add @bravado/sdk
+```
+
+```bash yarn
+yarn add @bravado/sdk
+```
+
+## Initialize
+
+```typescript
+import { Bravado } from "@bravado/sdk";
+
+const bravado = new Bravado({
+  apiKey: process.env.BRAVADO_API_KEY!,
+});
+```
+
+Options:
+
+- `apiKey` (required)
+- `baseUrl` (default `https://bravado-api-k7kaq.ondigitalocean.app`)
+- `timeoutMs` (default 10000)
+- `maxRetries` (default 3)
+
+## Place an order
+
+```typescript
+const order = await bravado.trade.placeOrder({
+  symbol: "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+  side: "buy",
+  type: "MARKET",
+  quoteAmount: "10.00",
+});
+
+console.log(order.orderId, order.status);
+```
+
+The SDK generates a UUID v4 for `Idempotency-Key` automatically. Pass an explicit key when you need to control retries yourself:
+
+```typescript
+const order = await bravado.trade.placeOrder(
+  { symbol, side: "buy", type: "MARKET", quoteAmount: "10.00" },
+  { idempotencyKey: "e4b9c1a2-38df-4f77-a3c5-012bd9e8f231" },
+);
+```
+
+## Fetch analytics
+
+```typescript
+const pnl = await bravado.analytics.getTraderPnl("0xabc...");
+const leaderboard = await bravado.analytics.getLeaderboard({ window: "30d", limit: 20 });
+```
+
+## Copy-trading
+
+```typescript
+const sub = await bravado.copytrade.subscribe({
+  leaderAddress: "0xabc...",
+  sizingMode: "proportional",
+  sizingFactor: "0.10",
+  maxNotionalPerFill: "100.00",
+});
+
+console.log(sub.subscriptionId);
+```
+
+## Error handling
+
+```typescript
+import { BravadoError, RateLimitError, ScopeError } from "@bravado/sdk";
+
+try {
+  await bravado.trade.placeOrder({ ... });
+} catch (err) {
+  if (err instanceof RateLimitError) {
+    // Retry-After honored automatically before this throws
+  } else if (err instanceof ScopeError) {
+    // 403 with the missing scope name available on err.requiredScope
+  } else if (err instanceof BravadoError) {
+    console.error(err.status, err.code, err.message);
+  }
+}
+```
+
+## Related
+
+- [SDK overview](/sdk/overview)
+- [Python SDK](/sdk/python)
+- [Idempotency](/reference/idempotency)

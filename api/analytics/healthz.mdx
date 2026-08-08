@@ -1,0 +1,41 @@
+---
+title: "GET /healthz — Analytics API Liveness Probe"
+sidebarTitle: "GET /healthz"
+description: "Unauthenticated liveness probe for the Bravado Analytics API."
+icon:
+  name: "heart-pulse"
+  library: "lucide"
+---
+
+Returns `200` when the Analytics API is healthy. No authentication required.
+
+```text
+GET https://bravado-api-k7kaq.ondigitalocean.app/healthz
+```
+
+### Response
+
+<ResponseField name="ok" type="boolean">
+  `true` when the service is healthy.
+</ResponseField>
+
+<ResponseField name="ts" type="string">
+  RFC 3339 UTC timestamp.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://bravado-api-k7kaq.ondigitalocean.app/healthz
+```
+
+```json Response
+{
+  "ok": true,
+  "ts": "2025-01-15T12:00:00Z"
+}
+```
+
+</CodeGroup>

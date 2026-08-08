@@ -1,0 +1,162 @@
+---
+title: "Positions and Portfolio Management on Bravado"
+sidebarTitle: "Positions"
+description: "Understand how Bravado tracks open and closed positions, mark-to-market valuations, realized PnL, and on-chain collateral management."
+icon:
+  name: "layers"
+  library: "lucide"
+---
+
+Positions on Bravado represent outcome token balances held in your Polymarket Safe wallet. When you buy YES or NO shares in a Polymarket market, those ERC-1155 tokens land in your wallet and Bravado surfaces them as a position record with a live mark price, cost basis, and PnL attribution. This page explains the full lifecycle of a position — from the moment you enter a trade to the point where you redeem a resolved market.
+
+<Tip>
+  Poll `GET /v2/trade/positions?status=active` to retrieve only your open positions. Omitting the `status` filter returns both active and closed positions, which can be a large payload for active wallets.
+</Tip>
+
+## Position lifecycle
+
+<Steps>
+  <Step title="Open">
+    You buy outcome token shares. Bravado creates a position record with `status: active`, an average cost basis, and a live mark price derived from the CLOB midpoint.
+  </Step>
+  <Step title="Partially closed">
+    You sell a portion of your shares. The position remains `active` but `size` decreases. Realized PnL is updated to reflect the cashflow from the partial exit.
+  </Step>
+  <Step title="Fully closed or resolved">
+    You sell all remaining shares, or the market resolves. The position moves to `status: closed`. Live fields (`current_value`, `unrealized_pnl`, `mark_price`) are zeroed; only `realized_pnl` is retained.
+  </Step>
+</Steps>
+
+## Active vs. closed positions
+
+<Tabs>
+  <Tab title="Active positions">
+    An active position has a full set of live fields updated on each response:
+
+    | Field | Description |
+    |---|---|
+    | `mark_price` | Latest CLOB midpoint for the outcome token |
+    | `size` | Current share balance |
+    | `current_value` | `size × mark_price` in USDC |
+    | `unrealized_pnl` | `size × (mark_price − avg_cost)` |
+    | `avg_cost` | Volume-weighted average entry price |
+    | `redeemable` | `true` when the market has resolved and shares can be redeemed |
+    | `mergeable` | `true` when you hold a complete set of outcome tokens that can be merged back to pUSD |
+  </Tab>
+  <Tab title="Closed positions">
+    A closed position retains only the historical cashflow data:
+
+    | Field | Description |
+    |---|---|
+    | `realized_pnl` | Net cashflow (proceeds minus cost) after fees |
+    | `status` | `closed` |
+    | `mark_price`, `current_value`, `unrealized_pnl` | All zero |
+
+    Use closed positions to calculate your historical win rate and total PnL per market.
+  </Tab>
+</Tabs>
+
+## PnL model
+
+Bravado uses a **cashflow model** for realized PnL — it measures the actual USDC that flowed in and out of your wallet, net of trading fees.
+
+<CardGroup cols={3}>
+  <Card title="Realized PnL">
+    The net USDC received from closed or partially closed positions minus the cost of the shares sold, after fees.
+
+    ```
+    realized_pnl = Σ(sell_usdc) − Σ(buy_usdc) − fees
+    ```
+  </Card>
+  <Card title="Unrealized PnL">
+    The paper gain or loss on your open share balance, marked to the current CLOB midpoint.
+
+    ```
+    unrealized_pnl = size × (mark_price − avg_cost)
+    ```
+  </Card>
+  <Card title="Total PnL">
+    The sum of both components, representing your complete economic position.
+
+    ```
+    total_pnl = realized_pnl + unrealized_pnl
+    ```
+  </Card>
+</CardGroup>
+
+## Collateral
+
+Polymarket uses two collateral tokens, and Bravado supports both:
+
+| Token | Status | Notes |
+|---|---|---|
+| **pUSD** | Active (V2) | The primary collateral token for all V2 markets. Use this for new positions. |
+| **USDC.e** | Legacy | Used in older V1 markets. Can be wrapped into pUSD for use in V2 markets. |
+
+Call `GET /v2/trade/balances` to retrieve your current balance of both tokens alongside your total portfolio value.
+
+```json
+{
+  "pusd": "1500.00",
+  "usdc_e": "200.00",
+  "total_value_usdc": "1700.00"
+}
+```
+
+## Redeeming resolved positions
+
+When a Polymarket market resolves, the winning outcome token is redeemable for $1 per share. Redemption is **not automatic** — you must call the redeem endpoint to receive your payout.
+
+```bash
+POST /v2/trade/positions/redeem
+```
+
+```json
+{
+  "token_id": "71321045679252212594626385532706912750332728571942532289631379312455583992646"
+}
+```
+
+The endpoint is synchronous and returns `payout_base_units` — the raw on-chain payout amount. Check `position.redeemable === true` before calling to avoid a no-op transaction.
+
+<Note>
+  Losing positions pay out **$0 per share**. This is the expected behavior of prediction markets, not a bug. Your `realized_pnl` on a losing position will be negative and equal to your total cost basis.
+</Note>
+
+## Splitting and merging outcome sets
+
+Polymarket's conditional token framework lets you convert pUSD directly into a complete set of outcome tokens — one YES share and one NO share per dollar — without going through the order book. Bravado exposes both directions:
+
+<Accordion title="Split: pUSD → outcome tokens">
+  Splitting converts pUSD into one share of every outcome in a market. For a binary market, $100 of pUSD becomes 100 YES shares + 100 NO shares.
+
+  **When to use it:** Market making — you can immediately offer both sides of the book without paying the spread.
+
+  ```bash
+  POST /v2/trade/positions/split
+  ```
+
+  ```json
+  {
+    "condition_id": "0x5f65177b394277fd294cd75650044e2898f2d2b2e2f2a2c2d2e2f303132333435",
+    "amount_usdc": "100"
+  }
+  ```
+</Accordion>
+
+<Accordion title="Merge: outcome tokens → pUSD">
+  Merging is the inverse: combining a complete set of outcome tokens (one of each outcome) back into pUSD at 1:1. You must hold at least one share of every outcome to merge.
+
+  **When to use it:** Unwinding a split position or extracting value from a portfolio that holds both sides.
+
+  ```bash
+  POST /v2/trade/positions/merge
+  ```
+
+  ```json
+  {
+    "condition_id": "0x5f65177b394277fd294cd75650044e2898f2d2b2e2f2a2c2d2e2f303132333435",
+    "amount_shares": "100"
+  }
+  ```
+</Accordion>

@@ -1,0 +1,72 @@
+---
+title: "AI Agents Trading Prediction Markets"
+sidebarTitle: "AI agents"
+description: "Give AI agents programmatic access to Polymarket trading with the Bravado APIs and MCP server."
+icon:
+  name: "brain"
+  library: "lucide"
+---
+
+## The problem
+
+Autonomous agents (LLM-driven or otherwise) that trade prediction markets need three things at once: a clean market data feed, a safe execution surface with strong idempotency guarantees, and a way to reason about wallet state without ambiguity. Wiring an agent to Polymarket's raw contracts requires custom code to smooth all three.
+
+## What Bravado provides
+
+- **Semantic endpoints.** Every action an agent might want (place order, get positions, look up a market, compute PnL) is a single REST call with typed request and response.
+- **Idempotency.** Every mutating call requires an `Idempotency-Key` header. Agents that retry on failure cannot double-execute. See [Idempotency](/reference/idempotency).
+- **Machine-readable docs.** `llms.txt` and `llms-full.txt` are published so any code-generation agent can consume the full API surface without scraping.
+- **Optional MCP server.** For agent frameworks that support the Model Context Protocol, Bravado exposes a hosted MCP endpoint.
+
+{/* TODO: Confirm the MCP server URL and auth method, then link it in the Build with AI page. */}
+
+## Worked example
+
+An LLM tool-calling function that lets an agent evaluate a market and place a scaled position:
+
+```python
+import os, uuid, requests
+
+API = "https://bravado-api-k7kaq.ondigitalocean.app"
+H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}", "Content-Type": "application/json"}
+
+def place_scaled_order(symbol: str, side: str, confidence: float, max_notional_usd: float):
+    """Tool an agent can call.
+    confidence: 0.0 to 1.0. Higher confidence -> larger position, up to max_notional_usd.
+    """
+    notional = str(round(max_notional_usd * confidence, 2))
+
+    r = requests.post(
+        f"{API}/v2/trade/order",
+        headers={**H, "Idempotency-Key": str(uuid.uuid4())},
+        json={
+            "symbol": symbol,
+            "side": side,
+            "type": "MARKET",
+            "quote_amount": notional,
+        },
+    )
+    r.raise_for_status()
+    return r.json()
+
+def get_position(symbol: str):
+    """Agent can inspect its own state."""
+    r = requests.get(f"{API}/v2/trade/positions", headers=H, params={"symbol": symbol})
+    r.raise_for_status()
+    return r.json()
+```
+
+Register these as tools with the agent framework (LangChain, OpenAI function-calling, Anthropic tool use, etc.) and constrain `max_notional_usd` at the tool boundary so the agent cannot exceed a budget per action.
+
+## Safety patterns
+
+- **Per-tool notional caps.** Enforce dollar limits at the tool layer, not in the agent's prompt.
+- **Dry-run mode.** Route to a test wallet or a preview endpoint during development.
+- **Cooldowns and daily caps.** Reject tool calls that exceed a rolling limit.
+- **Full audit trail.** Every mutating call has an idempotency key. Log them per agent session for post-hoc review.
+
+## Related
+
+- [Build with AI](/build-with-ai)
+- [Idempotency](/reference/idempotency)
+- [Trade API reference](/api/trade/overview)
