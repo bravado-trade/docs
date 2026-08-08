@@ -61,10 +61,62 @@
           {
             "group": "Products Overview",
             "pages": [
-              "products/data-api",
-              "products/trade-api",
-              "products/copytrade-api",
-              "products/uma-api"
+              {
+                "group": "Data API",
+                "icon": "chart-line",
+                "pages": [
+                  "products/data-api",
+                  "api/analytics/overview",
+                  "api/analytics/healthz",
+                  "api/analytics/leaderboard",
+                  "api/analytics/leaderboard-volume",
+                  "api/analytics/trader",
+                  "api/analytics/trader-pnl",
+                  "api/analytics/trader-positions",
+                  "api/analytics/trader-positions-active",
+                  "api/analytics/trader-positions-closed",
+                  "api/analytics/trader-trades",
+                  "api/analytics/trader-categories",
+                  "api/analytics/trader-usdc-balance",
+                  "api/analytics/trader-statements",
+                  "api/analytics/trader-statements-r1",
+                  "api/analytics/trader-metrics",
+                  "api/analytics/trader-reconciliation",
+                  "api/analytics/trader-tax-report",
+                  "api/analytics/trades",
+                  "api/analytics/entity"
+                ]
+              },
+              {
+                "group": "Trade API",
+                "icon": "arrow-left-right",
+                "pages": [
+                  "products/trade-api",
+                  "api/trade/overview",
+                  "api/trade/orders",
+                  "api/trade/positions",
+                  "api/trade/strategies",
+                  "api/trade/account",
+                  "api/trade/withdraw"
+                ]
+              },
+              {
+                "group": "Copytrade API",
+                "icon": "users",
+                "pages": [
+                  "products/copytrade-api",
+                  "api/copytrade/overview",
+                  "api/copytrade/subscriptions",
+                  "api/copytrade/simulation"
+                ]
+              },
+              {
+                "group": "UMA API",
+                "icon": "/logo/uma.png",
+                "pages": [
+                  "products/uma-api"
+                ]
+              }
             ]
           },
           {
@@ -149,10 +201,62 @@
           {
             "group": "Products",
             "pages": [
-              "products/data-api",
-              "products/trade-api",
-              "products/copytrade-api",
-              "products/uma-api"
+              {
+                "group": "Data API",
+                "icon": "chart-line",
+                "pages": [
+                  "products/data-api",
+                  "api/analytics/overview",
+                  "api/analytics/healthz",
+                  "api/analytics/leaderboard",
+                  "api/analytics/leaderboard-volume",
+                  "api/analytics/trader",
+                  "api/analytics/trader-pnl",
+                  "api/analytics/trader-positions",
+                  "api/analytics/trader-positions-active",
+                  "api/analytics/trader-positions-closed",
+                  "api/analytics/trader-trades",
+                  "api/analytics/trader-categories",
+                  "api/analytics/trader-usdc-balance",
+                  "api/analytics/trader-statements",
+                  "api/analytics/trader-statements-r1",
+                  "api/analytics/trader-metrics",
+                  "api/analytics/trader-reconciliation",
+                  "api/analytics/trader-tax-report",
+                  "api/analytics/trades",
+                  "api/analytics/entity"
+                ]
+              },
+              {
+                "group": "Trade API",
+                "icon": "arrow-left-right",
+                "pages": [
+                  "products/trade-api",
+                  "api/trade/overview",
+                  "api/trade/orders",
+                  "api/trade/positions",
+                  "api/trade/strategies",
+                  "api/trade/account",
+                  "api/trade/withdraw"
+                ]
+              },
+              {
+                "group": "Copytrade API",
+                "icon": "users",
+                "pages": [
+                  "products/copytrade-api",
+                  "api/copytrade/overview",
+                  "api/copytrade/subscriptions",
+                  "api/copytrade/simulation"
+                ]
+              },
+              {
+                "group": "UMA API",
+                "icon": "/logo/uma.png",
+                "pages": [
+                  "products/uma-api"
+                ]
+              }
             ]
           }
         ]
