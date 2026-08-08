@@ -1,0 +1,44 @@
+---
+title: "Combos API on Polymarket"
+sidebarTitle: "Combos API"
+description: "Buy multi-leg parlay positions across 2 to 10 Polymarket markets in a single on-chain position, priced by RFQ."
+icon:
+  name: "combine"
+  library: "lucide"
+---
+
+The [Combos API](/api/combos/overview) is supported on Polymarket. A combo bundles 2 to 10 YES outcome legs into a single position that pays out only if **every** selected market resolves in your favor.
+
+This page covers what is specific to Polymarket. For the full request and response reference, see [Quote / Accept / Redeem](/api/combos/quote-accept-redeem).
+
+## Why use a combo
+
+Placing separate orders across several markets leaves you holding several independent positions, each of which can be filled at a different time and price. A combo is priced and executed as one position, so you either get the whole parlay at a known price or you get nothing.
+
+## How pricing works
+
+Combos use a Request-for-Quote model rather than the CLOB. When you request a quote, a real maker counterparty prices the blended position and returns a firm quote, not an estimated midpoint.
+
+<Warning>
+  A quote is valid for roughly **8.5 seconds**. Accept it before the `expires_at` timestamp or the API returns `410 QUOTE_EXPIRED`. When a quote expires, request a fresh one rather than retrying the stale accept: the underlying markets may have moved and the maker needs to re-price.
+</Warning>
+
+```
+POST /combo/quote  →  POST /combo/accept (within ~8.5 s)  →  (events resolve)  →  POST /combo/redeem
+```
+
+## Polymarket specifics
+
+- **Legs are position token IDs.** Each leg in `leg_position_ids` is a Polymarket YES outcome token id, the same identifier used as `symbol` on the [Trade API](/markets/polymarket/trade-api).
+- **Resolution is per leg.** Every leg must resolve YES for the combo to pay out, and each leg settles through [UMA resolution](/markets/polymarket/uma-resolution). A combo is only redeemable once all of its legs have settled.
+- **Collateral is USDC**, with `notional_usd` expressed in US dollars.
+
+## Scope requirement
+
+Your API token must carry the `trade.combos` scope. A key without it is rejected with `403 Forbidden`. See [Authentication](/authentication).
+
+## Related
+
+- [Combos API reference](/api/combos/overview)
+- [Quote / Accept / Redeem](/api/combos/quote-accept-redeem)
+- [Polymarket overview](/markets/polymarket/overview)

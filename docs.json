@@ -42,6 +42,7 @@
                   "markets/polymarket/overview",
                   "markets/polymarket/trade-api",
                   "markets/polymarket/copytrade-api",
+                  "markets/polymarket/combos-api",
                   "markets/polymarket/data-api",
                   "markets/polymarket/uma-resolution"
                 ]
@@ -105,6 +106,14 @@
                   "products/copytrade-api",
                   "api/copytrade/subscriptions",
                   "api/copytrade/simulation"
+                ]
+              },
+              {
+                "group": "Combos API",
+                "icon": "combine",
+                "pages": [
+                  "api/combos/overview",
+                  "api/combos/quote-accept-redeem"
                 ]
               },
               "products/uma-api"
@@ -236,6 +245,14 @@
                   "products/copytrade-api",
                   "api/copytrade/subscriptions",
                   "api/copytrade/simulation"
+                ]
+              },
+              {
+                "group": "Combos API",
+                "icon": "combine",
+                "pages": [
+                  "api/combos/overview",
+                  "api/combos/quote-accept-redeem"
                 ]
               },
               "products/uma-api"
