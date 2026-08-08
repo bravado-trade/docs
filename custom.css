@@ -44,19 +44,23 @@ html.dark #sidebar {
   background: #161617;              /* Dark/Fill/Section */
 }
 
-/* The 32px gutter left of the sidebar is the layout row's own padding, so
-   it falls outside the sidebar's box and showed the page colour as a strip
-   down the left edge. A box-shadow cannot fill it: an ancestor sets
-   overflow-x: clip and cuts the shadow off. Painting the row itself does
-   work, and it also carries the panel past the sticky sidebar's viewport
-   height when scrolling. */
-html.dark div:has(> #sidebar) {
-  background: linear-gradient(
-    to right,
-    #161617 0,
-    #161617 calc(18rem + 32px),     /* sidebar width plus the row padding */
-    transparent calc(18rem + 32px)
-  );
+/* Run the sidebar surface from the viewport edge to the sidebar's right edge.
+   Two things make this awkward to do on the sidebar itself: the 32px gutter
+   beside it is the layout row's padding, and an ancestor sets overflow-x:
+   clip, so a box-shadow is silently cut off. The row is also centred with
+   max-width 1472px, so on wide screens it does not reach the edge.
+
+   A fixed fill avoids all of it. The width resolves to the sidebar's right
+   edge at any viewport: below 1472px the row is flush left so it is just the
+   sidebar plus its gutter; above that, half the leftover margin is added. */
+html.dark body::before {
+  content: "";
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: max(320px, calc((100vw - 1472px) / 2 + 320px));
+  background: #161617;              /* Dark/Fill/Section */
+  z-index: 0;                       /* over the page background, under the sidebar */
+  pointer-events: none;
 }
 
 /* Active sidebar item: neutral selected surface, green text and glow */
