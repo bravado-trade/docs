@@ -36,7 +36,24 @@ html.dark #navbar-transition {
    sidebar, which would otherwise show the page background as a strip. */
 html.dark #sidebar {
   background: #161617;              /* Dark/Fill/Section */
-  box-shadow: -40px 0 0 0 #161617;
+}
+
+/* The 32px gutter left of the sidebar is the row's own padding, so it sits
+   outside the sidebar's box. A box-shadow cannot fill it: an ancestor sets
+   overflow-x: clip and cuts the shadow off. Paint it from the row instead,
+   which also carries the panel past the sticky sidebar's viewport height. */
+html.dark div:has(> #sidebar) {
+  position: relative;
+}
+
+html.dark div:has(> #sidebar)::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(18rem + 32px);        /* sidebar width plus the row padding */
+  background: #161617;
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* Active sidebar item: neutral selected surface, green text and glow */
