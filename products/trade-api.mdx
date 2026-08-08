@@ -13,6 +13,28 @@ Every order on Bravado flows through a single endpoint, `POST /v2/trade/order`, 
   **Price is a decimal probability, not cents.** A price of `"0.62"` means 62 cents per share. If you send `price: "62"`, the API will return an error because 62 is outside the valid range of 0.001–0.999. Always express prices as decimals.
 </Warning>
 
+## Why Bravado over the native endpoints
+
+Polymarket's CLOB accepts limit and market orders. Anything more sophisticated is left to you: you build the execution engine, keep a process alive to run it, and handle every failure in between.
+
+Bravado runs that layer for you.
+
+| | Native CLOB | Bravado Trade API |
+| --- | --- | --- |
+| Order types | LIMIT, MARKET | Those plus TWAP, ICEBERG, PEGGED, STOP\_LOSS, TAKE\_PROFIT, TRAILING\_STOP |
+| Advanced execution | Build and host it yourself | Executed server-side, survives your process restarting |
+| Bracket orders | Not available | Take-profit and stop-loss attached at entry |
+| Duplicate protection | Not enforced | `Idempotency-Key` required on every mutation |
+| Batching | One order per call | Batch submit, batch cancel, cancel-all |
+| Sub-accounts | Not available | Provisioned under a partner master key |
+
+What that means in practice:
+
+- **A TWAP keeps running when your bot does not.** Managed strategies live on Bravado's side and expose a lifecycle you can inspect on `GET /v2/trade/strategies` and cancel on demand. A self-hosted scheduler dies with your process, mid-execution.
+- **Retries are safe.** Every mutating request takes an `Idempotency-Key`. Retry a timed-out order with the same key and you get the original response back rather than a second position. See [Idempotency](/reference/idempotency).
+- **Position mechanics are one call.** Redeem, split, and merge are endpoints rather than raw Conditional Token Framework interactions.
+- **Limits are discoverable.** Your quota is returned as `rate_limit_per_min` on [`GET /v2/trade/account`](/api/trade/account), so a client can read its own budget instead of hard-coding an assumption.
+
 ## Fees
 
 The Trade API charges **10 bips (0.10%) per side**, applied to both the maker and the taker.

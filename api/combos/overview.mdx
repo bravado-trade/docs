@@ -9,6 +9,22 @@ icon:
 
 Combos are multi-leg parlays, a single position that pays out only if every selected market resolves in your favor. Instead of placing separate orders across multiple markets, you submit a single combo order that bundles 2–10 YES outcome legs into one on-chain position. This API uses a Request-for-Quote (RFQ) model, meaning every price you receive is a firm, live quote from a real maker counterparty. To use the Combos API, your token must carry the `trade.combos` scope.
 
+## Why Bravado over the native endpoints
+
+Polymarket has no multi-leg product. To express "all of these outcomes happen", you buy each leg separately, which leaves you holding several independent positions rather than one parlay.
+
+That distinction matters more than it first appears:
+
+| | Legging in manually | Bravado Combos API |
+| --- | --- | --- |
+| Execution | One order per market | One position across 2 to 10 legs |
+| Pricing | Whatever each book gives you, leg by leg | A single firm quote for the blended position |
+| Partial fills | Some legs fill, some do not, leaving unintended exposure | The combo executes whole or not at all |
+| Price certainty | Each leg can move while you fill the others | Quote is firm for its validity window |
+
+- **A firm quote, not an estimate.** A real maker counterparty prices the blended position and stands behind it. This is not a simulated midpoint derived from the books.
+- **No leg risk.** Legging in manually means the market can move against you between the first fill and the last, and a failed leg leaves you exposed to a position you did not intend to hold.
+
 ## Endpoints
 
 | Method | Path | Description |

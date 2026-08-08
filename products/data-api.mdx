@@ -13,6 +13,34 @@ Bravado's Data API derives all metrics directly from on-chain Polygon data, usin
   All numeric fields in Data API responses, including PnL, volume, and prices, are returned as **JSON strings**. Always parse them as `BigDecimal` (or your language's equivalent arbitrary-precision type). Parsing as a float risks silent rounding errors on large values.
 </Warning>
 
+## Why Bravado over the native endpoints
+
+The difference here is accuracy, and it is worth being specific about where it comes from.
+
+Polymarket's own surfaces are built to run the exchange, not to account for a wallet. They expose recent activity and current holdings. They do not reconstruct what a position cost you, and they do not produce anything a preparer or an auditor can check.
+
+Bravado computes every figure from **on-chain Polygon settlement records**, then replays a wallet's entire transaction history through a **share-level FIFO cost-basis engine**, starting at its first ever trade. Nothing is estimated from a midpoint or sampled from a recent window.
+
+| | Native endpoints | Bravado Data API |
+| --- | --- | --- |
+| Source | Exchange state | On-chain settlement records, replayed |
+| History depth | Recent activity | Every fill since the wallet's first trade |
+| Cost basis | Not provided | Share-level FIFO, reconstructed per lot |
+| Consistency | Per-surface | One standard (PMWAS) across every endpoint |
+| Verifiability | None | R8 reconciliation certificate |
+| Tax output | None | R1 dispositions and per-year summaries |
+| Precision | JSON numbers | JSON strings, so no float drift |
+
+Three consequences follow from that design:
+
+- **Numbers agree with each other.** PnL on the leaderboard, on the trader profile, and in the tax report come from the same computation, so they reconcile. Endpoints that each calculate independently drift apart.
+- **You can prove it.** [`GET /traders/{address}/reconciliation`](/api/analytics/trader-reconciliation) returns a certificate verifying the statement is internally consistent, which matters when a third party has to accept the numbers.
+- **It works on wallets you do not control.** Every read endpoint takes any public address, so you can analyse a trader before you follow them, with no funded account.
+
+<Note>
+  Numeric fields are returned as JSON **strings** on purpose. Parsing them as floats reintroduces exactly the rounding error the FIFO engine exists to avoid. See [Numeric conventions](/reference/numeric-conventions).
+</Note>
+
 ## Key metrics
 
 <CardGroup cols={2}>

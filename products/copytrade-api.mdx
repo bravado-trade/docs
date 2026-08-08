@@ -13,6 +13,26 @@ Copy trading on Bravado subscribes your wallet to a leader's trading activity so
   Use **simulation mode** to paper-trade a leader's strategy before committing real capital. Simulation tracks all fills against live CLOB prices without executing on-chain transactions, giving you a realistic preview of how a strategy would have performed.
 </Note>
 
+## Why Bravado over the native endpoints
+
+There is no comparison to draw here: **Polymarket has no copy-trading**. Building it yourself means watching the chain for a leader's fills, deciding your size, and racing to execute before the price moves, then handling the case where you are short of collateral mid-mirror.
+
+Bravado runs that as a managed subscription.
+
+| | Building it yourself | Bravado Copytrade API |
+| --- | --- | --- |
+| Fill detection | Poll or index the chain | Handled, mirrored as fills land |
+| Sizing | Your own logic | Proportional, fixed, or capped, configured per subscription |
+| Filters | Your own logic | Market, side, and size filters |
+| Risk controls | Your own logic | Configurable, enforced before the order reaches the market |
+| Testing | Trade real money to find out | Simulation mode, paper trades against live prices |
+| Leader research | Build an indexer | [Data API](/products/data-api) on any public wallet |
+
+Two things make it usable as a product rather than a script:
+
+- **Any public wallet can be a leader.** They do not need a Bravado account, and are not notified. You can evaluate a candidate's full history first with the Data API, then subscribe.
+- **You can paper-trade the strategy first.** Simulation runs the whole subscription against live prices without executing on-chain, so a follower can see how a leader would have performed for them before committing collateral.
+
 ## Fees
 
 The Copytrade API charges **25 bips (0.25%) per side**, applied to both the maker and the taker on every mirrored fill.

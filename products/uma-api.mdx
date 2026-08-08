@@ -11,6 +11,19 @@ icon: "/logo/uma.png"
 
 Polymarket markets do not settle themselves. When a market's event concludes, the outcome has to be reported on-chain and accepted before holders can redeem winning shares. Polymarket uses [UMA](https://uma.xyz)'s Optimistic Oracle for that step, and the Bravado UMA API exposes the resolution lifecycle as queryable data.
 
+## Why Bravado over reading the chain
+
+Resolution data exists on-chain, so this is not about access. It is about not having to build an indexer to answer a question every prediction market application eventually has to answer: **is this position actually finished?**
+
+| | Reading the chain yourself | Bravado UMA API |
+| --- | --- | --- |
+| Setup | Index UMA oracle events yourself | Query an endpoint |
+| Assertion state | Decode on-chain events | Returned as data |
+| Dispute tracking | Watch for challenges and votes | Surfaced in the resolution record |
+| Correlation to positions | Map oracle events back to your holdings | Aligned with the same market identifiers as the rest of Bravado |
+
+The practical payoff is that a "concluded" event and a redeemable position stop being the same thing in your data model. An application that conflates them will show users balances they cannot access, and book PnL that has not been realised.
+
 ## Why resolution matters for traders
 
 Resolution is the point where an outcome token stops being a probability and becomes worth exactly \$1 or \$0. Three things about that transition affect anyone trading or building on Polymarket:
