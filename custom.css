@@ -10,6 +10,15 @@ html.dark {
   --gray-400: 143 143 143; /* #8f8f8f  Dark/Text/Secondary */
 }
 
+/* Navbar sits on the Card surface, one step lighter than the page.
+   Mintlify leaves this transparent and swaps opacity on scroll, so this
+   is set for both the scrolled and unscrolled states to keep the bar a
+   consistent colour. */
+html.dark #navbar-transition {
+  background-color: #202020 !important;  /* Dark/Fill/Card */
+  border-color: #303030 !important;      /* Dark/Border-1 */
+}
+
 /* Vertical divider between sidebar and content */
 #sidebar {
   border-right: 1px solid #303030;
