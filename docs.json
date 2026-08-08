@@ -22,6 +22,34 @@
               "authentication",
               "build-with-ai"
             ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/orders",
+              "concepts/positions",
+              "concepts/analytics",
+              "concepts/copytrade"
+            ]
+          },
+          {
+            "group": "Use Cases",
+            "pages": [
+              "use-cases/algorithmic-trading-bots",
+              "use-cases/copy-trading",
+              "use-cases/portfolio-dashboards",
+              "use-cases/ai-agents",
+              "use-cases/quant-research",
+              "use-cases/tax-accounting-tooling"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdk/overview",
+              "sdk/typescript",
+              "sdk/python"
+            ]
           }
         ]
       },
