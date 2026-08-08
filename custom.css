@@ -10,6 +10,14 @@ html.dark {
   --gray-400: 143 143 143; /* #8f8f8f  Dark/Text/Secondary */
 }
 
+/* The page background is not painted from the grey scale above. Mintlify
+   paints it with a fixed, full-viewport span at z-index -10 using
+   --background-dark, so it has to be set separately or the page stays
+   near-black regardless of the greys. */
+html.dark #background-color {
+  background-color: #1b1b1d !important;  /* Dark/Fill/Background */
+}
+
 /* Navbar sits on the Card surface, one step lighter than the page.
    Mintlify leaves this transparent and swaps opacity on scroll, so this
    is set for both the scrolled and unscrolled states to keep the bar a
@@ -31,29 +39,24 @@ html.dark #navbar-transition {
   border-right: 1px solid #303030;
 }
 
-/* Sidebar sits on the Section surface so it recedes behind the content.
-   The box-shadow fills the gutter between the viewport edge and the
-   sidebar, which would otherwise show the page background as a strip. */
+/* Sidebar sits on the Section surface so it recedes behind the content. */
 html.dark #sidebar {
   background: #161617;              /* Dark/Fill/Section */
 }
 
-/* The 32px gutter left of the sidebar is the row's own padding, so it sits
-   outside the sidebar's box. A box-shadow cannot fill it: an ancestor sets
-   overflow-x: clip and cuts the shadow off. Paint it from the row instead,
-   which also carries the panel past the sticky sidebar's viewport height. */
+/* The 32px gutter left of the sidebar is the layout row's own padding, so
+   it falls outside the sidebar's box and showed the page colour as a strip
+   down the left edge. A box-shadow cannot fill it: an ancestor sets
+   overflow-x: clip and cuts the shadow off. Painting the row itself does
+   work, and it also carries the panel past the sticky sidebar's viewport
+   height when scrolling. */
 html.dark div:has(> #sidebar) {
-  position: relative;
-}
-
-html.dark div:has(> #sidebar)::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: calc(18rem + 32px);        /* sidebar width plus the row padding */
-  background: #161617;
-  z-index: 0;
-  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    #161617 0,
+    #161617 calc(18rem + 32px),     /* sidebar width plus the row padding */
+    transparent calc(18rem + 32px)
+  );
 }
 
 /* Active sidebar item: neutral selected surface, green text and glow */
