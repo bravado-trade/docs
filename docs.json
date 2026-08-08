@@ -66,7 +66,6 @@
                 "icon": "chart-line",
                 "pages": [
                   "products/data-api",
-                  "api/analytics/overview",
                   "api/analytics/healthz",
                   "api/analytics/leaderboard",
                   "api/analytics/leaderboard-volume",
@@ -92,7 +91,6 @@
                 "icon": "arrow-left-right",
                 "pages": [
                   "products/trade-api",
-                  "api/trade/overview",
                   "api/trade/orders",
                   "api/trade/positions",
                   "api/trade/strategies",
@@ -105,18 +103,11 @@
                 "icon": "users",
                 "pages": [
                   "products/copytrade-api",
-                  "api/copytrade/overview",
                   "api/copytrade/subscriptions",
                   "api/copytrade/simulation"
                 ]
               },
-              {
-                "group": "UMA API",
-                "icon": "/logo/uma.png",
-                "pages": [
-                  "products/uma-api"
-                ]
-              }
+              "products/uma-api"
             ]
           },
           {
@@ -206,7 +197,6 @@
                 "icon": "chart-line",
                 "pages": [
                   "products/data-api",
-                  "api/analytics/overview",
                   "api/analytics/healthz",
                   "api/analytics/leaderboard",
                   "api/analytics/leaderboard-volume",
@@ -232,7 +222,6 @@
                 "icon": "arrow-left-right",
                 "pages": [
                   "products/trade-api",
-                  "api/trade/overview",
                   "api/trade/orders",
                   "api/trade/positions",
                   "api/trade/strategies",
@@ -245,18 +234,11 @@
                 "icon": "users",
                 "pages": [
                   "products/copytrade-api",
-                  "api/copytrade/overview",
                   "api/copytrade/subscriptions",
                   "api/copytrade/simulation"
                 ]
               },
-              {
-                "group": "UMA API",
-                "icon": "/logo/uma.png",
-                "pages": [
-                  "products/uma-api"
-                ]
-              }
+              "products/uma-api"
             ]
           }
         ]
