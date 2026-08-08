@@ -1,5 +1,5 @@
 ---
-title: "UMA API — Optimistic Oracle Resolution Data"
+title: "UMA API: Optimistic Oracle Resolution Data"
 sidebarTitle: "UMA API"
 description: "Query how Polymarket markets are resolved through UMA's Optimistic Oracle, including proposals, disputes, and final settlement outcomes."
 icon: "/logo/uma.png"
@@ -37,7 +37,7 @@ Resolution is the point where an outcome token stops being a probability and bec
 </Steps>
 
 <Warning>
-  A market whose event has visibly concluded is not necessarily settled. Always confirm final resolution state before treating a position as realized — an undisputed assertion can still be disputed until its challenge window closes.
+  A market whose event has visibly concluded is not necessarily settled. Always confirm final resolution state before treating a position as realized, an undisputed assertion can still be disputed until its challenge window closes.
 </Warning>
 
 ## Endpoints
@@ -50,12 +50,12 @@ Resolution is the point where an outcome token stops being a probability and bec
 <Note>
   Endpoint documentation is pending. In the meantime, resolution-adjacent behaviour that **is** documented today:
 
-  - [`POST /v2/trade/positions/redeem`](/api/trade/positions) — redeem winning shares once a market has settled.
-  - [Error reference](/reference/errors) — includes the `503` / `available: false` behaviour returned while data is still being processed.
+  - [`POST /v2/trade/positions/redeem`](/api/trade/positions), redeem winning shares once a market has settled.
+  - [Error reference](/reference/errors), includes the `503` / `available: false` behaviour returned while data is still being processed.
 </Note>
 
 ## Related
 
-- [Trade API](/products/trade-api) — order execution and position management
-- [Data API](/products/data-api) — wallet PnL, trade logs, and tax statements
-- [Polymarket](/markets/polymarket/overview) — market coverage and supported features
+- [Trade API](/products/trade-api), order execution and position management
+- [Data API](/products/data-api), wallet PnL, trade logs, and tax statements
+- [Polymarket](/markets/polymarket/overview), market coverage and supported features

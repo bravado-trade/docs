@@ -1,5 +1,5 @@
 ---
-title: "Data API — Trader Analytics and Performance Metrics"
+title: "Data API: Trader Analytics and Performance Metrics"
 sidebarTitle: "Data API"
 description: "The Bravado Data API provides on-chain PnL metrics, leaderboards, trade history, and tax statements for any Polymarket wallet address."
 icon:
@@ -7,10 +7,10 @@ icon:
   library: "lucide"
 ---
 
-Bravado's Data API derives all metrics directly from on-chain Polygon data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any Polymarket wallet. You can query performance data for your own wallet or any public address — useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
+Bravado's Data API derives all metrics directly from on-chain Polygon data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any Polymarket wallet. You can query performance data for your own wallet or any public address, useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
 
 <Warning>
-  All numeric fields in Data API responses — including PnL, volume, and prices — are returned as **JSON strings**. Always parse them as `BigDecimal` (or your language's equivalent arbitrary-precision type). Parsing as a float risks silent rounding errors on large values.
+  All numeric fields in Data API responses, including PnL, volume, and prices, are returned as **JSON strings**. Always parse them as `BigDecimal` (or your language's equivalent arbitrary-precision type). Parsing as a float risks silent rounding errors on large values.
 </Warning>
 
 ## Key metrics
@@ -29,7 +29,7 @@ Bravado's Data API derives all metrics directly from on-chain Polygon data, usin
   </Card>
 
   <Card title="Win rate">
-    Closed-position stats at the outcome level — a position is a "win" if it closed with positive realized PnL. Calculated independently of position size.
+    Closed-position stats at the outcome level, a position is a "win" if it closed with positive realized PnL. Calculated independently of position size.
   </Card>
 </CardGroup>
 
@@ -50,7 +50,7 @@ All analytics endpoints accept a `?window=` query parameter that controls the ro
 
 **What the window affects:** PnL, volume, and trade counts use daily or hourly rollups that respect the window boundary. Windowed queries are fast because they aggregate pre-computed buckets.
 
-**What the window does not affect:** Fee totals, streak metadata, and drawdown statistics are always computed all-time regardless of the `window` value. This is by design — these metrics are meaningless when truncated to a short window.
+**What the window does not affect:** Fee totals, streak metadata, and drawdown statistics are always computed all-time regardless of the `window` value. This is by design, these metrics are meaningless when truncated to a short window.
 
 ```bash
 GET https://bravado-api-k7kaq.ondigitalocean.app/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b?window=30d
@@ -130,7 +130,7 @@ Bravado generates formal accounting documents for tax reporting and financial re
 </Accordion>
 
 <Accordion title="Open positions">
-  A point-in-time snapshot of all open positions — share balances, cost bases, mark prices, and unrealized PnL. Useful for year-end Schedule D footnotes.
+  A point-in-time snapshot of all open positions, share balances, cost bases, mark prices, and unrealized PnL. Useful for year-end Schedule D footnotes.
 </Accordion>
 
 <Accordion title="Capital flows">
@@ -142,8 +142,8 @@ Bravado generates formal accounting documents for tax reporting and financial re
 
   | Metric | Description |
   | --- | --- |
-  | **TWR** | Time-weighted return — eliminates the effect of capital inflows/outflows |
-  | **MWR** | Money-weighted return (IRR) — accounts for the timing and size of capital flows |
+  | **TWR** | Time-weighted return, eliminates the effect of capital inflows/outflows |
+  | **MWR** | Money-weighted return (IRR), accounts for the timing and size of capital flows |
   | **NAV** | Net asset value at the statement date |
   | **ROI** | Simple return on invested capital |
   | **Win rate** | Closed-position win percentage |

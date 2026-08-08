@@ -1,13 +1,13 @@
 ---
 title: "Get Started with Bravado in 5 Minutes"
 sidebarTitle: "Quick Start"
-description: "Make your first Bravado API call — verify your credentials, check your balances, and place a market order on Polymarket in under 5 minutes."
+description: "Make your first Bravado API call: verify your credentials, check your balances, and place a market order on Polymarket in under 5 minutes."
 icon:
   name: "zap"
   library: "lucide"
 ---
 
-This guide walks you through the minimum steps to go from a fresh API key to a live Polymarket order. You'll verify your credentials, inspect your balances, place a market order, and confirm it shows up in your positions — all via the Bravado Trade API v2.
+This guide walks you through the minimum steps to go from a fresh API key to a live Polymarket order. You'll verify your credentials, inspect your balances, place a market order, and confirm it shows up in your positions, all via the Bravado Trade API v2.
 
 <Note>
   All requests to Bravado require a Bearer token in the `Authorization` header. Read the [Authentication](/authentication) page for a full breakdown of API keys, scopes, and error handling.
@@ -19,11 +19,11 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
 
     Each token carries a set of **scopes** that control which endpoints you can call. A typical key includes:
 
-    - `trade.read` — read balances, positions, and orders
-    - `trade.execute` — place and manage orders
-    - `trade.cancel` — cancel open orders and strategies
+    - `trade.read`, read balances, positions, and orders
+    - `trade.execute`, place and manage orders
+    - `trade.cancel`, cancel open orders and strategies
 
-    Store your token securely — treat it like a password. Never commit it to source control or expose it in client-side code.
+    Store your token securely, treat it like a password. Never commit it to source control or expose it in client-side code.
 
     ```bash
     # Set it as an environment variable for the examples below
@@ -54,7 +54,7 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     }
     ```
 
-    If you see `"onboarding_status": "pending"`, your wallet hasn't been fully provisioned yet — reach out to the Bravado team before proceeding.
+    If you see `"onboarding_status": "pending"`, your wallet hasn't been fully provisioned yet, reach out to the Bravado team before proceeding.
   </Step>
   <Step title="Check your balance">
     Before placing an order, verify you have collateral available. Call `GET /v2/trade/balances` to see your current funds.
@@ -75,17 +75,17 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     }
     ```
 
-    - `pusd` — pUSD held in your Polymarket trading wallet, ready to use immediately.
-    - `usdc_e` — Bridged USDC.e on Polygon, not yet deposited.
-    - `total_collateral_equivalent` — Sum of all collateral expressed in USD equivalent.
+    - `pusd`, pUSD held in your Polymarket trading wallet, ready to use immediately.
+    - `usdc_e`, Bridged USDC.e on Polygon, not yet deposited.
+    - `total_collateral_equivalent`, Sum of all collateral expressed in USD equivalent.
 
-    All values are strings — parse them as `BigDecimal` before doing arithmetic.
+    All values are strings. Parse them as `BigDecimal` before doing arithmetic.
   </Step>
   <Step title="Place a market order">
-    Now place a market buy order. You need the **token ID** of the outcome you want to trade — this is the Polymarket ERC-1155 token ID for a specific outcome (YES or NO) on a specific market.
+    Now place a market buy order. You need the **token ID** of the outcome you want to trade. This is the Polymarket ERC-1155 token ID for a specific outcome (YES or NO) on a specific market.
 
     <Tip>
-      Include an `Idempotency-Key` header on every mutating request. If the request times out or your network drops, you can safely retry with the same key — Bravado will return the original response instead of creating a duplicate order. Use a UUID v4 generated fresh for each intended order.
+      Include an `Idempotency-Key` header on every mutating request. If the request times out or your network drops, you can safely retry with the same key, Bravado will return the original response instead of creating a duplicate order. Use a UUID v4 generated fresh for each intended order.
     </Tip>
 
     <CodeGroup>
@@ -161,7 +161,7 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     | --- | --- | --- |
     | `symbol` | string | The Polymarket outcome token ID to trade |
     | `side` | string | `"buy"` or `"sell"` |
-    | `type` | string | Order type — `"MARKET"` here |
+    | `type` | string | Order type, `"MARKET"` here |
     | `quote_amount` | string | Amount of collateral (USD) to spend |
 
     Example response:
@@ -182,9 +182,9 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     }
     ```
 
-    - `filled_size` — number of outcome tokens you received.
-    - `matched_amount` — collateral actually spent (equals `quote_amount` for a fully filled market order).
-    - `average_price` — effective fill price per token, here `$0.62`.
+    - `filled_size`, number of outcome tokens you received.
+    - `matched_amount`, collateral actually spent (equals `quote_amount` for a fully filled market order).
+    - `average_price`, effective fill price per token, here `$0.62`.
   </Step>
   <Step title="Check your positions">
     Confirm the order appears in your open positions by calling `GET /v2/trade/positions`.

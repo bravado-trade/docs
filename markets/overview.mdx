@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-A prediction market lets people trade on the outcome of a future event. Each possible outcome is a token that settles at \$1 if it happens and \$0 if it does not, so the live price doubles as the market's implied probability — a share trading at `0.62` means the market collectively puts the outcome at about 62%.
+A prediction market lets people trade on the outcome of a future event. Each possible outcome is a token that settles at \$1 if it happens and \$0 if it does not, so the live price doubles as the market's implied probability, a share trading at `0.62` means the market collectively puts the outcome at about 62%.
 
 Bravado connects to these venues so you integrate once instead of per-venue. The same order types, copy-trading engine, and analytics model apply across every supported market.
 
@@ -27,7 +27,7 @@ The mechanics are broadly the same across venues, which is what makes a shared A
 
 <Steps>
   <Step title="A market is created">
-    An event is framed as a question with mutually exclusive outcomes — most commonly a binary YES / NO pair, though some markets have more.
+    An event is framed as a question with mutually exclusive outcomes, most commonly a binary YES / NO pair, though some markets have more.
   </Step>
   <Step title="Collateral is split into outcome tokens">
     Depositing one unit of collateral mints one full set of outcome tokens. Because exactly one outcome can be true, a complete set is always redeemable for the original collateral.
@@ -65,5 +65,5 @@ Most of the Bravado surface is venue-agnostic, but a few things are not:
 - **Market microstructure.** Minimum resting order size, tick size, and notional minimums are set per venue and per market, and rejections that come from those limits are venue rules rather than Bravado errors.
 
 <Note>
-  Venue-specific constraints are documented on each venue's own pages. When a request is rejected for a reason that is not obviously a Bravado validation error, check the venue's constraints first — see [Error reference](/reference/errors).
+  Venue-specific constraints are documented on each venue's own pages. When a request is rejected for a reason that is not obviously a Bravado validation error, check the venue's constraints first, see [Error reference](/reference/errors).
 </Note>

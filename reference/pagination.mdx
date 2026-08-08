@@ -18,7 +18,7 @@ For most list endpoints, you control pagination using `limit` and `offset` query
 - `GET /traders/{address}/positions`
 - `GET /v2/trade/positions`
 - `GET /v2/trade/combo/positions`
-- PMWAS statement endpoints (with `r1_limit` / `r1_offset` — see [PMWAS R1 pagination](#pmwas-r1-pagination))
+- PMWAS statement endpoints (with `r1_limit` / `r1_offset`, see [PMWAS R1 pagination](#pmwas-r1-pagination))
 
 **Example request:**
 
@@ -73,7 +73,7 @@ Trade history and activity timeline endpoints use cursor-based pagination. Inste
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `cursor_ts` | integer | Exclusive upper bound on `block_timestamp` — pass the `next_cursor` from the previous response |
+| `cursor_ts` | integer | Exclusive upper bound on `block_timestamp`, pass the `next_cursor` from the previous response |
 | `next_cursor_log_idx` | integer | Secondary cursor to disambiguate when multiple trades share the same `block_timestamp` |
 
 The response includes `next_cursor` (a `block_timestamp` value) and `next_cursor_log_idx`. When `next_cursor` is `null`, you have reached the end of the dataset.
@@ -109,7 +109,7 @@ Always pass both `cursor_ts` and `next_cursor_log_idx` together when available. 
 
 ### Activity timeline cursor
 
-`GET /v2/trade/activity` uses an opaque string cursor rather than a timestamp integer. Treat the `next_cursor` value as opaque — do not parse or construct it manually.
+`GET /v2/trade/activity` uses an opaque string cursor rather than a timestamp integer. Treat the `next_cursor` value as opaque, do not parse or construct it manually.
 
 **Example request (first page):**
 

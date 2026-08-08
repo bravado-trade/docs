@@ -1,7 +1,7 @@
 {
   "projectType": "api-service",
   "projectName": "Bravado",
-  "projectDescription": "Bravado is a Polymarket trading infrastructure API for partners — providing order execution, trader analytics, and copy-trading on Polygon.",
+  "projectDescription": "Bravado is a Polymarket trading infrastructure API for partners providing order execution, trader analytics, and copy-trading on Polygon.",
   "theme": "luma",
   "primaryColor": "#ef7025",
   "lightColor": "#eec9bc",

@@ -1,5 +1,5 @@
 ---
-title: "Bravado Data API — Polymarket Trader Data Overview"
+title: "Bravado Data API: Polymarket Trader Data Overview"
 sidebarTitle: "Overview"
 description: "The Bravado Data API provides on-chain PnL metrics, leaderboards, positions, trade logs, and formal tax statements for Polymarket wallets."
 icon:
@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-The Bravado Data API surfaces trader performance data derived entirely from on-chain Polygon settlement records. Every PnL figure, position valuation, and fee total is calculated by a share-level FIFO cost-basis engine that replays each wallet's full transaction history — no off-chain estimates or manual adjustments. The base URL for all endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
+The Bravado Data API surfaces trader performance data derived entirely from on-chain Polygon settlement records. Every PnL figure, position valuation, and fee total is calculated by a share-level FIFO cost-basis engine that replays each wallet's full transaction history, no off-chain estimates or manual adjustments. The base URL for all endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
 
 ## Authentication
 
@@ -48,7 +48,7 @@ Understanding how Bravado calculates PnL helps you interpret every number return
 
 **Unrealized PnL** marks open position shares at the latest available token prices from on-chain data. This figure changes continuously as market prices move.
 
-**Fees** are always reported gross — as a separate line item — regardless of whether you request `basis=net`. Net basis adjusts `realized_pnl` and `total_pnl` for fee impact, but the `fees` and `total_fees` fields always show the raw fee total.
+**Fees** are always reported gross, as a separate line item, regardless of whether you request `basis=net`. Net basis adjusts `realized_pnl` and `total_pnl` for fee impact, but the `fees` and `total_fees` fields always show the raw fee total.
 
 **Income** (maker rebates, liquidity rewards, referral rewards) is a separate line that is never netted into PnL. Use the `income` parameter to control how much detail you receive.
 
@@ -81,7 +81,7 @@ All monetary values (PnL, volume, prices, balances) are returned as **JSON strin
 
 ## Wallet Addresses
 
-All `{address}` path parameters accept Polygon EOA addresses in `0x…` format. Matching is **case-insensitive** — you may pass checksummed or lowercase addresses interchangeably.
+All `{address}` path parameters accept Polygon EOA addresses in `0x…` format. Matching is **case-insensitive**. You may pass checksummed or lowercase addresses interchangeably.
 
 ## Timestamps
 
@@ -101,10 +101,10 @@ Common status codes:
 
 | Status | Meaning |
 | --- | --- |
-| `400` | Bad request — invalid parameter value |
+| `400` | Bad request, invalid parameter value |
 | `401` | Missing or invalid Bearer token |
 | `404` | Resource not found (wallet has no recorded activity) |
-| `503` | Data not yet available for this wallet — retry in a few minutes |
+| `503` | Data not yet available for this wallet, retry in a few minutes |
 
 ## Liveness Probe
 

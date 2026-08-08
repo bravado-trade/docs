@@ -1,13 +1,13 @@
 ---
 title: "Copytrade Simulation Portfolio API Reference"
 sidebarTitle: "Simulation"
-description: "GET /v2/trade/copytrade/simulation and POST /simulation/reset — view and reset the paper trading portfolio for a copytrade subscription."
+description: "GET /v2/trade/copytrade/simulation and POST /simulation/reset: view and reset the paper trading portfolio for a copytrade subscription."
 icon:
   name: "play"
   library: "lucide"
 ---
 
-Simulation mode lets you test a copytrade strategy without risking real capital. When you create a subscription with `is_simulation: true`, every copied fill is recorded as a paper trade — positions are tracked, PnL is calculated using live CLOB midpoint prices, and execution history is preserved, all without placing real on-chain orders. Use these endpoints to inspect your paper portfolio and wipe it clean when you want to start a fresh backtest.
+Simulation mode lets you test a copytrade strategy without risking real capital. When you create a subscription with `is_simulation: true`, every copied fill is recorded as a paper trade, positions are tracked, PnL is calculated using live CLOB midpoint prices, and execution history is preserved, all without placing real on-chain orders. Use these endpoints to inspect your paper portfolio and wipe it clean when you want to start a fresh backtest.
 
 ---
 
@@ -127,7 +127,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## POST /v2/trade/copytrade/{id}/simulation/reset
 
-Deletes all paper fill history for a specific copytrade subscription, resetting the paper portfolio to a clean slate. Use this when you want to re-test a strategy from scratch after changing the subscription config. Only paper (simulation) fills are affected — real fills are never touched by this operation.
+Deletes all paper fill history for a specific copytrade subscription, resetting the paper portfolio to a clean slate. Use this when you want to re-test a strategy from scratch after changing the subscription config. Only paper (simulation) fills are affected, real fills are never touched by this operation.
 
 ### Headers
 

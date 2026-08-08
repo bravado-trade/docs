@@ -1,13 +1,13 @@
 ---
 title: "Place and Cancel Orders via the Bravado Trade API v2"
 sidebarTitle: "Orders"
-description: "Place single and batch Polymarket orders — LIMIT, MARKET, TWAP, ICEBERG, PEGGED, and stop variants — and cancel them via the Bravado API."
+description: "Place single and batch Polymarket orders: LIMIT, MARKET, TWAP, ICEBERG, PEGGED, and stop variants, and cancel them via the Bravado API."
 icon:
   name: "shopping-cart"
   library: "lucide"
 ---
 
-The order endpoints let you place, inspect, and cancel orders on the Polymarket CLOB. A single `POST /v2/trade/order` call handles every order type — from a simple limit order to a multi-hour TWAP execution — using a unified request shape. Cancellation endpoints give you granular control to remove one order, a targeted batch, or every open order at once.
+The order endpoints let you place, inspect, and cancel orders on the Polymarket CLOB. A single `POST /v2/trade/order` call handles every order type, from a simple limit order to a multi-hour TWAP execution, using a unified request shape. Cancellation endpoints give you granular control to remove one order, a targeted batch, or every open order at once.
 
 ---
 
@@ -47,9 +47,9 @@ Places a single order. The `type` field selects the execution strategy; some fie
 
 <ParamField body="quote_amount" type="string">
   US dollar notional as a decimal string. Used as:
-  - **MARKET buy** — total spend in dollars.
-  - **TWAP** — total dollar amount to execute over the strategy duration.
-  - **PEGGED** — alias for `budget_usdc`.
+  - **MARKET buy**, total spend in dollars.
+  - **TWAP**, total dollar amount to execute over the strategy duration.
+  - **PEGGED**, alias for `budget_usdc`.
 </ParamField>
 
 <ParamField body="time_in_force" type="string">
@@ -148,7 +148,7 @@ Places a single order. The `type` field selects the execution strategy; some fie
 </ResponseField>
 
 <ResponseField name="order_id" type="string">
-  CLOB order ID. Present for `LIMIT`, `MARKET`, `TAKE_PROFIT`, and triggered stops. Absent for managed strategies — use `record_id` instead.
+  CLOB order ID. Present for `LIMIT`, `MARKET`, `TAKE_PROFIT`, and triggered stops. Absent for managed strategies, use `record_id` instead.
 </ResponseField>
 
 <ResponseField name="record_id" type="string">
@@ -296,7 +296,7 @@ Places up to 20 limit orders atomically at distinct price levels. All orders sha
 </ParamField>
 
 <ParamField body="side" type="string" required>
-  `"buy"` or `"sell"` — applies to every rung.
+  `"buy"` or `"sell"`, applies to every rung.
 </ParamField>
 
 <ParamField body="rungs" type="array" required>
@@ -340,7 +340,7 @@ Places up to 20 limit orders atomically at distinct price levels. All orders sha
 
 <CodeGroup>
 
-```json Request — 3-rung bid ladder
+```json Request: 3-rung bid ladder
 // POST /v2/trade/order/batch
 // Idempotency-Key: d4e5f6a7-b8c9-0123-defa-123456789003
 
@@ -539,7 +539,7 @@ Cancels up to 50 orders in a single request. Useful for clearing a subset of a l
 
 ## POST /v2/trade/orders/cancel-all
 
-Cancels every open CLOB order on the account. No request body is required. This does **not** cancel managed strategy records (TWAP, Iceberg, Pegged, Stops) — use `DELETE /v2/trade/strategies/{id}` for those.
+Cancels every open CLOB order on the account. No request body is required. This does **not** cancel managed strategy records (TWAP, Iceberg, Pegged, Stops), use `DELETE /v2/trade/strategies/{id}` for those.
 
 **Required headers**
 

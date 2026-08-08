@@ -1,5 +1,5 @@
 ---
-title: "Copytrade API Overview — Mirror Trader Fills on Bravado"
+title: "Copytrade API Overview: Mirror Trader Fills on Bravado"
 sidebarTitle: "Overview"
 description: "Subscribe to a leader wallet so trades are automatically mirrored on Bravado with configurable sizing, order filters, and risk controls."
 icon:
@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-The Copytrade API lets you automatically mirror the on-chain trading activity of any Polygon wallet. When the leader executes a fill on Polymarket, Bravado detects it and immediately places a corresponding order on behalf of the subscribed follower — using the sizing mode, filters, and risk controls you configure at subscription time. You can run multiple simultaneous subscriptions, pause and resume copying at any time, and test strategies risk-free using simulation mode before committing real capital.
+The Copytrade API lets you automatically mirror the on-chain trading activity of any Polygon wallet. When the leader executes a fill on Polymarket, Bravado detects it and immediately places a corresponding order on behalf of the subscribed follower, using the sizing mode, filters, and risk controls you configure at subscription time. You can run multiple simultaneous subscriptions, pause and resume copying at any time, and test strategies risk-free using simulation mode before committing real capital.
 
 ## Endpoints
 
@@ -19,7 +19,7 @@ The Copytrade API lets you automatically mirror the on-chain trading activity of
 | DELETE | `/v2/trade/copytrade/{id}` | Cancel (soft-delete) subscription |
 | PATCH | `/v2/trade/copytrade/{id}/status` | Pause, resume, or disable a subscription |
 | GET | `/v2/trade/copytrade/history` | Copied-trade execution history |
-| GET | `/v2/trade/copytrade/pnl` | Realized PnL — 24h and lifetime |
+| GET | `/v2/trade/copytrade/pnl` | Realized PnL, 24h and lifetime |
 | GET | `/v2/trade/copytrade/simulation` | Simulation paper portfolio |
 | POST | `/v2/trade/copytrade/{id}/simulation/reset` | Reset paper fills for a subscription |
 
@@ -33,7 +33,7 @@ A subscription moves through three states. Use `PATCH /{id}/status` to transitio
 | `PAUSED` | Monitoring is suspended; no new fills are copied, but the subscription is preserved |
 | `DISABLED` | Permanently deactivated; re-enable by patching status back to `ACTIVE` |
 
-`DELETE /{id}` performs a **soft delete** — the subscription is deactivated and excluded from the active list, but all historical fills and PnL data are preserved. If you attempt to create a new `ACTIVE` subscription for a leader that already has one, the API returns `409 CONFLICT`.
+`DELETE /{id}` performs a **soft delete**, the subscription is deactivated and excluded from the active list, but all historical fills and PnL data are preserved. If you attempt to create a new `ACTIVE` subscription for a leader that already has one, the API returns `409 CONFLICT`.
 
 ## Buy-side sizing modes
 
@@ -65,11 +65,11 @@ Use `MAX` or `PCT_OF_MAX` for sell-side sizing when you want the follower to ful
 
 In addition to sizing, subscriptions support several risk control fields that you can set at creation or update later:
 
-- **`take_profit_levels`** — Automatically sell a portion of the position when unrealized gain reaches a specified threshold (in basis points).
-- **`stop_loss_levels`** — Automatically sell a portion of the position when unrealized loss reaches a specified threshold.
-- **`close_at_price_cents`** — Trigger a full position close when the market price hits a target in cents (1–9999).
-- **`max_hold_seconds`** — Force-close the position after a maximum number of seconds regardless of price.
-- **`copy_start_date` / `copy_end_date`** — Restrict copying to a specific date range; outside this window, leader fills are ignored.
+- **`take_profit_levels`**, Automatically sell a portion of the position when unrealized gain reaches a specified threshold (in basis points).
+- **`stop_loss_levels`**, Automatically sell a portion of the position when unrealized loss reaches a specified threshold.
+- **`close_at_price_cents`**, Trigger a full position close when the market price hits a target in cents (1–9999).
+- **`max_hold_seconds`**, Force-close the position after a maximum number of seconds regardless of price.
+- **`copy_start_date` / `copy_end_date`**, Restrict copying to a specific date range; outside this window, leader fills are ignored.
 
 <Note>
 All numeric fields in API responses are returned as JSON strings. Parse them before performing arithmetic.

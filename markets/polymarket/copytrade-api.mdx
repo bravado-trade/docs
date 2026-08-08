@@ -13,7 +13,7 @@ Subscribe to a leader wallet and Bravado mirrors its fills onto your own wallet 
 
 ## What you can mirror
 
-Any public Polymarket wallet can be followed — the leader does not need to be a Bravado user, and is not notified.
+Any public Polymarket wallet can be followed, the leader does not need to be a Bravado user, and is not notified.
 
 ## Sizing, filters, and risk controls
 
@@ -23,9 +23,9 @@ Sizing modes, market filters, and risk controls behave identically to the genera
 
 Before subscribing, pull the leader's history through the Data API:
 
-- [`GET /traders/{address}`](/api/analytics/trader) — headline performance summary
-- [`GET /traders/{address}/pnl`](/api/analytics/trader-pnl) — cumulative PnL curve
-- [`GET /traders/{address}/metrics`](/api/analytics/trader-metrics) — win rate and hold-time stats
+- [`GET /traders/{address}`](/api/analytics/trader), headline performance summary
+- [`GET /traders/{address}/pnl`](/api/analytics/trader-pnl), cumulative PnL curve
+- [`GET /traders/{address}/metrics`](/api/analytics/trader-metrics), win rate and hold-time stats
 
 <Note>
   Simulation mode lets you paper-trade a subscription before committing real collateral. See [Simulation](/api/copytrade/simulation).

@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-The Bravado Trade API v2 is the single integration point for building Polymarket trading applications on Polygon. It exposes order placement (including algorithmic order types such as TWAP, Iceberg, and Pegged), position lifecycle management (redeem, split, merge), account inspection, and partner user provisioning — all behind a consistent REST interface using Polygon-native pUSD collateral.
+The Bravado Trade API v2 is the single integration point for building Polymarket trading applications on Polygon. It exposes order placement (including algorithmic order types such as TWAP, Iceberg, and Pegged), position lifecycle management (redeem, split, merge), account inspection, and partner user provisioning, all behind a consistent REST interface using Polygon-native pUSD collateral.
 
 ## Base URL
 
@@ -47,7 +47,7 @@ All numeric fields in API responses are returned as **JSON strings** to preserve
 | `POST` | `/v2/trade/positions/merge` | Merge a complete outcome set back to pUSD |
 | `GET` | `/v2/trade/strategies` | List managed strategies (TWAP, Iceberg, Pegged, Stops) |
 | `DELETE` | `/v2/trade/strategies/{id}` | Cancel a managed strategy by record ID |
-| `GET` | `/v2/trade/account` | Account snapshot — partner, wallet, API key scopes |
+| `GET` | `/v2/trade/account` | Account snapshot, partner, wallet, API key scopes |
 | `GET` | `/v2/trade/balances` | Collateral balances (pUSD and USDC.e) |
 | `GET` | `/v2/trade/balances/withdrawable` | All ERC20 balances available to withdraw |
 | `POST` | `/v2/trade/withdraw` | Withdraw pUSD (or any ERC20) to an external Polygon address |
@@ -58,8 +58,8 @@ All numeric fields in API responses are returned as **JSON strings** to preserve
 
 Explore the detailed reference for each area of the API:
 
-- **[Orders](/api/trade/orders)** — place, query, and cancel individual or batched orders across all supported order types.
-- **[Positions](/api/trade/positions)** — inspect open and closed positions and perform on-chain lifecycle actions (redeem, split, merge).
-- **[Strategies](/api/trade/strategies)** — monitor and cancel long-running managed strategies such as TWAP, Iceberg, Pegged, and stop orders.
-- **[Account](/api/trade/account)** — retrieve your account snapshot, collateral balances, and trade activity history.
-- **[Withdraw](/api/trade/withdraw)** — move pUSD or other ERC20 tokens from your deposit wallet to any Polygon address.
+- **[Orders](/api/trade/orders)**, place, query, and cancel individual or batched orders across all supported order types.
+- **[Positions](/api/trade/positions)**, inspect open and closed positions and perform on-chain lifecycle actions (redeem, split, merge).
+- **[Strategies](/api/trade/strategies)**, monitor and cancel long-running managed strategies such as TWAP, Iceberg, Pegged, and stop orders.
+- **[Account](/api/trade/account)**, retrieve your account snapshot, collateral balances, and trade activity history.
+- **[Withdraw](/api/trade/withdraw)**, move pUSD or other ERC20 tokens from your deposit wallet to any Polygon address.

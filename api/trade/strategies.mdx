@@ -1,7 +1,7 @@
 ---
-title: "Managed Strategies API — TWAP, Iceberg, Pegged, Stops"
+title: "Managed Strategies API: TWAP, Iceberg, Pegged, Stops"
 sidebarTitle: "Strategies"
-description: "List and cancel long-running managed order strategies — TWAP, Iceberg, Pegged, Stop-Loss, and Trailing Stop — on the Bravado Trade API v2."
+description: "List and cancel long-running managed order strategies: TWAP, Iceberg, Pegged, Stop-Loss, and Trailing Stop, on the Bravado Trade API v2."
 icon:
   name: "target"
   library: "lucide"
@@ -19,11 +19,11 @@ Returns all managed strategy records on your account. You can filter by status t
 
 <ParamField query="status" type="string">
   Filter by strategy status. Accepted values:
-  - `ACTIVE` — currently executing or waiting to trigger.
-  - `PAUSED` — temporarily halted (e.g. a PEGGED order repricing).
-  - `COMPLETED` — fully filled or resolved.
-  - `CANCELED` — manually cancelled via this API.
-  - `ERROR` — terminated due to an execution error.
+  - `ACTIVE`, currently executing or waiting to trigger.
+  - `PAUSED`, temporarily halted (e.g. a PEGGED order repricing).
+  - `COMPLETED`, fully filled or resolved.
+  - `CANCELED`, manually cancelled via this API.
+  - `ERROR`, terminated due to an execution error.
 </ParamField>
 
 ### Response
@@ -116,7 +116,7 @@ Returns all managed strategy records on your account. You can filter by status t
 
 ## DELETE /v2/trade/strategies/{id}
 
-Cancels a managed strategy by its `record_id`. The operation is idempotent — cancelling an already-terminal strategy (`COMPLETED`, `CANCELED`, `ERROR`) returns the current record without error.
+Cancels a managed strategy by its `record_id`. The operation is idempotent, cancelling an already-terminal strategy (`COMPLETED`, `CANCELED`, `ERROR`) returns the current record without error.
 
 **Required headers**
 
@@ -142,7 +142,7 @@ Cancels a managed strategy by its `record_id`. The operation is idempotent — c
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  Final status after the cancellation attempt — `CANCELED` on success, or the existing terminal status if already complete.
+  Final status after the cancellation attempt, `CANCELED` on success, or the existing terminal status if already complete.
 </ResponseField>
 
 ### Example

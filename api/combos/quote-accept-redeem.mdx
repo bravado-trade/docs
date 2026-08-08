@@ -1,7 +1,7 @@
 ---
 title: "Combo Quote, Accept, and Redeem API Reference"
 sidebarTitle: "Quote / Accept / Redeem"
-description: "POST /v2/trade/combo/quote, /combo/accept, /combo/redeem, and GET /combo/positions — full reference for Bravado's multi-leg parlay API."
+description: "POST /v2/trade/combo/quote, /combo/accept, /combo/redeem, and GET /combo/positions: full reference for Bravado's multi-leg parlay API."
 icon:
   name: "combine"
   library: "lucide"
@@ -19,7 +19,7 @@ Request a firm RFQ quote for a multi-leg parlay. The quote is priced by a live m
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` — must include `trade.combos` scope |
+| `Authorization` | Yes | `Bearer <token>`, must include `trade.combos` scope |
 | `Idempotency-Key` | Yes | Unique string per request (UUID recommended) |
 
 ### Request
@@ -108,7 +108,7 @@ Accept a previously issued quote and execute the combo trade on-chain. You must 
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` — must include `trade.combos` scope |
+| `Authorization` | Yes | `Bearer <token>`, must include `trade.combos` scope |
 | `Idempotency-Key` | Yes | Unique string per request (UUID recommended) |
 
 ### Request
@@ -136,7 +136,7 @@ Accept a previously issued quote and execute the combo trade on-chain. You must 
 </ResponseField>
 
 <Warning>
-You must call `/combo/accept` before the `expires_at` time returned by `/combo/quote`. If the quote has expired, the API returns `410 QUOTE_EXPIRED`. **Do not retry the stale accept** — call `/combo/quote` again to obtain a fresh price, then accept the new quote.
+You must call `/combo/accept` before the `expires_at` time returned by `/combo/quote`. If the quote has expired, the API returns `410 QUOTE_EXPIRED`. **Do not retry the stale accept**, call `/combo/quote` again to obtain a fresh price, then accept the new quote.
 </Warning>
 
 <CodeGroup>
@@ -167,13 +167,13 @@ Content-Type: application/json
 
 ## POST /v2/trade/combo/redeem
 
-Redeem a winning combo position for pUSD after all legs have resolved in your favor. You can identify the position using either the `combo_order_id` from the original trade or the `combo_position_id` returned by `GET /combo/positions`. Provide one or the other — not both.
+Redeem a winning combo position for pUSD after all legs have resolved in your favor. You can identify the position using either the `combo_order_id` from the original trade or the `combo_position_id` returned by `GET /combo/positions`. Provide one or the other, not both.
 
 ### Headers
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` — must include `trade.combos` scope |
+| `Authorization` | Yes | `Bearer <token>`, must include `trade.combos` scope |
 | `Idempotency-Key` | Yes | Unique string per request (UUID recommended) |
 
 ### Request
@@ -205,7 +205,7 @@ Redeem a winning combo position for pUSD after all legs have resolved in your fa
 </ResponseField>
 
 <Note>
-Only positions with status `RESOLVED_WIN` produce a payout. If any single leg resolves against you, the entire combo is worthless — that is correct parlay behavior. Attempting to redeem a `RESOLVED_LOSS` position returns an error.
+Only positions with status `RESOLVED_WIN` produce a payout. If any single leg resolves against you, the entire combo is worthless, that is correct parlay behavior. Attempting to redeem a `RESOLVED_LOSS` position returns an error.
 </Note>
 
 <CodeGroup>
@@ -253,7 +253,7 @@ List all combo positions for the authenticated user, across all statuses. Use th
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` — must include `trade.combos` scope |
+| `Authorization` | Yes | `Bearer <token>`, must include `trade.combos` scope |
 
 ### Query parameters
 
@@ -308,14 +308,14 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## Common rejections
 
-<Accordion title="410 QUOTE_EXPIRED — quote window has closed">
-  The ~8.5-second acceptance window for this quote has passed. Call `POST /combo/quote` again to obtain a fresh price, then call `POST /combo/accept` with the new `combo_order_id` and `quote_id`. Never retry a stale accept — the underlying prices may have moved significantly.
+<Accordion title="410 QUOTE_EXPIRED, quote window has closed">
+  The ~8.5-second acceptance window for this quote has passed. Call `POST /combo/quote` again to obtain a fresh price, then call `POST /combo/accept` with the new `combo_order_id` and `quote_id`. Never retry a stale accept, the underlying prices may have moved significantly.
 </Accordion>
 
-<Accordion title="422 INSUFFICIENT_BALANCE — not enough pUSD">
+<Accordion title="422 INSUFFICIENT_BALANCE, not enough pUSD">
   Your account does not have enough pUSD to cover the `notional_usd` you requested. The error message specifies the exact shortfall in dollars. Reduce `notional_usd` or top up your balance before retrying.
 </Accordion>
 
-<Accordion title="422 NO_LIQUIDITY — no maker responded to the RFQ">
+<Accordion title="422 NO_LIQUIDITY: no maker responded to the RFQ">
   No maker counterparty was willing to price the combo at this size. This is most common on thin markets or very large notionals. Wait a moment and retry, or reduce `notional_usd`. If the market is consistently illiquid, consider removing the lowest-volume leg from the combo.
 </Accordion>

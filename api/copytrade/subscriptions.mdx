@@ -111,7 +111,7 @@ Create a new copytrade subscription. The subscription starts in `ACTIVE` status 
 </ParamField>
 
 <ParamField body="is_simulation" type="boolean">
-  When `true`, all copied fills are paper trades — no real orders are placed and no capital is spent. Defaults to `false`.
+  When `true`, all copied fills are paper trades: no real orders are placed and no capital is spent. Defaults to `false`.
 </ParamField>
 
 <ParamField body="copy_start_date" type="string">
@@ -163,7 +163,7 @@ Create a new copytrade subscription. The subscription starts in `ACTIVE` status 
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  The initial status of the subscription — `"ACTIVE"` or `"PAUSED"` based on what you passed.
+  The initial status of the subscription, `"ACTIVE"` or `"PAUSED"` based on what you passed.
 </ResponseField>
 
 <CodeGroup>
@@ -262,7 +262,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## PATCH /v2/trade/copytrade/{id}
 
-Partially update an existing subscription. Only the fields you include in the request body are changed — all other fields remain at their current values. You can update any optional or required field except `leader_address`.
+Partially update an existing subscription. Only the fields you include in the request body are changed, all other fields remain at their current values. You can update any optional or required field except `leader_address`.
 
 ### Headers
 

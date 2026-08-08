@@ -1,5 +1,5 @@
 ---
-title: "Copytrade API — Mirror a Leader Wallet's Fills"
+title: "Copytrade API: Mirror a Leader Wallet's Fills"
 sidebarTitle: "Copytrade API"
 description: "Bravado's Copytrade API mirrors a leader trader's fills on a follower's wallet in real time, with configurable sizing modes and risk controls."
 icon:
@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Copy trading on Bravado subscribes your wallet to a leader's trading activity so that every fill the leader receives is automatically mirrored on your account. The engine monitors the Polymarket CLOB in real time — when the leader's order fills, Bravado immediately executes an equivalent trade on your behalf, applying your configured sizing rules and risk controls before the order touches the market. All copy-trade configuration happens through endpoints under `/v2/trade/copytrade`.
+Copy trading on Bravado subscribes your wallet to a leader's trading activity so that every fill the leader receives is automatically mirrored on your account. The engine monitors the Polymarket CLOB in real time, when the leader's order fills, Bravado immediately executes an equivalent trade on your behalf, applying your configured sizing rules and risk controls before the order touches the market. All copy-trade configuration happens through endpoints under `/v2/trade/copytrade`.
 
 <Note>
   Use **simulation mode** to paper-trade a leader's strategy before committing real capital. Simulation tracks all fills against live CLOB prices without executing on-chain transactions, giving you a realistic preview of how a strategy would have performed.
@@ -15,14 +15,14 @@ Copy trading on Bravado subscribes your wallet to a leader's trading activity so
 
 ## Fees
 
-The Copytrade API charges **25 bips (0.25%) per side** — applied to both the maker and the taker on every mirrored fill.
+The Copytrade API charges **25 bips (0.25%) per side**, applied to both the maker and the taker on every mirrored fill.
 
 | | Copytrade API |
 | --- | --- |
 | Maker | 25 bips (0.25%) |
 | Taker | 25 bips (0.25%) |
 
-Basis points are hundredths of a percent, so 25 bips is 0.25% of notional. Fees are collected through **Bravado builder codes**, applied automatically to mirrored orders — no configuration is required to start copy trading.
+Basis points are hundredths of a percent, so 25 bips is 0.25% of notional. Fees are collected through **Bravado builder codes**, applied automatically to mirrored orders. No configuration is required to start copy trading.
 
 <Note>
   Copy trading is priced above the [Trade API](/products/trade-api), which charges 10 bips per side. Orders you place directly are charged at the Trade API rate; fills mirrored by a copytrade subscription are charged at this rate.
@@ -36,7 +36,7 @@ Basis points are hundredths of a percent, so 25 bips is 0.25% of notional. Fees 
 
 <Steps>
   <Step title="Leader places a trade">
-    The leader submits an order on Polymarket through any interface — the Bravado API, the Polymarket web app, or any other client.
+    The leader submits an order on Polymarket through any interface, the Bravado API, the Polymarket web app, or any other client.
   </Step>
   <Step title="Engine detects the fill">
     Bravado's real-time fill monitor detects the on-chain order fill for the leader wallet and parses the trade details: market, outcome, side, size, and price.
@@ -85,7 +85,7 @@ Filters let you limit which of the leader's trades your subscription copies.
   - **`market_ids_include`**: Only copy trades in the listed market IDs. All other markets are ignored.
   - **`market_ids_exclude`**: Copy all trades except those in the listed market IDs. Useful for excluding specific markets while still following the leader broadly.
 
-  `market_ids_include` and `market_ids_exclude` are mutually exclusive — supply one or the other, not both.
+  `market_ids_include` and `market_ids_exclude` are mutually exclusive, supply one or the other, not both.
 </Accordion>
 
 <Accordion title="Tag filters">
@@ -182,7 +182,7 @@ Reset the simulation to start a fresh evaluation:
 POST /v2/trade/copytrade/{id}/simulation/reset
 ```
 
-Resetting clears all paper fills and restarts the equity curve from zero — useful when you change sizing or filter parameters and want a clean comparison.
+Resetting clears all paper fills and restarts the equity curve from zero, useful when you change sizing or filter parameters and want a clean comparison.
 
 ## Subscription lifecycle
 

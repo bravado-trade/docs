@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Bravado authenticates every request using **API key Bearer tokens**. You include your token in the `Authorization` header of each HTTP request. There are no cookies, no session flows, and no OAuth redirects — just a static token your server sends with every call. The only public endpoint that does not require authentication is `GET /healthz`.
+Bravado authenticates every request using **API key Bearer tokens**. You include your token in the `Authorization` header of each HTTP request. There are no cookies, no session flows, and no OAuth redirects: just a static token your server sends with every call. The only public endpoint that does not require authentication is `GET /healthz`.
 
 ## Getting your API key
 
@@ -18,7 +18,7 @@ Create and manage your API keys in the [Bravado Portal](https://portal.bravadotr
 3. Copy the Bearer token from the portal. This is the only time it will be shown in full.
 
 <Warning>
-  The `trade.withdraw` scope — which allows withdrawing pUSD to an external address — is **not included** in a standard partner key and must be explicitly requested and granted. Even a key with all other trade scopes cannot initiate withdrawals without it.
+  The `trade.withdraw` scope, which allows withdrawing pUSD to an external address, is **not included** in a standard partner key and must be explicitly requested and granted. Even a key with all other trade scopes cannot initiate withdrawals without it.
 </Warning>
 
 Store your token securely. Never embed it in client-side JavaScript, commit it to a public repository, or log it to an unprotected output stream. Treat it with the same care as a private key.
@@ -99,7 +99,7 @@ func main() {
 
 </CodeGroup>
 
-Read your token from an environment variable or a secrets manager — never hardcode it inline.
+Read your token from an environment variable or a secrets manager. Never hardcode it inline.
 
 ## API key scopes
 
@@ -110,7 +110,7 @@ Every Bravado API key is issued with one or more scopes. A request to an endpoin
 | `trade.read` | Read account snapshot, balances, positions, open orders, activity history, and active strategies |
 | `trade.execute` | Place orders, redeem resolved positions, and split or merge outcome tokens |
 | `trade.cancel` | Cancel a single order, cancel orders in batch, cancel all open orders, and cancel strategies |
-| `trade.withdraw` | Withdraw pUSD from the trading wallet to an external address — **not included in `trade.execute`** |
+| `trade.withdraw` | Withdraw pUSD from the trading wallet to an external address, **not included in `trade.execute`** |
 | `trade.combos` | Access multi-leg RFQ parlays: quote, accept, and redeem combo positions, and read combo positions |
 | `trade.users` | Provision and manage partner sub-users (white-label flow) |
 
@@ -120,7 +120,7 @@ Scopes are additive, a key can hold any combination. Configure your key's scopes
 
 Bravado supports two key archetypes that serve different purposes in a partner integration:
 
-**Master keys** are issued at the partner level. They are not bound to a specific user wallet. A master key with the `trade.users` scope can call the user provisioning endpoints to create and manage sub-accounts on behalf of your platform. Use a master key in your backend services — never expose it to end users.
+**Master keys** are issued at the partner level. They are not bound to a specific user wallet. A master key with the `trade.users` scope can call the user provisioning endpoints to create and manage sub-accounts on behalf of your platform. Use a master key in your backend services, never expose it to end users.
 
 **Per-user keys** are bound to a specific provisioned user wallet. All trade activity executed with a per-user key is attributed to that wallet. These keys typically hold `trade.read`, `trade.execute`, and `trade.cancel` scopes, but not `trade.users`.
 
@@ -158,7 +158,7 @@ Review your key's scopes by calling `GET /v2/trade/account` and inspecting the `
 
 ## Idempotency keys
 
-Every mutating request — `POST`, `PATCH`, and `DELETE` — requires an `Idempotency-Key` header. Bravado uses this key to deduplicate requests, so if a network timeout causes you to retry an operation, you won't accidentally create a second order or cancellation.
+Every mutating request (`POST`, `PATCH`, and `DELETE`) requires an `Idempotency-Key` header. Bravado uses this key to deduplicate requests, so if a network timeout causes you to retry an operation, you won't accidentally create a second order or cancellation.
 
 ```text
 Idempotency-Key: e4b9c1a2-38df-4f77-a3c5-012bd9e8f231
@@ -169,10 +169,10 @@ Idempotency-Key: e4b9c1a2-38df-4f77-a3c5-012bd9e8f231
 - Generate a fresh **UUID v4** for each new intended operation.
 - Use the **same key** when retrying a request that failed with a network error or timeout.
 - Do **not** reuse a key from a previous, successfully completed request to create a new one.
-- Keys are scoped to your API token — the same UUID used by a different token is treated as a separate key.
+- Keys are scoped to your API token, the same UUID used by a different token is treated as a separate key.
 
 <Tip>
   Most HTTP client libraries have a built-in UUID generator. In Python, use `str(uuid.uuid4())`. In Node.js, use `crypto.randomUUID()`. In Go, use the `github.com/google/uuid` package.
 </Tip>
 
-If you send a retry with the same idempotency key as a request that already succeeded, Bravado returns the original response with an `Idempotent-Replayed: true` header — no duplicate operation is performed.
+If you send a retry with the same idempotency key as a request that already succeeded, Bravado returns the original response with an `Idempotent-Replayed: true` header, no duplicate operation is performed.

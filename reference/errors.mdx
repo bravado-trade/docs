@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Bravado uses standard HTTP status codes to indicate the success or failure of every request. When a request fails, the response body always contains a JSON object with a single `error` field describing what went wrong. Successful responses never include an `error` key, but may include a `warnings` array — always check for warnings on mutation requests.
+Bravado uses standard HTTP status codes to indicate the success or failure of every request. When a request fails, the response body always contains a JSON object with a single `error` field describing what went wrong. Successful responses never include an `error` key, but may include a `warnings` array. Always check for warnings on mutation requests.
 
 ## Error response format
 
@@ -31,7 +31,7 @@ The `error` value is a human-readable string. Your code should branch on the HTT
 | 410 Gone | Quote expired | Accepting a combo quote after its `expires_at` timestamp |
 | 422 Unprocessable Entity | Business rule violation | Insufficient balance, no liquidity, order crosses the book |
 | 429 Too Many Requests | Rate limit exceeded | Too many requests per minute for your API key |
-| 500 Internal Server Error | Server-side error | Unexpected server fault — retry with exponential backoff |
+| 500 Internal Server Error | Server-side error | Unexpected server fault, retry with exponential backoff |
 | 503 Service Unavailable | Service temporarily unavailable | Data not yet available for this wallet; retry later |
 
 ## Common error messages
@@ -93,7 +93,7 @@ A `200 OK` response does not always mean everything succeeded completely. Bravad
 When you exceed your API key's rate limit, Bravado returns `429 Too Many Requests` with a `Retry-After` header indicating how many seconds to wait before retrying.
 
 - Read the `Retry-After` header and wait at least that long before your next request.
-- Do **not** implement tight retry loops that immediately re-send on 429 — this will prolong your rate-limited state.
+- Do **not** implement tight retry loops that immediately re-send on 429. This will prolong your rate-limited state.
 - Add random jitter to your backoff to avoid thundering-herd retries in multi-threaded environments.
 
 See the [Rate Limits](/reference/rate-limits) page for a full retry strategy with code examples.
@@ -113,4 +113,4 @@ Tax statement and PMWAS endpoints return `503 Service Unavailable` with `availab
 }
 ```
 
-Data for these endpoints may not be available immediately. Availability varies by wallet activity — if you receive a `503`, the data is not ready yet. Implement polling with a reasonable interval (e.g. every few minutes) and surface a "processing" state to your users rather than treating this as a hard error.
+Data for these endpoints may not be available immediately. Availability varies by wallet activity. If you receive a `503`, the data is not ready yet. Implement polling with a reasonable interval (e.g. every few minutes) and surface a "processing" state to your users rather than treating this as a hard error.

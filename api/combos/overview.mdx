@@ -1,5 +1,5 @@
 ---
-title: "Combos API — Multi-Leg Parlay Trading on Bravado"
+title: "Combos API: Multi-Leg Parlay Trading on Bravado"
 sidebarTitle: "Overview"
 description: "The Bravado Combos API lets you buy multi-leg parlay positions across 2–10 markets via RFQ. Requires the trade.combos scope to quote, accept, and redeem."
 icon:
@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Combos are multi-leg parlays — a single position that pays out only if every selected market resolves in your favor. Instead of placing separate orders across multiple markets, you submit a single combo order that bundles 2–10 YES outcome legs into one on-chain position. This API uses a Request-for-Quote (RFQ) model, meaning every price you receive is a firm, live quote from a real maker counterparty. To use the Combos API, your token must carry the `trade.combos` scope.
+Combos are multi-leg parlays, a single position that pays out only if every selected market resolves in your favor. Instead of placing separate orders across multiple markets, you submit a single combo order that bundles 2–10 YES outcome legs into one on-chain position. This API uses a Request-for-Quote (RFQ) model, meaning every price you receive is a firm, live quote from a real maker counterparty. To use the Combos API, your token must carry the `trade.combos` scope.
 
 ## Endpoints
 
@@ -20,9 +20,9 @@ Combos are multi-leg parlays — a single position that pays out only if every s
 
 ## RFQ model
 
-The Combos API is built on a Request-for-Quote flow. When you call `/combo/quote`, a real maker counterparty prices the blended position and returns a firm quote — not an estimate or a simulated midpoint. That quote is valid for approximately **8.5 seconds** from the time it is issued.
+The Combos API is built on a Request-for-Quote flow. When you call `/combo/quote`, a real maker counterparty prices the blended position and returns a firm quote, not an estimate or a simulated midpoint. That quote is valid for approximately **8.5 seconds** from the time it is issued.
 
-You must call `/combo/accept` before the `expires_at` timestamp in the quote response. If you wait too long, the API returns a `410 QUOTE_EXPIRED` error. When that happens, **re-quote rather than retrying the stale accept** — the underlying market prices may have moved, and the maker needs to re-price the position.
+You must call `/combo/accept` before the `expires_at` timestamp in the quote response. If you wait too long, the API returns a `410 QUOTE_EXPIRED` error. When that happens, **re-quote rather than retrying the stale accept**, the underlying market prices may have moved, and the maker needs to re-price the position.
 
 ```
 POST /combo/quote  →  POST /combo/accept (within ~8.5 s)  →  (event resolves)  →  POST /combo/redeem
@@ -50,7 +50,7 @@ After a combo is accepted on-chain, it appears in `GET /combo/positions` with on
 |--------|---------|
 | `OPEN` | All legs are still active and unresolved |
 | `PARTIAL` | One or more legs have resolved (win so far) |
-| `RESOLVED_WIN` | Every leg resolved in your favor — eligible for redeem |
-| `RESOLVED_LOSS` | At least one leg resolved against you — position is worthless |
+| `RESOLVED_WIN` | Every leg resolved in your favor, eligible for redeem |
+| `RESOLVED_LOSS` | At least one leg resolved against you, position is worthless |
 
 Use the `combo_position_id` returned from `/combo/positions` when calling `/combo/redeem` if you did not retain the original `combo_order_id` from `/combo/accept`.

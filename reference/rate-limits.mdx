@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Bravado enforces rate limits on a per-API-key basis to ensure fair and stable access for all integrations. Your specific limit is tied to your account tier and is visible in your account snapshot — you can retrieve it programmatically at any time without hitting a separate billing dashboard.
+Bravado enforces rate limits on a per-API-key basis to ensure fair and stable access for all integrations. Your specific limit is tied to your account tier and is visible in your account snapshot, you can retrieve it programmatically at any time without hitting a separate billing dashboard.
 
 ## Finding your rate limit
 
@@ -37,7 +37,7 @@ In this example, your key is permitted 120 requests per minute across all Bravad
 When you exceed your rate limit, Bravado responds with:
 
 - **HTTP status:** `429 Too Many Requests`
-- **Response header:** `Retry-After: <seconds>` — the number of seconds you must wait before retrying
+- **Response header:** `Retry-After: <seconds>`, the number of seconds you must wait before retrying
 - **Response body:** `{"error": "rate limit exceeded"}`
 
 ```http
@@ -91,12 +91,12 @@ async function callWithRetry(fn, maxAttempts = 5) {
 ```
 
 <Tip>
-Apply this wrapper to all mutating requests (`POST`, `DELETE`, `PATCH`). For read-only `GET` requests you can use a lighter strategy — a single retry after the `Retry-After` delay is usually sufficient.
+Apply this wrapper to all mutating requests (`POST`, `DELETE`, `PATCH`). For read-only `GET` requests you can use a lighter strategy, a single retry after the `Retry-After` delay is usually sufficient.
 </Tip>
 
 ## Idempotency keys and safe retries
 
-All mutating requests should include an `Idempotency-Key` header. If your request times out or you receive a transient error before you know whether it succeeded, you can safely resend the identical request with the same key — Bravado will deduplicate it server-side and return the original result without creating a duplicate order or withdrawal.
+All mutating requests should include an `Idempotency-Key` header. If your request times out or you receive a transient error before you know whether it succeeded, you can safely resend the identical request with the same key, Bravado will deduplicate it server-side and return the original result without creating a duplicate order or withdrawal.
 
 ```http
 POST /v2/trade/order HTTP/1.1
@@ -110,12 +110,12 @@ Content-Type: application/json
 - Idempotency keys are scoped to your API key, so there is no collision risk across accounts.
 
 <Note>
-Idempotency keys protect against double-submission during network retries. They do not bypass rate limits — a deduplicated replay still counts as a request if the original already succeeded.
+Idempotency keys protect against double-submission during network retries. They do not bypass rate limits, a deduplicated replay still counts as a request if the original already succeeded.
 </Note>
 
 ## Best practices
 
-- **Batch cancellations** — use `DELETE /v2/trade/orders` (cancel-all) instead of looping individual cancel requests. A single call consumes one rate-limit slot regardless of how many open orders you have.
-- **Use strategies for high-frequency fills** — if you need many small orders placed at regular intervals, use the `interval_sec` field on execution strategies rather than calling the orders endpoint in a loop.
-- **Monitor proactively** — poll `GET /v2/trade/account` periodically to confirm your `rate_limit_per_min` hasn't changed and to detect unexpected spikes in your usage patterns.
-- **Share limits across threads** — if your integration is multi-threaded or runs multiple processes, coordinate request counting centrally (e.g. via a token-bucket in Redis) to avoid one thread consuming the budget of another.
+- **Batch cancellations**, use `DELETE /v2/trade/orders` (cancel-all) instead of looping individual cancel requests. A single call consumes one rate-limit slot regardless of how many open orders you have.
+- **Use strategies for high-frequency fills**, if you need many small orders placed at regular intervals, use the `interval_sec` field on execution strategies rather than calling the orders endpoint in a loop.
+- **Monitor proactively**, poll `GET /v2/trade/account` periodically to confirm your `rate_limit_per_min` hasn't changed and to detect unexpected spikes in your usage patterns.
+- **Share limits across threads**, if your integration is multi-threaded or runs multiple processes, coordinate request counting centrally (e.g. via a token-bucket in Redis) to avoid one thread consuming the budget of another.

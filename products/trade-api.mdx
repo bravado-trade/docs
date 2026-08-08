@@ -1,5 +1,5 @@
 ---
-title: "Trade API — Order Types, Execution, and Positions"
+title: "Trade API: Order Types, Execution, and Positions"
 sidebarTitle: "Trade API"
 description: "The Bravado Trade API covers the full order lifecycle on Polymarket: eight order types, bracket orders, and position management including redeem, split, and merge."
 icon:
@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Every order on Bravado flows through a single endpoint — `POST /v2/trade/order` — and a `type` field selects the execution strategy. Eight order types are available, ranging from simple resting limit orders to fully managed strategies like TWAP and trailing stops. Understanding which fields belong to which type, and how each type interacts with the Polymarket CLOB, will save you time debugging unexpected rejections and miscalculated sizes.
+Every order on Bravado flows through a single endpoint, `POST /v2/trade/order`, and a `type` field selects the execution strategy. Eight order types are available, ranging from simple resting limit orders to fully managed strategies like TWAP and trailing stops. Understanding which fields belong to which type, and how each type interacts with the Polymarket CLOB, will save you time debugging unexpected rejections and miscalculated sizes.
 
 <Warning>
   **Price is a decimal probability, not cents.** A price of `"0.62"` means 62 cents per share. If you send `price: "62"`, the API will return an error because 62 is outside the valid range of 0.001–0.999. Always express prices as decimals.
@@ -15,14 +15,14 @@ Every order on Bravado flows through a single endpoint — `POST /v2/trade/order
 
 ## Fees
 
-The Trade API charges **10 bips (0.10%) per side** — applied to both the maker and the taker.
+The Trade API charges **10 bips (0.10%) per side**, applied to both the maker and the taker.
 
 | | Trade API |
 | --- | --- |
 | Maker | 10 bips (0.10%) |
 | Taker | 10 bips (0.10%) |
 
-Basis points are hundredths of a percent, so 10 bips is 0.10% of notional. Fees are collected through **Bravado builder codes**, which are applied automatically — no configuration is required to start trading.
+Basis points are hundredths of a percent, so 10 bips is 0.10% of notional. Fees are collected through **Bravado builder codes**, which are applied automatically. No configuration is required to start trading.
 
 The builder code applied to an order is returned as `builder_code_used` on the order response, and the effective code for your key is visible as `builder_code_resolved` on [`GET /v2/trade/account`](/api/trade/account).
 
@@ -38,9 +38,9 @@ Mismatched units are the single most common source of bugs when integrating the 
 | --- | --- | --- | --- |
 | `price`, `take_profit.price`, `stop_loss.price`, `price_floor`, `price_ceiling` | Decimal probability (0.001–0.999) | `"0.60"` (= 60¢) | Sending `"60"` (cents) |
 | `execution.trailing_offset`, `execution.high_water_mark` | Decimal probability (0.001–0.999) | `"0.05"` | Sending `"5"` |
-| `size`, `execution.clip_size`, bracket `size` | Shares | `"100"` | — |
+| `size`, `execution.clip_size`, bracket `size` | Shares | `"100"` | |
 | `budget_usdc`, `quote_amount` | US dollars | `"50"` | Micro-units |
-| `offset_ticks` | CLOB ticks (1 tick = 0.1¢) | `0` | — |
+| `offset_ticks` | CLOB ticks (1 tick = 0.1¢) | `0` | |
 | `execution.trailing_offset_pct`, `execution.randomize_pct`, `execution.price_tolerance_pct` | Percent (0–100) | `5` | Sending `0.05` |
 | `execution.duration_sec` | Seconds | `3600` | Minutes |
 | `execution.interval_sec` | Seconds (minimum 10) | `60` | Values below 10 |
@@ -117,10 +117,10 @@ Order types fall into two categories that differ in how you track and cancel the
 
 A bracket order attaches a `take_profit` and/or `stop_loss` leg to a `LIMIT` or `MARKET` buy entry. When the entry fills, the bracket legs are submitted automatically.
 
-Bracket orders are **best-effort**: if the entry fill succeeds but a bracket leg cannot be submitted (for example, due to a market minimum), the entry is **not** rolled back. You still hold the position — Bravado simply records the bracket failure in the response.
+Bracket orders are **best-effort**: if the entry fill succeeds but a bracket leg cannot be submitted (for example, due to a market minimum), the entry is **not** rolled back. You still hold the position. Bravado simply records the bracket failure in the response.
 
 <Warning>
-  Always inspect `warnings[]` and `brackets.take_profit.error` / `brackets.stop_loss.error` in every order response. A missing bracket leg will not surface as an HTTP error — it will only appear in those fields.
+  Always inspect `warnings[]` and `brackets.take_profit.error` / `brackets.stop_loss.error` in every order response. A missing bracket leg will not surface as an HTTP error. It will only appear in those fields.
 </Warning>
 
 ```json
@@ -143,7 +143,7 @@ Bracket orders are **best-effort**: if the entry fill succeeds but a bracket leg
 
 ## Market microstructure constraints
 
-Some rejections are enforced by the CLOB or Polymarket protocol — they are not Bravado bugs. The most common ones are:
+Some rejections are enforced by the CLOB or Polymarket protocol. They are not Bravado bugs. The most common ones are:
 
 - **Resting order share minimum**: most markets require at least 5 shares per resting limit order. Sending `size: "1"` on a `LIMIT` order will be rejected.
 - **Market order notional minimum**: `MARKET` orders require a minimum spend of \$1. Sending `budget_usdc: "0.50"` will be rejected.
@@ -157,7 +157,7 @@ Refer to the [Polymarket CLOB documentation](https://docs.polymarket.com) for th
 
 ## Positions
 
-Positions on Bravado represent outcome token balances held in your Polymarket Safe wallet. When you buy YES or NO shares in a Polymarket market, those ERC-1155 tokens land in your wallet and Bravado surfaces them as a position record with a live mark price, cost basis, and PnL attribution. This page explains the full lifecycle of a position — from the moment you enter a trade to the point where you redeem a resolved market.
+Positions on Bravado represent outcome token balances held in your Polymarket Safe wallet. When you buy YES or NO shares in a Polymarket market, those ERC-1155 tokens land in your wallet and Bravado surfaces them as a position record with a live mark price, cost basis, and PnL attribution. This page explains the full lifecycle of a position, from the moment you enter a trade to the point where you redeem a resolved market.
 
 <Tip>
   Poll `GET /v2/trade/positions?status=active` to retrieve only your open positions. Omitting the `status` filter returns both active and closed positions, which can be a large payload for active wallets.
@@ -208,7 +208,7 @@ Positions on Bravado represent outcome token balances held in your Polymarket Sa
 
 ## PnL model
 
-Bravado uses a **cashflow model** for realized PnL — it measures the actual USDC that flowed in and out of your wallet, net of trading fees.
+Bravado uses a **cashflow model** for realized PnL. It measures the actual USDC that flowed in and out of your wallet, net of trading fees.
 
 <CardGroup cols={3}>
   <Card title="Realized PnL">
@@ -255,7 +255,7 @@ Call `GET /v2/trade/balances` to retrieve your current balance of both tokens al
 
 ## Redeeming resolved positions
 
-When a Polymarket market resolves, the winning outcome token is redeemable for $1 per share. Redemption is **not automatic** — you must call the redeem endpoint to receive your payout.
+When a Polymarket market resolves, the winning outcome token is redeemable for $1 per share. Redemption is **not automatic**. You must call the redeem endpoint to receive your payout.
 
 ```bash
 POST /v2/trade/positions/redeem
@@ -267,7 +267,7 @@ POST /v2/trade/positions/redeem
 }
 ```
 
-The endpoint is synchronous and returns `payout_base_units` — the raw on-chain payout amount. Check `position.redeemable === true` before calling to avoid a no-op transaction.
+The endpoint is synchronous and returns `payout_base_units`, the raw on-chain payout amount. Check `position.redeemable === true` before calling to avoid a no-op transaction.
 
 <Note>
   Losing positions pay out **$0 per share**. This is the expected behavior of prediction markets, not a bug. Your `realized_pnl` on a losing position will be negative and equal to your total cost basis.
@@ -275,12 +275,12 @@ The endpoint is synchronous and returns `payout_base_units` — the raw on-chain
 
 ## Splitting and merging outcome sets
 
-Polymarket's conditional token framework lets you convert pUSD directly into a complete set of outcome tokens — one YES share and one NO share per dollar — without going through the order book. Bravado exposes both directions:
+Polymarket's conditional token framework lets you convert pUSD directly into a complete set of outcome tokens, one YES share and one NO share per dollar, without going through the order book. Bravado exposes both directions:
 
 <Accordion title="Split: pUSD → outcome tokens">
   Splitting converts pUSD into one share of every outcome in a market. For a binary market, $100 of pUSD becomes 100 YES shares + 100 NO shares.
 
-  **When to use it:** Market making — you can immediately offer both sides of the book without paying the spread.
+  **When to use it:** Market making. You can immediately offer both sides of the book without paying the spread.
 
   ```bash
   POST /v2/trade/positions/split

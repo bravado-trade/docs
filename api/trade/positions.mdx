@@ -1,5 +1,5 @@
 ---
-title: "Position Management API — Redeem, Split, and Merge"
+title: "Position Management API: Redeem, Split, and Merge"
 sidebarTitle: "Positions"
 description: "GET /v2/trade/positions, POST /v2/trade/positions/redeem, /split, and /merge endpoints for managing Polymarket outcome token positions."
 icon:
@@ -145,7 +145,7 @@ Returns a paginated list of outcome token positions associated with your account
 
 ## POST /v2/trade/positions/redeem
 
-Redeems a resolved Conditional Token Framework (CTF) position and delivers the pUSD payout to your proxy wallet. The call is synchronous — it waits for the Polygon transaction to confirm before returning. Winning positions receive a payout of 1 pUSD per share; losing positions receive 0.
+Redeems a resolved Conditional Token Framework (CTF) position and delivers the pUSD payout to your proxy wallet. The call is synchronous: it waits for the Polygon transaction to confirm before returning. Winning positions receive a payout of 1 pUSD per share; losing positions receive 0.
 
 **Required headers**
 
@@ -235,7 +235,7 @@ Redeems a resolved Conditional Token Framework (CTF) position and delivers the p
 
 ## POST /v2/trade/positions/split
 
-Splits pUSD collateral into one share of every outcome token in a condition. After splitting, you hold a complete outcome set — useful for then selling one side on the CLOB while retaining the other. Splitting is the on-chain equivalent of buying both sides simultaneously.
+Splits pUSD collateral into one share of every outcome token in a condition. After splitting, you hold a complete outcome set, useful for then selling one side on the CLOB while retaining the other. Splitting is the on-chain equivalent of buying both sides simultaneously.
 
 **Required headers**
 

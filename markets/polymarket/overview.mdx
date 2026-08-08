@@ -1,5 +1,5 @@
 ---
-title: "Polymarket on Bravado — Coverage and Supported Features"
+title: "Polymarket on Bravado: Coverage and Supported Features"
 sidebarTitle: "Overview"
 description: "Polymarket is the largest prediction market by volume, running on Polygon. Bravado supports it across the Trade, Copytrade, Data, and UMA APIs."
 icon: "/logo/polymarket.png"
@@ -11,11 +11,11 @@ Bravado supports Polymarket across every product, and gives you execution and da
 
 ## How Polymarket works
 
-Each market has a `condition_id`, and each tradeable outcome within it has its own ERC-1155 token id — the `symbol` you pass when placing an order. Prices are decimal probabilities between `0.001` and `0.999`, so `0.62` means 62 cents per share.
+Each market has a `condition_id`, and each tradeable outcome within it has its own ERC-1155 token id, the `symbol` you pass when placing an order. Prices are decimal probabilities between `0.001` and `0.999`, so `0.62` means 62 cents per share.
 
 Depositing USDC mints a complete set of outcome tokens, which can be split and merged. Because exactly one outcome resolves true, a complete set is always redeemable for the underlying collateral. See [Positions](/products/trade-api#positions) for split, merge, and redeem mechanics.
 
-Once an event concludes, the outcome is reported through UMA's Optimistic Oracle before winning shares become redeemable — see [UMA resolution](/markets/polymarket/uma-resolution).
+Once an event concludes, the outcome is reported through UMA's Optimistic Oracle before winning shares become redeemable, see [UMA resolution](/markets/polymarket/uma-resolution).
 
 ## Supported Bravado products
 
@@ -54,9 +54,9 @@ Once an event concludes, the outcome is reported through UMA's Optimistic Oracle
 
 These limits are enforced by Polymarket's CLOB and the underlying protocol. Rejections that cite them are venue rules, not Bravado bugs:
 
-- **Resting order share minimum** — most markets require at least 5 shares per resting limit order.
-- **Market order notional minimum** — `MARKET` orders require a minimum spend of \$1.
-- **Iceberg slices are post-only** — each slice is submitted passively, so for a buy the slice price must be at or below the current best bid.
+- **Resting order share minimum**, most markets require at least 5 shares per resting limit order.
+- **Market order notional minimum**, `MARKET` orders require a minimum spend of \$1.
+- **Iceberg slices are post-only**, each slice is submitted passively, so for a buy the slice price must be at or below the current best bid.
 
 <Warning>
   Prices are decimal probabilities, not cents. Sending `price: "62"` is rejected because 62 falls outside the valid `0.001`–`0.999` range. Send `"0.62"` instead.

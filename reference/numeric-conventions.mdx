@@ -7,18 +7,18 @@ icon:
   library: "lucide"
 ---
 
-Bravado encodes all numeric fields — including prices, balances, PnL, volume, and share counts — as JSON strings rather than native JSON numbers. This is intentional: JavaScript's `Number` type (IEEE 754 double-precision float) loses precision on integers larger than 2⁵³ and on decimal values that cannot be represented exactly in binary floating point. By using strings, Bravado lets your application choose the right numeric type for its environment.
+Bravado encodes all numeric fields, including prices, balances, PnL, volume, and share counts, as JSON strings rather than native JSON numbers. This is intentional: JavaScript's `Number` type (IEEE 754 double-precision float) loses precision on integers larger than 2⁵³ and on decimal values that cannot be represented exactly in binary floating point. By using strings, Bravado lets your application choose the right numeric type for its environment.
 
 ## Why strings?
 
 Financial applications require exact arithmetic. A balance of `"1234567.890123"` USDC must round-trip without loss. Native JSON number parsing in JavaScript would silently corrupt values like this:
 
 ```javascript
-// ❌ Dangerous — precision lost
+// ❌ Dangerous, precision lost
 JSON.parse('{"balance": 1234567.890123}').balance
 // => 1234567.8901230002  (IEEE 754 rounding error)
 
-// ✅ Safe — parse as string, then use decimal library
+// ✅ Safe, parse as string, then use decimal library
 import Decimal from "decimal.js";
 const balance = new Decimal(response.balance); // exact
 ```
@@ -36,16 +36,16 @@ Sending `price: 62` instead of `price: "0.62"` is the single most common integra
 | Field | Unit | Example value | Common mistake |
 |-------|------|---------------|----------------|
 | `price` | Decimal probability `0.001`–`0.999` | `"0.62"` (= 62¢) | Sending `"62"` (cents) |
-| `size` | Shares (string) | `"100"` | — |
+| `size` | Shares (string) | `"100"` | |
 | `quote_amount` | US dollars | `"10"` | Sending micro-units |
 | `budget_usdc` | US dollars | `"50"` | Sending micro-units |
 | `price_floor` | Decimal probability `0`–`1` | `0.05` | Sending cents (`5`) |
 | `price_ceiling` | Decimal probability `0`–`1` | `0.95` | Sending cents (`95`) |
-| `offset_ticks` | CLOB ticks (1 tick = 0.1¢) | `0` | — |
-| `execution.trailing_offset_pct` | Percent `0`–`100` | `5` | — |
-| `execution.duration_sec` | Seconds | `3600` | — |
-| `execution.interval_sec` | Seconds (minimum 10) | `60` | — |
-| `notional_usd` (combo) | US dollars | `5` | — |
+| `offset_ticks` | CLOB ticks (1 tick = 0.1¢) | `0` | |
+| `execution.trailing_offset_pct` | Percent `0`–`100` | `5` | |
+| `execution.duration_sec` | Seconds | `3600` | |
+| `execution.interval_sec` | Seconds (minimum 10) | `60` | |
+| `notional_usd` (combo) | US dollars | `5` | |
 
 ### Price in depth
 
@@ -72,7 +72,7 @@ Response fields follow a consistent naming convention that signals their unit.
 
 ## Micro-USDC (uusdc)
 
-Some Data API and PMWAS fields express values in **micro-USDC** — integers where 1 USDC = 1,000,000 units. These fields always end in `_uusdc` or `_ushare`.
+Some Data API and PMWAS fields express values in **micro-USDC**, integers where 1 USDC = 1,000,000 units. These fields always end in `_uusdc` or `_ushare`.
 
 ```json
 {
@@ -91,7 +91,7 @@ fees_usdc = fees_uusdc / Decimal("1000000")  # => Decimal("1.234567")
 ```
 
 <Note>
-Standard PnL and balance fields on the trading endpoints (`/v2/trade/...`) are already in USDC with 6 decimal places — no conversion needed. Only fields explicitly suffixed `_uusdc` or `_ushare` require the ÷ 1,000,000 step.
+Standard PnL and balance fields on the trading endpoints (`/v2/trade/...`) are already in USDC with 6 decimal places, no conversion needed. Only fields explicitly suffixed `_uusdc` or `_ushare` require the ÷ 1,000,000 step.
 </Note>
 
 ## Timestamps
