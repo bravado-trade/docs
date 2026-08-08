@@ -8,6 +8,14 @@
     "dark": "#27D79B"
   },
   "css": "/custom.css",
+  "icons": {
+    "library": "lucide"
+  },
+  "api": {
+    "mdx": {
+      "server": "https://bravado-api-k7kaq.ondigitalocean.app"
+    }
+  },
   "favicon": "/favicon.svg",
   "navigation": {
     "tabs": [

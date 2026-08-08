@@ -1,7 +1,10 @@
-/* Active sidebar item glow */
-nav li a[data-active="true"],
-nav li a.active,
-[data-sidebar] a[aria-current="page"] {
-  box-shadow: 0 0 12px rgba(39, 215, 155, 0.4), 0 0 4px rgba(39, 215, 155, 0.2);
-  border-radius: 6px;
+/* Vertical divider between sidebar and content */
+#sidebar {
+  border-right: 1px solid rgb(38, 43, 42);
+}
+
+/* Glow on the active sidebar item */
+#sidebar a[aria-current="page"] {
+  box-shadow: 0 0 12px rgba(39, 215, 155, 0.25), 0 0 3px rgba(39, 215, 155, 0.15);
+  border-radius: 8px;
 }
