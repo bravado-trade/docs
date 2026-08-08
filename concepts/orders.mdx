@@ -2,7 +2,9 @@
 title: "Order Types and Execution on Bravado"
 sidebarTitle: "Orders"
 description: "Bravado supports eight order types for trading Polymarket outcome tokens: LIMIT, MARKET, PEGGED, TWAP, ICEBERG, STOP_LOSS, TAKE_PROFIT, and TRAILING_STOP."
-icon: "swap-arrows"
+icon:
+  name: "arrow-left-right"
+  library: "lucide"
 ---
 
 Every order on Bravado flows through a single endpoint — `POST /v2/trade/order` — and a `type` field selects the execution strategy. Eight order types are available, ranging from simple resting limit orders to fully managed strategies like TWAP and trailing stops. Understanding which fields belong to which type, and how each type interacts with the Polymarket CLOB, will save you time debugging unexpected rejections and miscalculated sizes.
