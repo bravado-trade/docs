@@ -63,6 +63,22 @@ html.dark body::before {
   pointer-events: none;
 }
 
+/* The sidebar scroll area fades its top edge with a gradient hardcoded to
+   the default page colour, which showed as a dark band above the first
+   group once the surfaces changed. Fade from the sidebar surface instead. */
+html.dark #sidebar div[class*="sticky"][class*="h-8"] {
+  background-image: linear-gradient(to bottom, #161617 0%, rgba(22, 22, 23, 0) 100%) !important;
+}
+
+/* The active item sits flush against the scroll container's left edge, and
+   that container is overflow: scroll, so the glow below was clipped on the
+   left and looked lopsided. Inset the container and pull it back by the
+   same amount: the items do not move, the glow gets room to render. */
+html.dark #sidebar div[class*="--scroll-area-fade-size"] {
+  padding-left: 14px;
+  margin-left: -14px;
+}
+
 /* Active sidebar item: neutral selected surface, green text and glow */
 #sidebar a[aria-current="page"] {
   box-shadow: 0 0 12px rgba(39, 215, 159, 0.25), 0 0 3px rgba(39, 215, 159, 0.15);
