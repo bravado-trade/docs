@@ -22,7 +22,12 @@
               "authentication",
               "build-with-ai"
             ]
-          },
+          }
+        ]
+      },
+      {
+        "tab": "Concepts",
+        "groups": [
           {
             "group": "Concepts",
             "pages": [
@@ -31,7 +36,12 @@
               "concepts/analytics",
               "concepts/copytrade"
             ]
-          },
+          }
+        ]
+      },
+      {
+        "tab": "Use Cases",
+        "groups": [
           {
             "group": "Use Cases",
             "pages": [
@@ -42,7 +52,12 @@
               "use-cases/quant-research",
               "use-cases/tax-accounting-tooling"
             ]
-          },
+          }
+        ]
+      },
+      {
+        "tab": "SDKs",
+        "groups": [
           {
             "group": "SDKs",
             "pages": [
@@ -50,7 +65,12 @@
               "sdk/typescript",
               "sdk/python"
             ]
-          },
+          }
+        ]
+      },
+      {
+        "tab": "Resources",
+        "groups": [
           {
             "group": "Resources",
             "pages": [
