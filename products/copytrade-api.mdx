@@ -13,6 +13,25 @@ Copy trading on Bravado subscribes your wallet to a leader's trading activity so
   Use **simulation mode** to paper-trade a leader's strategy before committing real capital. Simulation tracks all fills against live CLOB prices without executing on-chain transactions, giving you a realistic preview of how a strategy would have performed.
 </Note>
 
+## Fees
+
+The Copytrade API charges **25 bips (0.25%) per side** — applied to both the maker and the taker on every mirrored fill.
+
+| | Copytrade API |
+| --- | --- |
+| Maker | 25 bips (0.25%) |
+| Taker | 25 bips (0.25%) |
+
+Basis points are hundredths of a percent, so 25 bips is 0.25% of notional. Fees are collected through **Bravado builder codes**, applied automatically to mirrored orders — no configuration is required to start copy trading.
+
+<Note>
+  Copy trading is priced above the [Trade API](/products/trade-api), which charges 10 bips per side. Orders you place directly are charged at the Trade API rate; fills mirrored by a copytrade subscription are charged at this rate.
+</Note>
+
+<Card title="Need your own builder codes?" icon="mail" href="mailto:support@bravadotrade.com">
+  If you need a custom setup running your own builder codes rather than Bravado's, reach out to **support@bravadotrade.com** and the team will get you configured.
+</Card>
+
 ## How it works
 
 <Steps>

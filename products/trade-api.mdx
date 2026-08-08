@@ -13,6 +13,23 @@ Every order on Bravado flows through a single endpoint — `POST /v2/trade/order
   **Price is a decimal probability, not cents.** A price of `"0.62"` means 62 cents per share. If you send `price: "62"`, the API will return an error because 62 is outside the valid range of 0.001–0.999. Always express prices as decimals.
 </Warning>
 
+## Fees
+
+The Trade API charges **10 bips (0.10%) per side** — applied to both the maker and the taker.
+
+| | Trade API |
+| --- | --- |
+| Maker | 10 bips (0.10%) |
+| Taker | 10 bips (0.10%) |
+
+Basis points are hundredths of a percent, so 10 bips is 0.10% of notional. Fees are collected through **Bravado builder codes**, which are applied automatically — no configuration is required to start trading.
+
+The builder code applied to an order is returned as `builder_code_used` on the order response, and the effective code for your key is visible as `builder_code_resolved` on [`GET /v2/trade/account`](/api/trade/account).
+
+<Card title="Need your own builder codes?" icon="mail" href="mailto:support@bravadotrade.com">
+  If you need a custom setup running your own builder codes rather than Bravado's, reach out to **support@bravadotrade.com** and the team will get you configured.
+</Card>
+
 ## Field units reference
 
 Mismatched units are the single most common source of bugs when integrating the Trade API. Use this table as a reference whenever you build a request payload.
