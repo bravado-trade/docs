@@ -15,10 +15,22 @@ html.dark {
   border-right: 1px solid #303030;
 }
 
-/* Glow on the active sidebar item */
+/* Sidebar sits on the Section surface so it recedes behind the content.
+   The box-shadow fills the gutter between the viewport edge and the
+   sidebar, which would otherwise show the page background as a strip. */
+html.dark #sidebar {
+  background: #161617;              /* Dark/Fill/Section */
+  box-shadow: -40px 0 0 0 #161617;
+}
+
+/* Active sidebar item: neutral selected surface, green text and glow */
 #sidebar a[aria-current="page"] {
   box-shadow: 0 0 12px rgba(39, 215, 159, 0.25), 0 0 3px rgba(39, 215, 159, 0.15);
   border-radius: 8px;
+}
+
+html.dark #sidebar a[aria-current="page"] {
+  background: #2a2a2d;              /* Dark/Buttons/Button-Selected */
 }
 
 /* Hide the AI assistant: the navbar entry point and the floating input.
