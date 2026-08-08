@@ -26,6 +26,61 @@
         ]
       },
       {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Trade API",
+            "pages": [
+              "api/trade/overview",
+              "api/trade/orders",
+              "api/trade/positions",
+              "api/trade/strategies",
+              "api/trade/account",
+              "api/trade/withdraw"
+            ]
+          },
+          {
+            "group": "Combos API",
+            "pages": [
+              "api/combos/overview",
+              "api/combos/quote-accept-redeem"
+            ]
+          },
+          {
+            "group": "Copytrade API",
+            "pages": [
+              "api/copytrade/overview",
+              "api/copytrade/subscriptions",
+              "api/copytrade/simulation"
+            ]
+          },
+          {
+            "group": "Analytics API",
+            "pages": [
+              "api/analytics/overview",
+              "api/analytics/healthz",
+              "api/analytics/leaderboard",
+              "api/analytics/leaderboard-volume",
+              "api/analytics/trader",
+              "api/analytics/trader-pnl",
+              "api/analytics/trader-positions",
+              "api/analytics/trader-positions-active",
+              "api/analytics/trader-positions-closed",
+              "api/analytics/trader-trades",
+              "api/analytics/trader-categories",
+              "api/analytics/trader-usdc-balance",
+              "api/analytics/trader-statements",
+              "api/analytics/trader-statements-r1",
+              "api/analytics/trader-metrics",
+              "api/analytics/trader-reconciliation",
+              "api/analytics/trader-tax-report",
+              "api/analytics/trades",
+              "api/analytics/entity"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Concepts",
         "groups": [
           {
@@ -82,61 +137,6 @@
               "reference/versioning",
               "reference/changelog",
               "reference/status"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "Trade API",
-            "pages": [
-              "api/trade/overview",
-              "api/trade/orders",
-              "api/trade/positions",
-              "api/trade/strategies",
-              "api/trade/account",
-              "api/trade/withdraw"
-            ]
-          },
-          {
-            "group": "Combos API",
-            "pages": [
-              "api/combos/overview",
-              "api/combos/quote-accept-redeem"
-            ]
-          },
-          {
-            "group": "Copytrade API",
-            "pages": [
-              "api/copytrade/overview",
-              "api/copytrade/subscriptions",
-              "api/copytrade/simulation"
-            ]
-          },
-          {
-            "group": "Analytics API",
-            "pages": [
-              "api/analytics/overview",
-              "api/analytics/healthz",
-              "api/analytics/leaderboard",
-              "api/analytics/leaderboard-volume",
-              "api/analytics/trader",
-              "api/analytics/trader-pnl",
-              "api/analytics/trader-positions",
-              "api/analytics/trader-positions-active",
-              "api/analytics/trader-positions-closed",
-              "api/analytics/trader-trades",
-              "api/analytics/trader-categories",
-              "api/analytics/trader-usdc-balance",
-              "api/analytics/trader-statements",
-              "api/analytics/trader-statements-r1",
-              "api/analytics/trader-metrics",
-              "api/analytics/trader-reconciliation",
-              "api/analytics/trader-tax-report",
-              "api/analytics/trades",
-              "api/analytics/entity"
             ]
           }
         ]
