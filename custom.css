@@ -1,0 +1,7 @@
+/* Active sidebar item glow */
+nav li a[data-active="true"],
+nav li a.active,
+[data-sidebar] a[aria-current="page"] {
+  box-shadow: 0 0 12px rgba(39, 215, 155, 0.4), 0 0 4px rgba(39, 215, 155, 0.2);
+  border-radius: 6px;
+}
