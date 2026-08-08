@@ -2,18 +2,20 @@
 title: "Bravado: Prediction Market Infrastructure API"
 sidebarTitle: "Introduction"
 description: "Bravado provides REST APIs for order execution, copy-trading, and analytics on Polymarket. Build trading bots, dashboards, and social trading features."
-mode: "default"
+mode: "wide"
 icon:
   name: "book-open"
   library: "lucide"
 ---
 
-Bravado is a REST API platform that gives developers and partners direct, programmable access to Polymarket, the world's largest prediction market, running on Polygon. Whether you're building an algorithmic trading bot, a copy-trading product, a portfolio dashboard, or a white-label prediction market interface, Bravado provides the infrastructure to do it without managing low-level smart contract interactions.
+**The trading infrastructure layer for Polymarket.**
+
+Execute orders, mirror top traders, and surface analytics — all through a single authenticated REST API on Polygon.
 
 Create and manage your API keys in the [Bravado Portal](https://portal.bravadotrade.com/).
 
 <CardGroup cols={2}>
-  <Card title="Quick Start" icon="bolt" href="/quickstart">
+  <Card title="Quick Start" icon="zap" href="/quickstart">
     Make your first API call and place a market order in under 5 minutes.
   </Card>
 
@@ -21,22 +23,55 @@ Create and manage your API keys in the [Bravado Portal](https://portal.bravadotr
     Set up Bearer token auth and understand API key scopes.
   </Card>
 
-  <Card title="Place an Order" icon="chart-line" href="/guides/place-an-order">
-    Step-by-step guide to all supported order types.
+  <Card title="API Reference" icon="code" href="/api/trade/overview">
+    Full endpoint reference for Trade, Copytrade, and Analytics APIs.
   </Card>
 
-  <Card title="Trade API Reference" icon="code" href="/api/trade/overview">
-    Full endpoint reference for the Trade API v2.
+  <Card title="Build with AI" icon="sparkles" href="/build-with-ai">
+    Point your coding agents at Bravado docs, llms.txt, and MCP.
   </Card>
 </CardGroup>
 
+## Why Bravado
+
+<CardGroup cols={3}>
+  <Card title="Eight order types" icon="arrow-left-right" href="/concepts/orders">
+    LIMIT, MARKET, TWAP, ICEBERG, PEGGED, STOP_LOSS, TAKE_PROFIT, and TRAILING_STOP for algorithmic strategies on thin books.
+  </Card>
+
+  <Card title="Copy-trading built in" icon="users" href="/api/copytrade/overview">
+    Mirror any wallet's fills with proportional, fixed, or capped sizing. No native equivalent on Polymarket.
+  </Card>
+
+  <Card title="Tax-grade analytics" icon="chart-line" href="/concepts/analytics">
+    Wallet-level PnL under the Prediction Market Wallet Accounting Standard (PMWAS), with tax statements for realized gains.
+  </Card>
+</CardGroup>
+
+## Bravado vs. Polymarket's native APIs
+
+| Capability | Polymarket native | Bravado |
+| --- | --- | --- |
+| Order types | LIMIT, MARKET | LIMIT, MARKET, TWAP, ICEBERG, PEGGED, STOP\_LOSS, TAKE\_PROFIT, TRAILING\_STOP |
+| Execution latency | Baseline | Lower, with server-side execution of advanced order types |
+| Data accuracy | Baseline | PMWAS-standardized PnL and full fill reconciliation |
+| Copy-trading | Not available | First-class Copytrade API with configurable sizing modes |
+| Historical PnL | Recent activity | Full wallet history from first trade, with cost-basis tracking |
+| Tax reporting | Not available | Tax statements per wallet, US-format |
+| Sub-accounts | Not available | Master-key flow for white-label integrations |
+| Idempotency | Not enforced | Required `Idempotency-Key` on every mutating request |
+
+## API surfaces
+
+| API | Base URL | What it does |
+| --- | --- | --- |
+| **Trade API v2** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade` | Order execution, positions, balances, user provisioning |
+| **Copytrade API** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade` | Mirror fills from top traders with configurable sizing |
+| **Analytics API** | `https://bravado-api-k7kaq.ondigitalocean.app` | Leaderboards, wallet PnL, trade logs, tax statements |
+
 ## Your first request
 
-The Analytics API is public read-only, so you can run this snippet without funding a wallet or signing up. It returns lifetime PnL for a Polymarket wallet.
-
-<Info>
-  A demo API key is available for the Analytics API so you can run the snippet below with zero setup. Replace `demo` with your own key once you have one from the [portal](https://portal.bravadotrade.com/).
-</Info>
+The Analytics API is public read-only — run this with zero setup. Replace `demo` with your own key from the [portal](https://portal.bravadotrade.com/).
 
 <CodeGroup>
 
@@ -65,107 +100,40 @@ res = requests.get(
 print(res.json())
 ```
 
-```go Go
-package main
-
-import (
-	"fmt"
-	"io"
-	"net/http"
-)
-
-func main() {
-	req, _ := http.NewRequest("GET",
-		"https://bravado-api-k7kaq.ondigitalocean.app/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/pnl",
-		nil,
-	)
-	req.Header.Set("Authorization", "Bearer demo")
-
-	resp, _ := http.DefaultClient.Do(req)
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Println(string(body))
-}
-```
-
 </CodeGroup>
 
-## Bravado vs. Polymarket's native APIs
-
-Bravado is not a passthrough. Each surface is purpose-built to do something Polymarket's native APIs do not, or do at a higher standard.
-
-| Capability | Polymarket native | Bravado |
-| --- | --- | --- |
-| Order types | LIMIT, MARKET | LIMIT, MARKET, TWAP, ICEBERG, PEGGED, STOP\_LOSS, TAKE\_PROFIT, TRAILING\_STOP |
-| Execution latency | Baseline | Lower, with server-side execution of advanced order types |
-| Data accuracy and reconciliation | Baseline | Higher, with PMWAS-standardized PnL and full fill reconciliation |
-| Rate limits | Public quotas | Higher per-partner quotas on the Analytics API |
-| Copy-trading | Not available | First-class Copytrade API with configurable sizing modes |
-| Historical PnL depth | Recent activity | Full wallet history from first trade, with cost-basis tracking |
-| Tax reporting | Not available | Tax statements per wallet, US-format |
-| Sub-account provisioning | Not available | Master-key flow for white-label integrations |
-| Idempotency | Not enforced | Required `Idempotency-Key` on every mutating request |
-
-## Why Bravado
+## Use cases
 
 <CardGroup cols={3}>
-  <Card title="Eight order types" icon="layer-group" href="/concepts/orders">
-    Basic execution plus TWAP, Iceberg, Pegged, and three stop variants for algorithmic strategies on thin books.
+  <Card title="Trading Bots" icon="bot" href="/use-cases/algorithmic-trading-bots">
+    Automate strategies with TWAP, iceberg, pegged, and bracket orders.
   </Card>
 
-  <Card title="Copy-trading built in" icon="users" href="/api/copytrade/overview">
-    Mirror any wallet's fills with proportional, fixed, or capped sizing. No native equivalent on Polymarket.
+  <Card title="Copy Trading" icon="users-round" href="/use-cases/copy-trading">
+    Mirror top traders automatically with configurable sizing.
   </Card>
 
-  <Card title="Tax-grade analytics" icon="chart-simple" href="/concepts/pnl-methodology">
-    Wallet-level PnL under the Prediction Market Wallet Accounting Standard (PMWAS), with tax statements for realized gains.
+  <Card title="Portfolio Dashboards" icon="chart-pie" href="/use-cases/portfolio-dashboards">
+    Surface leaderboards, PnL charts, and wallet profiles.
   </Card>
 </CardGroup>
 
-## API surfaces
+## Start building
 
-Bravado exposes three distinct API surfaces. Each is purpose-built for a different layer of a Polymarket application.
+<CardGroup cols={2}>
+  <Card title="TypeScript SDK" icon="braces" href="/sdk/typescript">
+    Type-safe client with built-in auth and pagination.
+  </Card>
 
-| API | Base URL | Description |
-| --- | --- | --- |
-| **Trade API v2** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade` | Order execution, positions, balances, and user provisioning |
-| **Copytrade API** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade` | Mirror fills from top traders with configurable sizing |
-| **Analytics API** | `https://bravado-api-k7kaq.ondigitalocean.app` | Leaderboards, wallet PnL, and tax statements |
+  <Card title="Python SDK" icon="code" href="/sdk/python">
+    Pythonic wrapper for all three Bravado APIs.
+  </Card>
 
-### Trade API v2
+  <Card title="Concepts" icon="layers" href="/concepts/orders">
+    Understand order types, positions, analytics, and copy-trading.
+  </Card>
 
-The Trade API is the core of Bravado. It handles the full order lifecycle — submission, monitoring, and cancellation — across a rich set of order types designed for both simple one-off trades and sophisticated algorithmic strategies.
-
-**Supported order types:**
-
-- **LIMIT** — Post a resting order at a specific price.
-- **MARKET** — Fill immediately at the best available price.
-- **TWAP** — Time-weighted average price execution, splitting a large order over a defined window.
-- **ICEBERG** — Show only a slice of your full order size to the market.
-- **PEGGED** — Track the best bid or ask dynamically.
-- **STOP\_LOSS** — Trigger a market sell when price falls to your stop level.
-- **TAKE\_PROFIT** — Trigger a market sell when price rises to your target.
-- **TRAILING\_STOP** — Follow price upward and trigger when it reverses by a set amount.
-
-The Trade API also handles account management: checking USDC and pUSD balances, reading open positions, reviewing activity history, and provisioning sub-users under a partner master key.
-
-### Copytrade API
-
-The Copytrade API lets you automatically mirror the fills of any Polymarket wallet. When your tracked trader executes a fill, Bravado replicates the trade on your behalf using configurable sizing logic — proportional, fixed, or capped. This powers social trading products and portfolio strategies without requiring you to monitor the chain yourself.
-
-### Analytics API
-
-The Analytics API surfaces Polymarket performance data at the wallet level. Use it to build leaderboards ranked by PnL or volume, inspect detailed trade history for any public wallet, and generate tax statements for realized gains. It works on any Polymarket address — not just those managed through Bravado.
-
-## Key capabilities
-
-- **Eight order types** spanning basic execution and advanced algorithmic strategies
-- **Copy trading** with flexible per-strategy sizing controls
-- **Wallet analytics** including historical PnL, volume, and market-level breakdowns
-- **Tax statements** for realized gain/loss reporting
-- **User provisioning** so partners can create and manage sub-accounts under a master key
-- **Idempotent mutations** — every write endpoint accepts an `Idempotency-Key` to prevent duplicate orders
-
-<Note>
-  All numeric fields in API responses — including prices, PnL figures, sizes, and collateral amounts — are returned as **JSON strings**, not numbers. This preserves full decimal precision. Always parse these values using a `BigDecimal` (or equivalent arbitrary-precision) type in your application rather than a floating-point number.
-</Note>
+  <Card title="Error Reference" icon="alert-triangle" href="/reference/errors">
+    HTTP status codes, error shapes, and troubleshooting.
+  </Card>
+</CardGroup>
