@@ -1,55 +1,129 @@
 ---
 title: "How to Build a Prediction Market Trading Bot"
 sidebarTitle: "Build a trading bot"
-description: "Build a Polymarket trading bot with the Bravado API: signal, sizing, execution, and reconciling state after a restart."
+description: "Build a Polymarket trading bot with the Bravado API: reconcile state on startup, compute a delta, execute safely, and survive restarts without doubling your position."
 icon:
   name: "bot"
   library: "lucide"
 ---
 
-A trading bot is four things: a signal, a sizing rule, an execution path, and a way to recover when it restarts. The last one is what separates a bot that runs unattended from a script you have to babysit, and it is the part most tutorials skip.
+## Overview
+
+Most trading bot tutorials show you how to place an order in a loop. That is the easy 10% of the problem, and it produces bots that work in testing and misbehave the first time something interrupts them.
+
+The hard part is **state**. Your bot restarts, the process was killed mid-execution, a request timed out and you do not know if it landed, or a TWAP you started an hour ago is still running somewhere. A bot that assumes it starts flat will happily double its exposure every time it comes back up.
+
+This guide builds a bot around that problem. The signal is left to you, because that is your edge and nobody can give it to you. Everything around it, the part that determines whether the bot is safe to leave running, is what we cover.
+
+<Note>
+  Read time: about 16 minutes. Python and REST API experience assumed. Read [Place an order](/guides/place-an-order) first if you have not placed one yet.
+</Note>
+
+## TL;DR
+
+- **Reconcile before you trade.** Read positions, open orders, *and* running strategies. Skipping the third is the classic bug.
+- **Trade the delta**, not the target. Compare what you want against what you already have plus what is already working.
+- **One idempotency key per intended order**, reused across retries, so a timeout cannot become a duplicate.
+- Managed strategies (`TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP`, pre-trigger `STOP_LOSS`) do **not** appear in open orders.
+- `cancel-all` clears CLOB orders only. Strategies keep running.
+- Parse every number with `Decimal`. They arrive as strings for a reason.
+
+## What you will do
+
+- Read complete account state across three endpoints
+- Compute a position delta that accounts for orders already working
+- Place orders with retry-safe idempotency keys
+- Choose an order type based on size rather than habit
+- Run a dry cycle that prints intended trades without placing them
+- Add a main loop that respects your rate limit and backs off on `429`
+
+## What you will need
+
+**Knowledge**
+
+- Python 3.9 or later, and comfort with REST APIs
+- A trading signal of your own. This guide deliberately does not provide one.
+
+**Tools and access**
+
+- A Bravado API key with `trade.read`, `trade.execute`, and `trade.cancel`
+- `pip install requests`
+- USDC collateral, though the dry-run mode needs none
+
+```bash
+export BRAVADO_API_KEY="your-bearer-token"
+```
 
 ## Architecture
 
+Four steps, in this order, every cycle:
+
 <Steps>
-  <Step title="Reconcile on startup">
-    Read existing positions, open orders, and running strategies before doing anything. A bot that assumes it starts flat will double its exposure after every restart.
+  <Step title="Reconcile">
+    Read what you hold and what is already working. Never assume.
   </Step>
-  <Step title="Evaluate a signal">
-    Decide what you want to hold. This is your edge and the only part Bravado does not provide.
+  <Step title="Evaluate">
+    Decide the target position. Your signal lives here.
   </Step>
-  <Step title="Compute a delta">
-    Compare target against actual. Trade the difference, not the target.
+  <Step title="Diff">
+    Target minus current equals the trade. Trade only the difference.
   </Step>
-  <Step title="Execute with an idempotency key">
-    One key per intended order, reused across retries.
+  <Step title="Execute">
+    Place with an idempotency key, sized by an order type that suits the size.
   </Step>
 </Steps>
 
-## Reconcile before trading
+The reason reconcile comes first, every cycle rather than only at startup, is that your bot is not the only thing that changes your account. A TWAP fills between cycles. A stop triggers. Somebody trades manually through the portal. Reading state fresh each pass makes all of those harmless.
 
-Three calls give you complete state. Skipping the third is the common bug: a TWAP placed before the restart is still running, and it does not appear in open orders.
+## Set up the client
 
 ```python
-import os, uuid, requests
+import os, time, uuid, requests
 from decimal import Decimal
 
 BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
 H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
 
+DRY_RUN = True          # nothing is placed until you turn this off
 
+
+def read(path, **params):
+    r = requests.get(f"{BASE}{path}", headers=H, params=params or None, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+
+def write(path, body, key):
+    if DRY_RUN:
+        print(f"  DRY RUN  would POST {path}  {body}")
+        return {"dry_run": True}
+    r = requests.post(f"{BASE}{path}", headers={**H, "Idempotency-Key": key},
+                      json=body, timeout=15)
+    r.raise_for_status()
+    return r.json()
+```
+
+<Note>
+  `DRY_RUN` defaults to `True` on purpose. The expensive mistake should require a deliberate act, not an oversight. Every example below is safe to run as written.
+</Note>
+
+## Reconcile: read complete state
+
+Three calls. The third is the one people miss.
+
+```python
 def current_state():
-    positions = requests.get(f"{BASE}/v2/trade/positions", headers=H).json()
-    open_orders = requests.get(f"{BASE}/v2/trade/orders/open", headers=H).json()
-    strategies = requests.get(f"{BASE}/v2/trade/strategies", headers=H).json()
+    positions  = read("/v2/trade/positions")["positions"]
+    open_orders = read("/v2/trade/orders/open")["orders"]
+    strategies = read("/v2/trade/strategies")["strategies"]
 
-    held = {p["symbol"]: Decimal(p["size"]) for p in positions["positions"]}
+    held = {p["symbol"]: Decimal(p["size"]) for p in positions}
 
-    # size already committed but not yet filled, so we do not order it twice
+    # size already committed but not yet filled
     pending = {}
-    for o in open_orders["orders"]:
+    for o in open_orders:
         pending[o["symbol"]] = pending.get(o["symbol"], Decimal(0)) + Decimal(o["remaining_size"])
-    for s in strategies["strategies"]:
+    for s in strategies:
         if s["status"] in ("ACTIVE", "PENDING"):
             pending[s["symbol"]] = pending.get(s["symbol"], Decimal(0)) + Decimal(s["remaining_size"])
 
@@ -57,111 +131,197 @@ def current_state():
 ```
 
 <Warning>
-  Managed strategies (`TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP`, and pre-trigger `STOP_LOSS`) appear only on `GET /v2/trade/strategies`. A bot that reconciles against open orders alone will treat a running TWAP as if it does not exist and place the same size again.
+  A `TWAP` started an hour ago is still buying. It is not in `orders/open`, because managed strategies live on `/v2/trade/strategies`. A bot that reconciles against open orders alone treats that TWAP as if it does not exist and orders the same size again, which is how you end up with double the position you intended.
 </Warning>
 
-## Trade the delta
+`PENDING` counts as committed. A strategy waiting on its entry conditions has not filled, but it will, and ordering more in the meantime means you get both.
+
+## Diff: trade the difference
 
 ```python
-def rebalance(target: dict[str, Decimal]):
+MIN_SHARES = Decimal("5")     # venue minimum on a resting order
+
+
+def plan(target: dict[str, Decimal]):
     held, pending = current_state()
+    trades = []
 
     for symbol, want in target.items():
         have = held.get(symbol, Decimal(0)) + pending.get(symbol, Decimal(0))
         delta = want - have
 
-        if abs(delta) < Decimal("5"):     # venue minimum for a resting order
-            continue
+        if abs(delta) < MIN_SHARES:
+            continue                      # below venue minimum, skip
 
-        place(symbol, "BUY" if delta > 0 else "SELL", abs(delta))
+        trades.append({
+            "symbol": symbol,
+            "side": "BUY" if delta > 0 else "SELL",
+            "size": abs(delta),
+        })
+
+    return trades
 ```
 
-The 5-share floor is a venue rule, not a Bravado one. Orders below it are rejected, and a bot that retries them in a loop will hammer the rate limit.
+That `MIN_SHARES` guard matters more than it looks. Without it, a bot whose target is 2 shares away from actual will place a 2-share order, get rejected by the venue, and retry on the next cycle, forever, burning rate limit the entire time.
+
+## Choose an order type by size
+
+Most bots hard-code `MARKET` and pay for it on thin books. Choose deliberately:
+
+```python
+def order_for(trade, book_depth: Decimal):
+    size = trade["size"]
+
+    if size <= book_depth * Decimal("0.25"):
+        # small relative to the book: just take it
+        return {"type": "MARKET", "symbol": trade["symbol"],
+                "side": trade["side"], "size": str(size)}
+
+    # large enough to move the price: work it in over time
+    return {
+        "type": "TWAP",
+        "symbol": trade["symbol"],
+        "side": trade["side"],
+        "size": str(size),
+        "execution": {"duration_sec": 1800, "interval_sec": 60,
+                      "price_tolerance_pct": 2},
+    }
+```
+
+| Situation | Type | Why |
+| --- | --- | --- |
+| Small relative to the book | `MARKET` | The slippage is not worth managing |
+| You have a price in mind | `LIMIT` | Rests, earns the spread, 5-share minimum |
+| Would move the price | `TWAP` | Clips over a window, survives your restart |
+| Patient, want the spread | `ICEBERG` | Post-only, waits to be hit |
+
+The critical property of `TWAP` for a bot specifically: it runs **on Bravado's side**. If your process dies mid-execution, the strategy keeps going. A self-hosted scheduler dies with you, halfway through a position.
 
 ## Execute
 
 ```python
-def place(symbol, side, size, price=None):
-    payload = {
-        "type": "LIMIT" if price else "MARKET",
-        "symbol": symbol,
-        "side": side,
-    }
-    if price:
-        payload["price"] = str(price)
-        payload["size"] = str(size)
-    else:
-        payload["size"] = str(size)
+def execute(trades, book_depth=Decimal("500")):
+    for t in trades:
+        payload = order_for(t, book_depth)
+        key = str(uuid.uuid4())          # one key per intended order
+        res = write("/v2/trade/order", payload, key)
 
-    return requests.post(
-        f"{BASE}/v2/trade/order",
-        headers={**H, "Idempotency-Key": str(uuid.uuid4())},
-        json=payload,
-    ).json()
+        if res.get("warnings"):
+            print("  warnings:", res["warnings"])
 ```
 
-## Choosing an order type
+<Warning>
+  Generate the key **outside** any retry loop. Inside, every attempt carries a different key and each one that reaches the server creates its own order. This is the single most expensive mistake in this guide. See [Safe retries](/guides/safe-retries-idempotency).
+</Warning>
 
-| Situation | Type | Why |
-| --- | --- | --- |
-| Small size, need the fill | `MARKET` | Takes the book, minimum \$1 notional |
-| You have a price in mind | `LIMIT` | Rests, minimum 5 shares |
-| Size that would move the book | `TWAP` | Clips over a window, survives your restart |
-| Patient and want the spread | `ICEBERG` | Post-only, waits to be hit |
-| Following the touch | `PEGGED` | Tracks best bid or ask within a budget |
+## Run a dry cycle
 
-For anything above small size, see [Execute a large position](/guides/large-position-twap-iceberg).
+```python
+def compute_target():
+    """Your signal goes here. Returns {symbol: desired share count}."""
+    return {"71321045679252212594626385532706912750332728571942532289631379312455583992646": Decimal("250")}
+
+
+if __name__ == "__main__":
+    trades = plan(compute_target())
+    print(f"planned {len(trades)} trade(s)\n")
+    execute(trades)
+```
+
+Expected output with `DRY_RUN = True`:
+
+```text
+planned 1 trade(s)
+
+  DRY RUN  would POST /v2/trade/order  {'type': 'TWAP', 'symbol': '713210456…',
+           'side': 'BUY', 'size': '183.870968',
+           'execution': {'duration_sec': 1800, 'interval_sec': 60, 'price_tolerance_pct': 2}}
+```
+
+Note the size: the target was 250 shares but the plan is 183.87, because reconciliation found 66.13 already held or working. That subtraction is the whole point of the diff step.
 
 ## The main loop
 
 ```python
-import time
-
 def run(interval_sec=60):
     while True:
         try:
-            rebalance(compute_target())    # your signal
+            execute(plan(compute_target()))
         except requests.HTTPError as e:
             if e.response.status_code == 429:
-                time.sleep(int(e.response.headers.get("Retry-After", 30)))
+                wait = int(e.response.headers.get("Retry-After", 30))
+                print(f"  rate limited, sleeping {wait}s")
+                time.sleep(wait)
                 continue
             raise
         time.sleep(interval_sec)
 ```
 
-Set the poll interval from your actual quota rather than guessing:
+Set the interval from your actual quota rather than guessing at one:
 
 ```python
-acct = requests.get(f"{BASE}/v2/trade/account", headers=H).json()
-budget = acct["api_key"]["rate_limit_per_min"]
+acct = read("/v2/trade/account")
+budget = acct["api_key"]["rate_limit_per_min"]     # e.g. 120
+
+# three reads per cycle, leave headroom
+interval = max(10, int(60 / (budget / 3) * 2))
 ```
 
-## Things that will bite you
+## Going live
+
+Flip `DRY_RUN` to `False` and start small. Specifically:
+
+<Steps>
+  <Step title="One symbol first">
+    Run against a single market so any surprise is contained and legible.
+  </Step>
+  <Step title="Watch a restart deliberately">
+    Kill the process mid-cycle and start it again. Confirm the next plan accounts for what is already working rather than re-ordering it.
+  </Step>
+  <Step title="Then widen">
+    Only once a restart is boring should you point it at more markets.
+  </Step>
+</Steps>
+
+## Wrapping up
+
+The bot is four steps, and three of them are bookkeeping. Reconcile, diff, execute, repeat. The signal, the interesting part, plugs into one function.
+
+That ratio is deliberate. Most bots that lose money do it through operational failures rather than a bad signal: duplicated positions after a restart, orders retried into existence, a TWAP that nobody was counting. Getting the bookkeeping right is what lets the signal be the thing that matters.
+
+## Frequently asked questions
 
 <AccordionGroup>
-  <Accordion title="Treating PENDING as a failure">
-    A managed strategy sits in `PENDING` until its entry conditions are met. A bot that cancels and re-places on `PENDING` will churn fees and never let a strategy work.
+  <Accordion title="Why reconcile every cycle rather than just at startup?">
+    Your bot is not the only thing changing the account. Strategies fill between cycles, stops trigger, and someone may trade manually. Reading fresh state each pass makes all of that harmless instead of requiring you to anticipate it.
   </Accordion>
 
-  <Accordion title="Parsing numbers as floats">
-    Every numeric field is a JSON string. `float("0.1") + float("0.2")` will eventually produce a size the venue rejects. Use `Decimal` throughout.
+  <Accordion title="Why does PENDING count as committed size?">
+    A `PENDING` strategy has been accepted and is waiting on its entry conditions. It has not filled yet, but it will. Treating it as absent means ordering the same exposure twice and getting both.
   </Accordion>
 
-  <Accordion title="Generating the idempotency key inside the retry loop">
-    Each attempt then carries a different key, and every one that reaches the server creates its own order. Generate once per intended order. See [Safe retries](/guides/safe-retries-idempotency).
+  <Accordion title="My bot cancelled everything but a TWAP kept running.">
+    `POST /v2/trade/orders/cancel-all` clears CLOB orders only. Managed strategies must be cancelled individually with `DELETE /v2/trade/strategies/{id}`. Iterate over `/v2/trade/strategies` and cancel each `ACTIVE` or `PENDING` record.
   </Accordion>
 
-  <Accordion title="Assuming cancel-all clears everything">
-    `POST /v2/trade/orders/cancel-all` clears CLOB orders only. Running strategies continue. Cancel those individually with `DELETE /v2/trade/strategies/{id}`.
+  <Accordion title="Why is my small order rejected repeatedly?">
+    Resting orders need at least 5 shares and market orders need \$1 notional. Without a minimum-size guard, a bot will retry a sub-minimum order every cycle and consume its rate limit doing so.
   </Accordion>
 
-  <Accordion title="Ignoring warnings on a 200">
-    Order responses carry a `warnings[]` array for non-fatal problems such as partial fills and clamped prices. A bot that only checks status codes will silently misreport its own fills.
+  <Accordion title="Should I use floats for sizes if I round them anyway?">
+    No. Values arrive as strings to preserve precision, and float arithmetic accumulates error that eventually produces a size the venue rejects. `Decimal` costs nothing here.
+  </Accordion>
+
+  <Accordion title="How do I know if an order actually filled?">
+    Check the response body rather than the status code alone. A `200` can carry `warnings[]` describing a partial fill or a clamped price, and bracket legs report their own failures in `brackets.*.error`.
   </Accordion>
 </AccordionGroup>
 
-## Next
+## Resources
 
-- [Stop-loss and take-profit](/guides/stop-loss-take-profit)
-- [Execute a large position](/guides/large-position-twap-iceberg)
-- [Track order and strategy state](/guides/track-order-and-strategy-state)
+- [Place an order](/guides/place-an-order), all eight order types in detail
+- [Execute a large position](/guides/large-position-twap-iceberg), TWAP and Iceberg tuning
+- [Track order and strategy state](/guides/track-order-and-strategy-state), where each order type lives
+- [Safe retries](/guides/safe-retries-idempotency), idempotency keys in depth
+- [Trade API reference](/products/trade-api), full field documentation
+- [Rate limits](/reference/rate-limits), quotas and backoff
