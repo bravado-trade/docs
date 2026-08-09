@@ -1,150 +1,327 @@
 ---
 title: "How to Build a Polymarket Copy Trading Bot"
 sidebarTitle: "Copy-trading bot"
-description: "Build a copy trading bot for Polymarket: select leaders on evidence, subscribe with risk controls, and supervise mirrored fills."
+description: "Build a Polymarket copy trading bot with the Bravado API: rank leaders on evidence, subscribe with sizing and risk controls, paper trade it, then go live."
 icon:
   name: "bot"
   library: "lucide"
 ---
 
-Most of copy-trading is already handled by the Copytrade API: fill detection, sizing, and execution happen on Bravado's side. What you build is the layer around it, deciding who to follow, applying your own rules, and reacting when things drift.
+## Overview
 
-## What you are actually building
+Most copy trading bots pick a leader off a leaderboard and mirror everything they do. That works right up until the wallet you copied turns out to have made its entire return on one correct bet, and you are now mirroring a trader with no repeatable edge into markets they know nothing about.
 
-<Steps>
-  <Step title="Selection">
-    Rank candidate wallets and filter on evidence, not headline PnL.
-  </Step>
-  <Step title="Subscription">
-    Create a copytrade subscription with sizing, filters, and risk controls.
-  </Step>
-  <Step title="Supervision">
-    Watch mirrored performance and pause or unsubscribe when the thesis breaks.
-  </Step>
-</Steps>
+The hard part of copy trading is not the mirroring. Bravado already does that: it watches the leader, detects fills, sizes your order, and executes. The hard part is **selection**, deciding who is worth following, in which markets, at what size, and knowing when to stop.
 
-You are not polling the chain, matching fills, or racing to execute. That is the part you are buying.
+This guide builds a follower service that treats selection as the product.
 
-## A minimal follower service
+<Note>
+  Read time: about 15 minutes. Working knowledge of Python and REST APIs assumed. No Polymarket experience needed.
+</Note>
+
+## TL;DR
+
+- Bravado's Copytrade API handles fill detection, sizing, and execution. You build the layer that chooses leaders and supervises them.
+- Rank candidates with `GET /leaderboard`, then **reject most of them** using trade count and win rate, because a 30-day PnL board is full of one-lucky-bet wallets.
+- Narrow each subscription to the category where the leader actually has an edge, using `GET /traders/{address}/categories`.
+- Run in `simulation: true` until the numbers are boring. Only then go live.
+- Copytrade costs **25 bips per side**, so a high-frequency leader is expensive. Check fill counts before committing.
+
+## What you will do
+
+- Pull a leaderboard of Polymarket traders and inspect their real records
+- Filter out wallets whose track record is a single outsized win
+- Identify the market category where a leader is genuinely profitable
+- Create a copytrade subscription with proportional sizing and category filters
+- Paper trade the whole thing against live prices without spending anything
+- Add a supervisor that pauses a subscription when it drifts past your tolerance
+- Switch to live trading once the simulation holds up
+
+## What you will need
+
+**Knowledge**
+
+- Python 3.9 or later, and comfort with REST APIs
+- No prior Polymarket or prediction market experience required
+
+**Tools and access**
+
+- A Bravado API key from the [Bravado Portal](https://portal.bravadotrade.com/)
+- Scopes: `trade.read` and `trade.execute`
+- `pip install requests`
+- USDC collateral in your Bravado wallet, but only for the live step at the end
+
+```bash
+export BRAVADO_API_KEY="your-bearer-token"
+```
+
+<Note>
+  Every read in this guide works on any public wallet with no funded account, so you can complete the entire selection and simulation flow before depositing anything.
+</Note>
+
+## How the bot is built
+
+Three layers, deliberately independent so each can be tested on its own:
+
+| Layer | Job | Who does it |
+| --- | --- | --- |
+| **Discovery** | Find candidate wallets | You, via the Data API |
+| **Decision** | Reject most of them | You, in plain code |
+| **Execution** | Mirror fills as they land | Bravado |
+
+The decision layer is pure logic with no side effects, which means you can run it against historical wallets and see what it would have picked without touching an order. That is the layer worth iterating on.
+
+## Set up the client
+
+Two helpers cover everything: a plain reader, and a writer that attaches an idempotency key to every mutating call.
 
 ```python
 import os, uuid, requests
+from decimal import Decimal
 
 BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
 H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
 
 
+def read(path, **params):
+    r = requests.get(f"{BASE}{path}", headers=H, params=params or None, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+
 def write(method, path, body=None):
-    """Any mutating call: one idempotency key per intended action."""
-    return requests.request(
+    """One idempotency key per intended action, so a retry cannot duplicate it."""
+    r = requests.request(
         method, f"{BASE}{path}",
         headers={**H, "Idempotency-Key": str(uuid.uuid4())},
-        json=body,
-    ).json()
+        json=body, timeout=15,
+    )
+    r.raise_for_status()
+    return r.json()
+```
 
+<Warning>
+  Generate the idempotency key once per intended action, not once per HTTP attempt. Putting `uuid4()` inside a retry loop means every attempt carries a different key, and each one that reaches the server creates its own subscription. See [Safe retries](/guides/safe-retries-idempotency).
+</Warning>
 
-def shortlist(window="30d", limit=25, min_trades=50, min_win_rate=0.55):
-    """Rank by PnL, then keep only wallets with a real track record."""
-    board = requests.get(
-        f"{BASE}/leaderboard", headers=H,
-        params={"window": window, "limit": limit},
-    ).json()
+## Discover candidates
 
+Start with traders ranked by realized PnL over a rolling window:
+
+```python
+def candidates(window="30d", limit=25):
+    board = read("/leaderboard", window=window, limit=limit)
+    return [t["address"] for t in board["traders"]]
+```
+
+This is the easy part, and also the part that misleads people. A 30-day PnL ranking answers "who made the most money", which is not the same question as "who is worth copying".
+
+## Screen them properly
+
+Three checks, each rejecting a different kind of bad candidate.
+
+**Did they trade enough for the record to mean anything?**
+
+```python
+def has_track_record(addr, min_trades=50):
+    m = read(f"/traders/{addr}/metrics")
+    return int(m["trade_count"]) >= min_trades
+```
+
+A wallet with eight trades and a large positive PnL made one good call. Copying it means betting that lightning strikes twice.
+
+**Do they win consistently, or rarely and hugely?**
+
+```python
+def wins_consistently(addr, min_win_rate=0.55):
+    m = read(f"/traders/{addr}/metrics")
+    return Decimal(m["win_rate"]) >= Decimal(str(min_win_rate))
+```
+
+A trader who wins 20% of the time but wins enormously can be genuinely skilled. They are still a poor copy target, because you will eat every small loss while needing to stay subscribed long enough to catch a rare win.
+
+**Where is the edge actually concentrated?**
+
+```python
+def best_category(addr):
+    cats = read(f"/traders/{addr}/categories")
+    best = max(cats["categories"], key=lambda c: Decimal(c["realized_pnl"]))
+    return best["category"]
+```
+
+This is the check that changes outcomes most. Traders are rarely good at everything: someone who reads politics well may be guessing at sports. Copying them everywhere means copying their guesses too.
+
+Putting it together:
+
+```python
+def shortlist(window="30d", limit=25):
     keep = []
-    for row in board["traders"]:
-        addr = row["address"]
-        m = requests.get(f"{BASE}/traders/{addr}/metrics", headers=H).json()
-
-        # a single lucky bet should not qualify
-        if m["trade_count"] < min_trades:
+    for addr in candidates(window, limit):
+        if not has_track_record(addr):
             continue
-        if float(m["win_rate"]) < min_win_rate:
+        if not wins_consistently(addr):
             continue
-
-        cats = requests.get(f"{BASE}/traders/{addr}/categories", headers=H).json()
-        best = max(cats["categories"], key=lambda c: float(c["realized_pnl"]))
-        keep.append({"address": addr, "category": best["category"]})
-
+        keep.append({"address": addr, "category": best_category(addr)})
     return keep
+```
 
+<Note>
+  Expect this to reject most of the board. That is the point. If it keeps twenty out of twenty-five, your thresholds are too loose to be doing any work.
+</Note>
 
+## Subscribe
+
+Mirror the leader, but only where they have shown an edge, and start in simulation:
+
+```python
 def follow(addr, category, fraction="0.10", simulate=True):
-    """Mirror a leader, but only in the category where they have an edge."""
     return write("POST", "/v2/trade/copytrade", {
         "leader_address": addr,
         "sizing": {"mode": "proportional", "value": fraction},
         "filters": {"categories": [category]},
         "simulation": simulate,
     })
-
-
-def review(sub_id, max_drawdown=-0.15):
-    """Pause a subscription that has drifted past tolerance."""
-    pnl = requests.get(f"{BASE}/v2/trade/copytrade/pnl", headers=H).json()
-    row = next(s for s in pnl["subscriptions"] if s["id"] == sub_id)
-
-    if float(row["return_pct"]) < max_drawdown:
-        write("PATCH", f"/v2/trade/copytrade/{sub_id}/status", {"status": "paused"})
-        return "paused"
-    return "ok"
-
-
-if __name__ == "__main__":
-    for c in shortlist():
-        sub = follow(c["address"], c["category"])
-        print("following", c["address"], "in", c["category"], "->", sub["id"])
 ```
 
-<Warning>
-  Response field names above follow the documented shapes, but confirm them against the [endpoint reference](/products/copytrade-api) before running this against real money. Paper-trade first with `simulation: true`.
-</Warning>
+### Choosing a sizing mode
 
-## The selection filter is the product
+| Mode | Behaviour | Use when |
+| --- | --- | --- |
+| `proportional` | A fixed fraction of the leader's size | The leader's account is much larger than yours |
+| `fixed` | The same stake on every mirrored fill | You want predictable exposure per trade |
+| `capped` | Proportional, with a per-trade ceiling | The leader's sizing is erratic |
 
-The two checks in `shortlist()` do the real work:
+`proportional` at `0.10` means a \$10,000 position from the leader becomes \$1,000 for you. It scales with their conviction, which is usually what you want, provided you trust the conviction.
 
-- **`trade_count`** rejects wallets whose record is one correct large bet. A 30-day PnL leaderboard is full of them.
-- **`win_rate`** rejects wallets that make money on rare outsized wins while losing steadily. Copying those means eating the losses without necessarily catching the win.
+<Note>
+  The leader needs no Bravado account and is never notified. Any public wallet can be followed.
+</Note>
 
-Then `categories` narrows the subscription to where the leader demonstrably has an edge, rather than following them into markets they happen to be bad at.
+## Run a dry cycle
 
-## Run it in simulation until it is boring
+Nothing so far has spent money. Run the selection end to end and look at what it picked:
 
 ```python
-sim = requests.get(f"{BASE}/v2/trade/copytrade/simulation", headers=H).json()
+if __name__ == "__main__":
+    picks = shortlist()
+    print(f"screened {len(picks)} leaders\n")
+    for p in picks:
+        sub = follow(p["address"], p["category"])
+        print(f'  {p["address"][:10]}…  {p["category"]:<12}  sub={sub["id"]}')
 ```
 
-Simulation executes the whole subscription against live prices without touching the chain. Watch for:
+Expected output:
 
-- **Mirrored return diverging from the leader's own PnL.** Usually sizing or filters.
-- **Fill counts far higher than expected.** At 25 bips per side, a busy leader is expensive.
-- **Insufficient-funds events.** Your collateral cannot keep up with the leader's cadence.
+```text
+screened 3 leaders
 
-Reset between experiments:
+  0x3a2b1c4d…  politics      sub=cts_01hxab2c3d
+  0x9f8e7d6c…  sports        sub=cts_01hxab4e5f
+  0x1122aabb…  crypto        sub=cts_01hxab6g7h
+```
+
+Twenty-five candidates in, three out. If your run keeps fifteen, tighten `min_trades` and `min_win_rate` until it does not.
+
+## Watch the simulation
+
+Simulation runs the entire subscription against live prices without touching the chain:
+
+```python
+sim = read("/v2/trade/copytrade/simulation")
+```
+
+Three things to look for before going live:
+
+<AccordionGroup>
+  <Accordion title="Your return diverging from the leader's">
+    Compare simulated return against the leader's own PnL over the same period with `GET /traders/{address}/pnl`. Large divergence usually means your sizing mode or category filter is doing something you did not intend, not that the leader changed.
+  </Accordion>
+
+  <Accordion title="Fill counts higher than expected">
+    Copytrade is charged at 25 bips per side, against 10 bips on the Trade API. A leader who trades constantly can turn a profitable strategy into a break-even one purely through fees. Count fills over a week before committing.
+  </Accordion>
+
+  <Accordion title="Insufficient funds events">
+    If your collateral cannot keep pace with the leader's cadence, some fills will be skipped, and the ones that get skipped are not random. Either raise collateral or lower the proportional fraction.
+  </Accordion>
+</AccordionGroup>
+
+Reset between experiments so runs do not contaminate each other:
 
 ```python
 write("POST", f"/v2/trade/copytrade/{sub_id}/simulation/reset")
 ```
 
+## Supervise
+
+A leader who was good for six months can stop being good, and nothing about a subscription notices that for you. Add a check that runs on a schedule:
+
+```python
+def review(sub_id, max_drawdown="-0.15"):
+    pnl = read("/v2/trade/copytrade/pnl")
+    row = next(s for s in pnl["subscriptions"] if s["id"] == sub_id)
+
+    if Decimal(row["return_pct"]) < Decimal(max_drawdown):
+        write("PATCH", f"/v2/trade/copytrade/{sub_id}/status", {"status": "paused"})
+        return "paused"
+    return "ok"
+```
+
+Pausing keeps the configuration so you can resume. `DELETE` discards it. Prefer pausing while you work out whether the drawdown is noise or a broken thesis.
+
 ## Going live
+
+Once the simulation is dull rather than exciting:
 
 ```python
 write("PATCH", f"/v2/trade/copytrade/{sub_id}", {"simulation": False})
 ```
 
-Keep `review()` on a schedule. A leader who was good for six months can stop being good, and nothing about a subscription notices that on your behalf.
+Go live on one subscription first, not all three. The failure modes that matter (fee drag, collateral pacing, fills you did not anticipate) show up faster and cost less when isolated.
 
-## Operational details worth getting right
+<Warning>
+  Response field names in this guide follow the documented shapes, but confirm them against the [Copytrade API reference](/products/copytrade-api) before running against real money. A typo in a field name fails loudly; a wrong assumption about units fails quietly.
+</Warning>
 
-| Concern | What to do |
-| --- | --- |
-| Duplicate subscriptions | Creating one for a leader you already follow returns `409 Conflict`. Treat it as already-done, not an error. |
-| Rate limits | Read `rate_limit_per_min` from `GET /v2/trade/account` rather than hard-coding a poll interval. |
-| Numeric precision | Every number is a JSON string. Parse with `Decimal`, never `float`. |
-| Pausing vs unsubscribing | `PATCH /status` keeps the configuration; `DELETE` discards it. |
+## Wrapping up
 
-## Next
+The bot is three layers, and only one of them is yours. Bravado detects the leader's fills, sizes your order, applies your risk controls, and executes. What you built is the judgement: which wallets pass, in which categories, at what fraction, and when to stop.
 
-- [Track a whale wallet](/guides/track-whale-wallet)
-- [Safe retries](/guides/safe-retries-idempotency)
-- [Copytrade API reference](/products/copytrade-api)
+Two design choices carry most of the value. **Simulation defaults to on**, so the expensive mistake requires a deliberate act to make. And **the screening functions are pure**, taking an address and returning a boolean, so you can run them over historical wallets and see what they would have chosen without placing a single order.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Why filter by category instead of just copying everything?">
+    Because edges are usually narrow. A trader with a strong record in politics markets may be no better than random in sports, and copying them everywhere means paying 25 bips a side to mirror guesses. The category endpoint tells you where their PnL actually came from.
+  </Accordion>
+
+  <Accordion title="Does the leader know I am copying them?">
+    No. They need no Bravado account and receive no notification. Any public wallet can be followed.
+  </Accordion>
+
+  <Accordion title="What happens if I run out of collateral mid-subscription?">
+    Fills that cannot be funded are skipped, and skipped fills are not randomly distributed, so your mirrored performance will diverge from the leader's in ways that are hard to reason about. Watch for these in simulation and size accordingly.
+  </Accordion>
+
+  <Accordion title="Why does creating a subscription sometimes return 409?">
+    You already have one for that leader. Treat `409 Conflict` as already-done rather than an error, and fetch the existing subscription instead of retrying.
+  </Accordion>
+
+  <Accordion title="Can I copy more than one leader at once?">
+    Yes, each is a separate subscription with its own sizing and filters. Bear in mind that two leaders trading the same market both consume the same collateral pool.
+  </Accordion>
+
+  <Accordion title="Why parse numbers with Decimal rather than float?">
+    Every numeric field is returned as a JSON string to preserve precision. Parsing as a float reintroduces rounding error, and a size that fails validation at the venue is an unpleasant way to discover it. See [Numeric conventions](/reference/numeric-conventions).
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Copytrade API reference](/products/copytrade-api), endpoints, sizing modes, filters, and risk controls
+- [Track a whale wallet](/guides/track-whale-wallet), the manual version of the selection process
+- [Safe retries](/guides/safe-retries-idempotency), idempotency keys in depth
+- [Data API](/products/data-api), the wallet analytics used for screening
+- [Simulation endpoints](/api/copytrade/simulation), paper trading reference
+- [Rate limits](/reference/rate-limits), polling budgets and backoff
