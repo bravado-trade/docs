@@ -1,49 +1,92 @@
 ---
 title: "How to Generate a US Tax Statement for Polymarket Trading"
 sidebarTitle: "Generate a tax statement"
-description: "Pull Form-8949-style disposition rows for a Polymarket wallet, reconcile them, and export for a preparer."
+description: "Pull Form-8949-style disposition rows for a Polymarket wallet, reconcile them against an R8 certificate, and export something a preparer can check."
 icon:
   name: "receipt"
   library: "lucide"
 ---
 
-Prediction market tax reporting is awkward because a position can end in three different ways: sold on the book, redeemed after resolution, or expired worthless. Each is a disposition, and reconstructing them from raw fills is where home-grown tooling usually goes wrong.
+## Overview
 
-Bravado computes them from on-chain settlement records using a share-level FIFO cost-basis engine, so the output is derived rather than estimated.
+Tax reporting for prediction markets is harder than for spot trading, and not for the reason people expect. The difficulty is not volume. It is that **a position can end three different ways, and only one of them looks like a trade**.
+
+You can sell shares on the book. You can redeem winning shares after resolution. Or your shares can expire worthless, which produces a realized loss with no transaction anywhere that resembles a sale.
+
+Tooling built by reading a fill history catches the first case, sometimes catches the second, and silently misses the third. That understates losses, which is the direction nobody discovers by accident.
+
+This guide pulls dispositions that account for all three, reconciles them, and exports something defensible.
 
 <Warning>
-  This guide covers pulling and checking the data. It is not tax advice. Rules vary by jurisdiction and by how the taxpayer's activity is characterised. A qualified preparer should make those calls.
+  This covers pulling and checking data. It is **not tax advice**. Rules vary by jurisdiction and by how a taxpayer's activity is characterised. A qualified preparer should make those calls.
 </Warning>
+
+<Note>
+  Read time: about 13 minutes. No prior tax engineering experience assumed.
+</Note>
+
+## TL;DR
+
+- `GET /traders/{address}/tax-report` gives per-year totals. `GET /traders/{address}/statements/r1` gives the line items.
+- Rows are computed from **on-chain settlement records** replayed through a share-level FIFO cost-basis engine, not estimated from fills.
+- **Paginate.** Missing the tail silently understates gains.
+- Reconcile with `GET /traders/{address}/reconciliation`, the R8 certificate.
+- **Do not reconstruct cost basis yourself.** Splits, merges, and redemptions are not buys and sells.
+- `503` with `available: false` means still computing, not failed.
+
+## What you will do
+
+- Pull a per-year tax summary for a wallet
+- Pull the underlying Form-8949-style disposition rows, with pagination
+- Run two independent reconciliation checks before trusting the numbers
+- Understand the three ways a position ends and why the third is easy to miss
+- Handle the processing state for wallets with long histories
+- Export to CSV without reintroducing rounding error
+
+## What you will need
+
+**Knowledge**
+
+- Comfort with paginated APIs and CSV export
+- No tax expertise required to follow the mechanics
+
+**Tools and access**
+
+- A Bravado API key. Data API reads work on **any public wallet**, so you can run this against an address you do not control.
+- Python with `requests`
+
+```bash
+export BRAVADO_API_KEY="your-bearer-token"
+export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+```
 
 ## Start with the summary
 
 ```bash
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/tax-report \
+curl -G $BASE/traders/0xWALLET/tax-report \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -d year=2025
 ```
 
-Per-calendar-year totals: short-term and long-term capital gains, income by kind, and capital flows. This is the number that goes on a return, and the detail below is what supports it.
+Per-calendar-year totals: short-term and long-term capital gains, income by kind, and capital flows. This is the number that ends up on a return. Everything below exists to support it.
 
 ## Then the line items
 
-Form-8949-style disposition rows, one per closed lot:
-
 ```bash
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/statements/r1 \
+curl -G $BASE/traders/0xWALLET/statements/r1 \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -d year=2025 -d limit=500
 ```
 
-Each row carries acquisition date, disposition date, proceeds, cost basis, and the resulting gain or loss.
+Each row is a closed lot: acquisition date, disposition date, proceeds, cost basis, and the resulting gain or loss. That is the Form 8949 shape, which is why a preparer can work from it directly.
 
 <Note>
-  Use the standalone `/statements/r1` endpoint rather than the full `/statements` response for active wallets. The complete §20 statement contains all eight reports and gets large fast.
+  Use the standalone `/statements/r1` endpoint rather than the full `/statements` response for active wallets. The complete §20 statement carries all eight reports (R1 through R8) and gets large quickly. R1 is the only one most tax workflows need.
 </Note>
 
-## Pull every page
+## Paginate properly
 
-Disposition sets run long. Missing the tail silently understates gains:
+Disposition sets run long, and a truncated pull is worse than no pull because it looks complete.
 
 ```python
 import os, requests
@@ -55,93 +98,171 @@ H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
 
 def dispositions(address, year):
     rows, cursor = [], None
+
     while True:
         params = {"year": year, "limit": 500}
         if cursor:
             params["cursor"] = cursor
 
         r = requests.get(f"{BASE}/traders/{address}/statements/r1",
-                         headers=H, params=params)
+                         headers=H, params=params, timeout=60)
 
         if r.status_code == 503 and not r.json().get("available", True):
             raise RuntimeError("statement still processing, retry shortly")
 
+        r.raise_for_status()
         page = r.json()
         rows.extend(page["rows"])
+
         cursor = page.get("next_cursor")
         if not cursor:
             return rows
-
-
-rows = dispositions("0xWALLET", 2025)
-total = sum(Decimal(r["gain_loss"]) for r in rows)
-print(f"{len(rows)} dispositions, net {total:,.2f}")
 ```
+
+<Warning>
+  Raising `limit` is not a substitute for following the cursor. Follow `next_cursor` until it is absent, or you will confidently report a partial year.
+</Warning>
 
 ## Reconcile before you file
 
-This is the step that makes the output defensible. The R8 certificate verifies the statement is internally consistent:
+This is what makes the output defensible rather than merely available.
+
+### The R8 certificate
 
 ```bash
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/reconciliation \
+curl -G $BASE/traders/0xWALLET/reconciliation \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -d year=2025
 ```
 
-Two independent checks worth running yourself:
+R8 verifies the statement is internally consistent: that the reports agree with each other and with the underlying settlement data. It exists precisely so a third party does not have to take the numbers on trust.
+
+### Two checks of your own
 
 <Steps>
   <Step title="Line items should sum to the summary">
-    Total `gain_loss` across R1 rows should match the capital gains in the tax report. A mismatch means a page was missed or the year filter differs between the two calls.
+    Total `gain_loss` across R1 rows should match the capital gains in the tax report. A mismatch almost always means a missed page or a year filter that differs between the two calls.
   </Step>
-  <Step title="Every disposition should trace to a trade">
-    Cross-check against `GET /traders/{address}/trades` for the same period. Every disposition should correspond to a sale, a redemption, or an expiry.
+  <Step title="Every disposition should trace to an event">
+    Cross-check against `GET /traders/{address}/trades` for the period. Every disposition should correspond to a sale, a redemption, or an expiry. Anything that traces to nothing is worth asking about before filing.
   </Step>
 </Steps>
 
-<Warning>
-  Do not reconstruct cost basis yourself from the trade log. Splits, merges, and redemptions are not ordinary buys and sells, and treating them as such produces basis that does not match the on-chain reality. The R1 rows already account for them.
-</Warning>
+```python
+rows = dispositions("0xWALLET", 2025)
+line_total = sum(Decimal(r["gain_loss"]) for r in rows)
 
-## Three ways a position ends
+report = requests.get(f"{BASE}/traders/0xWALLET/tax-report",
+                      headers=H, params={"year": 2025}).json()
+summary_total = Decimal(report["short_term_gain"]) + Decimal(report["long_term_gain"])
 
-Worth understanding, because they look different in the data and users will ask:
+print(f"{len(rows)} dispositions")
+print(f"  line items: {line_total:>14,.2f}")
+print(f"  summary:    {summary_total:>14,.2f}")
+print(f"  match:      {line_total == summary_total}")
+```
+
+Expected output:
+
+```text
+1,284 dispositions
+  line items:      12,481.37
+  summary:         12,481.37
+  match:      True
+```
+
+If `match` is `False`, stop and find out why before anything downstream uses these numbers.
+
+## The three ways a position ends
 
 | Ending | What happens | Appears as |
 | --- | --- | --- |
-| Sold on the book | Shares sold before resolution | Ordinary disposition at the sale price |
-| Redeemed after resolution | Winning shares redeemed at \$1 | Disposition with proceeds of \$1 per share |
-| Expired worthless | Losing shares settle at \$0 | Disposition with zero proceeds, realising the full loss |
+| **Sold on the book** | Shares sold before resolution | Ordinary disposition at the sale price |
+| **Redeemed after resolution** | Winning shares claimed at \$1 | Disposition with proceeds of \$1 per share |
+| **Expired worthless** | Losing shares settle at \$0 | Disposition with zero proceeds, full loss realized |
 
-That third case matters: the loss is real and realised, but nothing about it looks like a trade. Tooling that only reads fills misses it entirely.
+That third row is the one that matters most, and the one home-grown tooling misses.
 
-## Handling 503
+Nothing about it looks like a trade. There is no counterparty, no fill, no transaction to find in a trade log. The shares simply stop being worth anything when the market resolves against you. It is still a **realized loss**, and one that is often material, because losing outcomes are the most common way a prediction market position ends.
 
-Tax and PMWAS endpoints return `503` with `available: false` while a wallet is still being computed. For a wallet with long history this can take a while on first request.
+<Warning>
+  Do not reconstruct cost basis from the trade log. Splits mint a complete outcome set from collateral; merges destroy one; redemptions convert shares to cash at a fixed price. Treating any of those as ordinary buys and sells produces a basis that disagrees with the chain, and the error compounds with account age. The R1 rows already account for all of it.
+</Warning>
+
+## Handle the processing state
+
+Tax and PMWAS endpoints compute a wallet's full history on first request. For a long-lived wallet that takes a while.
 
 ```python
-if r.status_code == 503 and not r.json().get("available", True):
-    # expected, not an error: poll on an interval and show a processing state
-    ...
+def dispositions_with_wait(address, year, tries=10, delay=30):
+    for _ in range(tries):
+        try:
+            return dispositions(address, year)
+        except RuntimeError:
+            time.sleep(delay)      # still computing, not failed
+    raise TimeoutError("statement did not become available")
 ```
 
-Do not treat it as a hard failure or retry aggressively.
+A `503` with `available: false` is a state, not an error. Surface it as "preparing your statement" rather than a failure, and poll on a sane interval.
 
-## Exporting
+## Export
 
 ```python
 import csv
 
+FIELDS = ["acquired_at", "disposed_at", "asset", "quantity",
+          "proceeds", "cost_basis", "gain_loss", "term"]
+
 with open("dispositions-2025.csv", "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=rows[0].keys())
+    w = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
     w.writeheader()
     w.writerows(rows)
 ```
 
-Keep values as strings on the way out. Converting to float for a CSV reintroduces the rounding the FIFO engine exists to avoid.
+<Warning>
+  Keep values as strings on the way out. Converting to float for a CSV reintroduces exactly the rounding error the FIFO engine exists to avoid, and a preparer reconciling your export against the API will find the discrepancy before you do.
+</Warning>
 
-## Next
+## Wrapping up
 
-- [Build a PnL leaderboard](/guides/pnl-leaderboard)
-- [Data API reference](/products/data-api)
-- [Numeric conventions](/reference/numeric-conventions)
+Two calls give you the numbers, one gives you the proof, and two checks of your own make it defensible.
+
+The conceptual point worth carrying: **a prediction market position ends three ways, and the most common one leaves no trace in a trade log.** Any tax tool built on fills alone will understate losses. That is the reason to use derived dispositions rather than rolling your own.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Why not compute cost basis from the trade history myself?">
+    Because splits, merges, and redemptions are not buys and sells. A split mints a complete outcome set from collateral, a merge destroys one, and a redemption converts shares at a fixed price. Treating them as trades produces a basis that drifts further from reality the longer the account has been active.
+  </Accordion>
+
+  <Accordion title="My line items do not sum to the summary.">
+    Almost always a missed page or a mismatched year filter. Confirm you followed `next_cursor` to the end and that both calls used the same year.
+  </Accordion>
+
+  <Accordion title="What is the R8 certificate for?">
+    It verifies the statement is internally consistent, so a preparer or auditor can check the numbers rather than trusting them. Useful whenever someone other than you has to accept the output.
+  </Accordion>
+
+  <Accordion title="Why does a losing position appear as a disposition?">
+    Because it is one. The shares settled at \$0 and the loss is realized, even though no sale occurred. Omitting it understates losses.
+  </Accordion>
+
+  <Accordion title="The endpoint returned 503. Is something broken?">
+    No. `available: false` means the wallet's history is still being computed, which happens on first request for wallets with long histories. Poll rather than failing.
+  </Accordion>
+
+  <Accordion title="Can I run this for a wallet I do not control?">
+    Yes. Every Data API read works on any public address, with no permission from the owner and no funded account of your own.
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Tax report endpoint](/api/analytics/trader-tax-report), per-year summary reference
+- [R1 dispositions](/api/analytics/trader-statements-r1), line item reference
+- [R8 reconciliation](/api/analytics/trader-reconciliation), certificate reference
+- [Data API](/products/data-api), the accounting model behind these numbers
+- [Display positions and PnL](/guides/display-positions-and-pnl), realized versus unrealized
+- [Numeric conventions](/reference/numeric-conventions), why values are strings
+- [Pagination](/reference/pagination), cursor behaviour on large statements

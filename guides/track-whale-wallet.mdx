@@ -1,117 +1,198 @@
 ---
 title: "How to Track a Whale Wallet and Mirror Its Trades"
 sidebarTitle: "Track a whale wallet"
-description: "Find a profitable Polymarket trader with the Data API, verify their record, then mirror their fills with copy trading."
+description: "Find a profitable Polymarket trader with the Data API, verify their record properly, then mirror their fills with configurable sizing and risk controls."
 icon:
   name: "users-round"
   library: "lucide"
 ---
 
-Copying a wallet is easy. Choosing the right wallet is the hard part, and it is where the Data API earns its place: you can inspect any public address before committing a cent.
+## Overview
 
-## Step 1: find candidates
+Copying a wallet is one API call. Choosing the right wallet is the entire problem, and it is the part a leaderboard actively works against you on.
 
-Rank traders by realized PnL over a window:
+A 30-day PnL ranking answers "who made the most money recently". It does not distinguish a trader with a repeatable edge from someone who made one correct large bet, and the second group ranks higher, because one enormous win beats many steady ones on a leaderboard sorted by total.
 
-```bash
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
-  -d window=30d \
-  -d limit=25
-```
-
-Or by volume, which surfaces active traders rather than lucky ones:
-
-```bash
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
-  -d window=30d
-```
+This guide is about the verification step in between. Everything here is read-only until the final section, so you can complete the whole selection process without funding anything.
 
 <Note>
-  The Data API is read-only and works on any public address, so this whole step needs no funded account.
+  Read time: about 13 minutes. If you want the automated version of this, see [Build a copy-trading bot](/guides/copy-trading-bot-50-lines).
 </Note>
 
-## Step 2: check the record properly
+## TL;DR
 
-A high PnL number on its own tells you very little. Three things separate a trader worth following from one who got lucky once.
+- `GET /leaderboard` ranks by realized PnL, `/leaderboard/volume` by USDC traded. They surface different people.
+- **Verify before subscribing**: trade count, equity curve shape, and category concentration.
+- A trader good in one category is worth copying **only in that category**.
+- Subscribe with `simulation: true` and leave it there until the numbers are dull.
+- Copytrade costs **25 bips per side** against 10 on the Trade API, so a busy leader is expensive.
+- Pause with `PATCH /status`, which keeps configuration. `DELETE` discards it.
 
-**Was it one trade or many?**
+## What you will do
+
+- Pull candidates from two different leaderboards and understand what each is telling you
+- Check a wallet's real record across three dimensions
+- Identify the market category where the edge actually lives
+- Subscribe with sizing and filters that reflect what you found
+- Paper trade it against live prices
+- Go live, and know what to watch afterwards
+
+## What you will need
+
+**Knowledge**
+
+- Comfort with REST APIs. No prediction market background required.
+
+**Tools and access**
+
+- A Bravado API key. Selection and simulation need no collateral.
+- `trade.execute` only for the final live step
 
 ```bash
-curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/metrics \
+export BRAVADO_API_KEY="your-bearer-token"
+export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+```
+
+## Step 1: pull candidates
+
+Two rankings, two different questions:
+
+```bash
+# who made the most money
+curl -G $BASE/leaderboard \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -d window=30d -d limit=25
+
+# who trades the most
+curl -G $BASE/leaderboard/volume \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -d window=30d -d limit=25
+```
+
+| Ranking | Surfaces | Fails to surface |
+| --- | --- | --- |
+| PnL | Profitable traders | Whether the profit was one bet or a hundred |
+| Volume | Active traders | Whether the activity is profitable at all |
+
+For copy trading, pull both and look at the intersection. A wallet high on **both** is active *and* profitable, which is a much stronger starting signal than either alone.
+
+<Note>
+  Every read here works on any public address with no funded account and no permission from the wallet owner.
+</Note>
+
+## Step 2: verify the record
+
+Three checks, each catching a different kind of false positive.
+
+### Was it one trade or many?
+
+```bash
+curl $BASE/traders/0xWALLET/metrics \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 
-Win rate and hold time tell you whether the record is a pattern or a single outsized bet.
+Look at trade count and win rate together. A wallet with 12 trades and a large PnL made one good call. Copying it is a bet that lightning strikes twice, and you will be paying 25 bips a side for the privilege of finding out.
 
-**Is the equity curve steady or one spike?**
+A useful floor is somewhere around 50 trades before a record means anything.
+
+### Is the equity curve steady or one spike?
 
 ```bash
-curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/pnl \
+curl $BASE/traders/0xWALLET/pnl \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 
-Cumulative PnL over time, computed from their first ever trade rather than a recent window.
+Cumulative PnL from the wallet's **first ever trade**, not from the start of your window. This is what the leaderboard cannot show you.
 
-**Is the edge concentrated in one category?**
+Two wallets with identical 30-day PnL can look completely different here: one climbing steadily, the other flat for months with a single vertical jump. Only the first is a strategy you can copy.
+
+### Where does the edge actually live?
 
 ```bash
-curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/categories \
+curl $BASE/traders/0xWALLET/categories \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 
-A trader who only wins in one category is worth copying **only in that category**. This directly informs the filters you set in the next step.
+This is the check that changes outcomes most, and the one people skip.
+
+Traders are rarely good at everything. Someone who reads politics markets well may be guessing at sports, and their aggregate PnL hides that: the politics profits fund the sports losses and the total still looks good. Copy them everywhere and you inherit both halves.
+
+```python
+cats = read(f"/traders/{addr}/categories")["categories"]
+for c in sorted(cats, key=lambda c: Decimal(c["realized_pnl"]), reverse=True):
+    print(f'  {c["category"]:<14} {Decimal(c["realized_pnl"]):>12,.2f}')
+```
+
+```text
+  politics          18,420.50
+  crypto             2,105.20
+  sports            -6,880.10
+```
+
+That wallet is worth following in politics. Following it everywhere means voluntarily taking the sports losses.
 
 <Warning>
-  PnL alone is a poor selection signal. A wallet that made one correct large bet outranks a consistently profitable one on a 30-day leaderboard. Check the curve and the trade count before subscribing.
+  PnL alone is a poor selection signal. A wallet that made one correct large bet outranks a consistently profitable one on a 30-day board. Check the curve and the trade count before you subscribe to anything.
 </Warning>
 
 ## Step 3: subscribe
 
-Once you have a wallet, mirror it:
-
 ```bash
-curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade \
+curl -X POST $BASE/v2/trade/copytrade \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{
     "leader_address": "0xWALLET",
     "sizing": { "mode": "proportional", "value": "0.10" },
+    "filters": { "categories": ["politics"] },
     "simulation": true
   }'
 ```
 
-`simulation: true` paper-trades it first. Leave it on until you have watched the subscription behave for a while.
+The `filters` block is where step 2 pays off. Without it you are copying the whole wallet, sports losses included.
 
 <Note>
-  The leader does not need a Bravado account and is not notified. Any public wallet can be followed.
+  The leader needs no Bravado account and is never notified. Any public wallet can be followed.
 </Note>
 
-## Step 4: size it deliberately
+### Sizing modes
 
-| Mode | Behaviour | Suits |
+| Mode | Behaviour | Use when |
 | --- | --- | --- |
-| `proportional` | A fraction of the leader's size | Following a wallet much larger than yours |
-| `fixed` | The same amount on every mirrored fill | Predictable exposure per trade |
-| `capped` | Proportional with a ceiling per trade | Following someone whose sizing is erratic |
+| `proportional` | A fixed fraction of the leader's size | Their account is much larger than yours |
+| `fixed` | The same stake on every mirrored fill | You want predictable per-trade exposure |
+| `capped` | Proportional with a per-trade ceiling | Their sizing is erratic |
 
-Whatever the leader does, your risk controls apply before the order reaches the market. Use the category finding from step 2 to filter to the markets where they actually have an edge.
+`proportional` scales with the leader's conviction, which is usually what you want if you trust the conviction. `capped` is the hedge when you like their picks but not their position sizing.
 
-## Step 5: watch it before going live
+## Step 4: paper trade it
 
 ```bash
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/simulation \
+curl $BASE/v2/trade/copytrade/simulation \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 
-Compare against the leader's own PnL over the same period. If your mirrored performance diverges sharply, sizing or filters are the usual cause.
+Simulation runs the whole subscription against live prices without touching the chain. Compare against the leader's own PnL over the same period, and look for three things:
 
-When ready, switch off simulation:
+<AccordionGroup>
+  <Accordion title="Divergence from the leader's own returns">
+    Some divergence is expected, since you are filtering by category and sizing proportionally. Large divergence usually means the filter is doing more than you intended, not that the leader changed.
+  </Accordion>
+
+  <Accordion title="Fill counts higher than expected">
+    At 25 bips per side, a leader who trades constantly can turn a profitable strategy into a break-even one on fees alone. Count fills across a week before committing capital.
+  </Accordion>
+
+  <Accordion title="Insufficient funds events">
+    If your collateral cannot keep pace, fills get skipped, and skipped fills are not randomly distributed. Either raise collateral or lower the proportional fraction.
+  </Accordion>
+</AccordionGroup>
+
+## Step 5: go live
 
 ```bash
-curl -X PATCH https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/{id} \
+curl -X PATCH $BASE/v2/trade/copytrade/{id} \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
@@ -119,30 +200,66 @@ curl -X PATCH https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/{i
 ```
 
 <Warning>
-  Mirroring is not free. Copytrade is charged at **25 bips per side**, against 10 bips on the Trade API. A high-frequency leader can generate a lot of fills, and the fee applies to each one.
+  Copytrade is charged at **25 bips per side**, against 10 bips on the Trade API. That difference is why fill count matters more than it first appears: a leader trading twenty times a week costs materially more to follow than one trading twice.
 </Warning>
 
 ## Step 6: monitor
 
 ```bash
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/pnl \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
-
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/history \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+curl $BASE/v2/trade/copytrade/pnl     -H "Authorization: Bearer $BRAVADO_API_KEY"
+curl $BASE/v2/trade/copytrade/history -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 
 Pause without losing configuration:
 
 ```bash
-curl -X PATCH https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/{id}/status \
+curl -X PATCH $BASE/v2/trade/copytrade/{id}/status \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{"status": "paused"}'
 ```
 
-## Next
+Prefer pausing to deleting while you work out whether a drawdown is noise or a broken thesis. `PATCH /status` keeps sizing and filters; `DELETE` discards them and you rebuild from scratch.
 
-- [Build a copy-trading bot](/guides/copy-trading-bot-50-lines)
-- [Build a PnL leaderboard](/guides/pnl-leaderboard)
-- [Copytrade API reference](/products/copytrade-api)
+## Wrapping up
+
+The subscription is one call. Everything before it is the work, and it comes down to a single question the leaderboard cannot answer: **is this record repeatable, and where?**
+
+Trade count tells you whether there is enough evidence. The equity curve tells you whether it accumulated or arrived all at once. Categories tell you where it came from. Filter to that, size it deliberately, and simulate until it is boring.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Why not just copy the top wallet on the leaderboard?">
+    Because a 30-day PnL ranking rewards one enormous win over many steady ones. The top wallet is frequently someone who got a single large call right, which is not a strategy you can inherit.
+  </Accordion>
+
+  <Accordion title="Does the leader know I am copying them?">
+    No. They need no Bravado account and receive no notification.
+  </Accordion>
+
+  <Accordion title="Why filter by category rather than copying everything?">
+    Aggregate PnL hides the composition. A trader can be strongly profitable in one category and steadily losing in another, and the total still looks good. Filtering means you inherit the edge without the leak.
+  </Accordion>
+
+  <Accordion title="How long should I simulate before going live?">
+    Long enough to see a representative number of fills, which depends entirely on the leader's cadence. The test is not elapsed time but whether the results have stopped surprising you.
+  </Accordion>
+
+  <Accordion title="What happens if I run out of collateral?">
+    Fills that cannot be funded are skipped. Because skipped fills are not random, your returns will diverge from the leader's in ways that are hard to reason about after the fact.
+  </Accordion>
+
+  <Accordion title="Can I follow several leaders at once?">
+    Yes, each is a separate subscription with its own sizing and filters. Remember they draw on the same collateral pool, so two leaders active in the same market compete for it.
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Build a copy-trading bot](/guides/copy-trading-bot-50-lines), automating this selection process
+- [Copytrade API reference](/products/copytrade-api), sizing, filters, and risk controls
+- [Build a PnL leaderboard](/guides/pnl-leaderboard), the discovery surface
+- [Data API](/products/data-api), the wallet analytics used for verification
+- [Simulation endpoints](/api/copytrade/simulation), paper trading reference
+- [Subscription endpoints](/api/copytrade/subscriptions), create, patch, and delete
