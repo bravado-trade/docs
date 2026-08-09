@@ -1,42 +1,131 @@
 ---
 title: "How to Place an Order on Polymarket with the Bravado API"
 sidebarTitle: "Place an order"
-description: "Place an order on Polymarket via a single endpoint, then shape the same call into each of the eight supported order types."
+description: "Place your first Polymarket order through the Bravado API, then shape the same call into all eight order types, attach exits, and find your order afterwards."
 icon:
   name: "arrow-left-right"
   library: "lucide"
 ---
 
-Every order type on Bravado goes through one endpoint, `POST /v2/trade/order`. The `type` field selects the execution strategy, and the other fields change with it. This guide places a simple market order first, then shows the same call shaped into each type.
+## Overview
 
-## Before you start
+Most order APIs give you a different endpoint per order type, so adding a stop-loss to a working integration means writing a new client method, new error handling, and new state tracking.
 
-You need a key with the `trade.execute` scope and collateral in your wallet. Check both in one call:
+Bravado does not work that way. Every order goes through **one endpoint**, `POST /v2/trade/order`, and a `type` field selects the execution strategy. A market order and a multi-hour TWAP are the same call with different fields.
+
+That design has a consequence worth understanding early: because the types behave very differently, the response you get back and the endpoint you later poll to find your order **both change depending on the type you sent**. Getting that wrong is the most common reason people think an order vanished.
+
+This guide places a real order, then walks all eight types, then covers where each one ends up.
+
+<Note>
+  Read time: about 18 minutes. Assumes you can make HTTP requests. No prediction market experience needed.
+</Note>
+
+## TL;DR
+
+- One endpoint, `POST /v2/trade/order`. The `type` field picks the strategy.
+- `symbol` is an **outcome token**, not a market. A binary market has two of them.
+- Prices are **decimal probabilities**: `"0.62"` means 62 cents. Sending `"62"` is rejected.
+- Size in **shares** with `size`, or spend a budget in dollars with `quote_amount`.
+- Three types return an `order_id` and live on `GET /v2/trade/orders/open`. Five return a `record_id` and live on `GET /v2/trade/strategies`. Poll the wrong one and your order looks missing.
+- Always send an `Idempotency-Key`, and always read `warnings[]` even on a `200`.
+
+## What you will do
+
+- Verify your key has the right scope and your wallet has collateral
+- Place a market buy and read the fill back
+- Shape the same request into each of the eight order types
+- Attach take-profit and stop-loss legs to an entry
+- Find your order afterwards, whichever type you used
+- Cancel correctly, including the case where cancel-all does not do what you expect
+
+## What you will need
+
+**Knowledge**
+
+- Comfort making HTTP requests from curl, Python, or TypeScript
+- No Polymarket background required, though [how Polymarket works](/markets/polymarket/overview) is useful context
+
+**Tools and access**
+
+- A Bravado API key from the [Bravado Portal](https://portal.bravadotrade.com/)
+- The `trade.execute` scope for placing orders, plus `trade.cancel` to cancel them
+- USDC collateral in your Bravado wallet
+- An outcome token id to trade, covered below
 
 ```bash
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account \
+export BRAVADO_API_KEY="your-bearer-token"
+export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+```
+
+## Check your account first
+
+Two calls save a lot of confused debugging later.
+
+**Does this key have permission?**
+
+```bash
+curl $BASE/v2/trade/account \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 
-Confirm `trade.execute` appears in `api_key.scopes` and that `onboarding_status` is `complete`. Then check spendable collateral:
+```json
+{
+  "partner": "acme-trading",
+  "binding": "user",
+  "wallet": "0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+  "api_key": {
+    "id": "ak_01hx9z2q3r4s5t6u7v8w9x0y",
+    "scopes": ["trade.read", "trade.execute", "trade.cancel"],
+    "rate_limit_per_min": 120
+  },
+  "onboarding_status": "complete"
+}
+```
+
+Check `trade.execute` is in `scopes`. If `onboarding_status` is `pending`, your wallet is not fully provisioned and orders will fail regardless of collateral.
+
+The `rate_limit_per_min` value is worth keeping: it is your polling budget later, and reading it beats hard-coding a guess.
+
+**Do you have money to spend?**
 
 ```bash
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/balances \
+curl $BASE/v2/trade/balances \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 
-## Find the token you want to trade
+```json
+{
+  "pusd": "47.820000",
+  "usdc_e": "5.000000",
+  "total_collateral_equivalent": "52.820000"
+}
+```
 
-Orders trade a single **outcome**, not a market. A binary market has two outcome tokens, and `symbol` is the ERC-1155 token id of the one you want. A YES and a NO token are different symbols with different prices.
+`pusd` is what you can trade with immediately. `usdc_e` is bridged USDC.e sitting on Polygon that has not been deposited yet, so it does not count toward buying power.
 
-## Your first order
+<Warning>
+  Those values are **strings**, not numbers, and that is deliberate. Parsing them as floats reintroduces rounding error that eventually produces a size the venue rejects. Use `Decimal`, `BigDecimal`, or your language's arbitrary-precision equivalent throughout. See [Numeric conventions](/reference/numeric-conventions).
+</Warning>
 
-Buy \$10 of an outcome at whatever the book offers:
+## Understand what you are trading
+
+This trips up nearly everyone once.
+
+A Polymarket **market** is a question: "Will X happen?" Each possible **outcome** is a separate ERC-1155 token with its own id and its own price. `symbol` refers to the outcome token, not the market.
+
+So a binary market gives you two symbols: one for YES, one for NO. Buying YES and selling NO are different orders on different symbols, not two sides of one instrument.
+
+Prices are decimal probabilities between `0.001` and `0.999`. A YES token at `0.62` costs 62 cents per share and implies the market thinks there is roughly a 62% chance. If it resolves true, each share pays \$1.
+
+## Place your first order
+
+Spend \$10 at whatever the book offers:
 
 <CodeGroup>
 
 ```bash cURL
-curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order \
+curl -X POST $BASE/v2/trade/order \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
@@ -65,6 +154,7 @@ res = requests.post(
         "side": "BUY",
         "quote_amount": "10",
     },
+    timeout=15,
 )
 order = res.json()
 print(order["order_id"], order["status"], order["average_price"])
@@ -94,12 +184,15 @@ console.log(order.order_id, order.status, order.average_price);
 
 </CodeGroup>
 
-A filled market order returns the shares you received and the effective price:
+Expected response:
 
 ```json
 {
   "order_id": "ord_01hxab2c3d4e5f6g7h8i9j0k",
   "status": "filled",
+  "side": "BUY",
+  "type": "MARKET",
+  "quote_amount": "10",
   "filled_size": "16.129032",
   "matched_amount": "10.000000",
   "average_price": "0.62",
@@ -107,35 +200,42 @@ A filled market order returns the shares you received and the effective price:
 }
 ```
 
+Reading that back: you spent \$10 and received 16.129032 shares at an effective 62 cents each. If the market resolves in your favour those shares pay \$1 each, so \$16.13 against \$10 spent.
+
 <Warning>
-  Check `warnings[]` even on a `200`. It carries non-fatal problems such as partial fills and clamped prices that would otherwise pass silently.
+  Check `warnings[]` even when the status code is `200`. It carries non-fatal problems that would otherwise pass silently: partial fills, prices clamped to a valid range, and bracket legs that could not be placed. An integration that only branches on status codes will misreport its own fills.
 </Warning>
 
-## Sizing: `quote_amount` vs `size`
+## Sizing: shares or dollars
 
-Two ways to express how much to trade, and mixing them up is a common first bug:
+Two ways to express quantity, and mixing them up is a common early bug:
 
 | Field | Unit | Use when |
 | --- | --- | --- |
-| `quote_amount` | US dollars to spend | You want to spend a budget. Natural for `MARKET` buys. |
-| `size` | Shares | You want a specific share count. Required for resting orders and sells. |
+| `quote_amount` | US dollars to spend | You have a budget. Natural for market buys. |
+| `size` | Shares | You want an exact share count. Required for resting orders and for sells. |
+
+You cannot sell dollars. A sell needs `size`, because you are disposing of a specific number of shares you hold.
 
 ## The eight order types
 
-Same endpoint, different `type`. Only the distinguishing fields are shown.
+Same endpoint throughout. Only the distinguishing fields are shown.
 
 <AccordionGroup>
   <Accordion title="LIMIT: rest on the book at your price">
     ```json
     {
       "type": "LIMIT",
-      "symbol": "7132104567925221259462638553270691275033272857194253228963137931245558399264",
+      "symbol": "...",
       "side": "BUY",
       "price": "0.62",
       "size": "100"
     }
     ```
-    Returns an `order_id` and appears on `GET /v2/trade/orders/open`. Most markets require **at least 5 shares** on a resting order.
+
+    Sits on the book until filled or cancelled, and provides liquidity while it waits. Returns an `order_id`.
+
+    **Constraint:** most markets require **at least 5 shares** on a resting order. `size: "1"` is rejected by the venue, not by Bravado.
   </Accordion>
 
   <Accordion title="MARKET: take liquidity now">
@@ -147,10 +247,15 @@ Same endpoint, different `type`. Only the distinguishing fields are shown.
       "quote_amount": "10"
     }
     ```
-    Minimum spend is **\$1**. Fills against whatever is resting, so the price you get is the price the book gives you.
+
+    Fills immediately against resting orders. Returns an `order_id`.
+
+    **Constraint:** minimum spend of **\$1**.
+
+    **Watch for:** on a thin book, a large market order walks through several price levels and your average is worse than the price you saw. For anything substantial, see [Execute a large position](/guides/large-position-twap-iceberg).
   </Accordion>
 
-  <Accordion title="TWAP: spread a large order over time">
+  <Accordion title="TWAP: spread execution over a window">
     ```json
     {
       "type": "TWAP",
@@ -164,10 +269,13 @@ Same endpoint, different `type`. Only the distinguishing fields are shown.
       }
     }
     ```
-    Returns a `record_id`, not an `order_id`. `interval_sec` has a minimum of 10. See [Execute a large position](/guides/large-position-twap-iceberg).
+
+    Splits a budget into clips executed at intervals. Returns a **`record_id`**, not an `order_id`.
+
+    `duration_sec` and `interval_sec` are seconds, and `interval_sec` has a minimum of 10. `price_tolerance_pct` is a percent from 0 to 100 that skips clips when price has moved too far, which is your protection against filling into a spike.
   </Accordion>
 
-  <Accordion title="ICEBERG: show only a slice at a time">
+  <Accordion title="ICEBERG: show a slice, hide the rest">
     ```json
     {
       "type": "ICEBERG",
@@ -178,7 +286,10 @@ Same endpoint, different `type`. Only the distinguishing fields are shown.
       "execution": { "clip_size": "50" }
     }
     ```
-    Each slice is **post-only**. For a buy, the price must be at or below the current best bid or the slice is rejected for crossing the book.
+
+    Rests a large order while exposing only `clip_size` at a time. Returns a `record_id`.
+
+    **Constraint:** slices are **post-only**. For a buy, the price must be at or below the current best bid, or the slice is rejected with `order crosses book`. Iceberg cannot be used to fill aggressively; it waits to be hit.
   </Accordion>
 
   <Accordion title="PEGGED: follow the touch price">
@@ -191,7 +302,10 @@ Same endpoint, different `type`. Only the distinguishing fields are shown.
       "execution": { "offset_ticks": 0, "price_ceiling": "0.70" }
     }
     ```
-    Tracks the best bid or ask as it moves. `offset_ticks` is in CLOB ticks, where one tick is 0.1 cents.
+
+    Tracks the best bid or ask as it moves, within a budget. Returns a `record_id`.
+
+    `offset_ticks` is in CLOB ticks where one tick is 0.1 cents, so `2` quotes two ticks off the touch. `price_ceiling` stops it chasing the market up past a level you are unwilling to pay.
   </Accordion>
 
   <Accordion title="STOP_LOSS: sell if price falls">
@@ -204,7 +318,8 @@ Same endpoint, different `type`. Only the distinguishing fields are shown.
       "price": "0.40"
     }
     ```
-    Before it triggers, this exists only as a `record_id` on `GET /v2/trade/strategies`. Once triggered it becomes a CLOB order with `is_stop_loss: true`.
+
+    Returns a `record_id`. Before it triggers, this exists **only** on `GET /v2/trade/strategies`, because a sell below the market would fill instantly if it were resting on the book. Bravado holds it and places the order when the trigger hits, at which point it also appears on open orders with `is_stop_loss: true`.
   </Accordion>
 
   <Accordion title="TAKE_PROFIT: sell if price rises">
@@ -217,7 +332,8 @@ Same endpoint, different `type`. Only the distinguishing fields are shown.
       "price": "0.85"
     }
     ```
-    Unlike the other stops, this goes straight onto the CLOB and returns an `order_id`.
+
+    Returns an `order_id`, unlike the other exit types. A sell above the current price can rest on the book straight away, so it does, and it earns you the spread while it waits.
   </Accordion>
 
   <Accordion title="TRAILING_STOP: follow the high-water mark">
@@ -233,13 +349,16 @@ Same endpoint, different `type`. Only the distinguishing fields are shown.
       }
     }
     ```
-    `trailing_offset` is a decimal probability, so `"0.05"` trails by 5 cents. Sending `"5"` is rejected.
+
+    Follows the price up and fires when it reverses by your offset. Returns a `record_id`.
+
+    **Units matter here.** `trailing_offset` is a decimal probability, so `"0.05"` trails by 5 cents. If you want a percentage, use `trailing_offset_pct`, which takes 0 to 100. Sending `"5"` to `trailing_offset` is rejected for falling outside the valid range.
   </Accordion>
 </AccordionGroup>
 
 ## Attach exits at entry
 
-A bracket attaches take-profit and stop-loss legs to a `LIMIT` or `MARKET` buy. When the entry fills, the legs are submitted for you:
+Rather than placing an exit after your entry fills, attach both legs to the entry itself:
 
 ```json
 {
@@ -253,34 +372,143 @@ A bracket attaches take-profit and stop-loss legs to a `LIMIT` or `MARKET` buy. 
 }
 ```
 
+When the entry fills, both legs are submitted automatically. This closes the gap where you hold an unprotected position between the fill and your exit order landing.
+
 <Warning>
-  Brackets are **best-effort**. If the entry fills but a leg cannot be placed, the entry is **not** rolled back: you hold the position with no exit attached. Always inspect `brackets.take_profit.error` and `brackets.stop_loss.error` in the response.
+  Brackets are **best-effort**. If the entry fills but a leg cannot be placed, the entry is **not** rolled back. You hold the position with no exit attached, and the only sign is in the response body, not the status code.
 </Warning>
 
-## Where your order went
+Always inspect both legs:
 
-Which endpoint shows your order depends on the type. Polling only the open-orders endpoint is why people think a TWAP vanished:
+```python
+res = place_order(payload)
+
+for leg in ("take_profit", "stop_loss"):
+    err = res.get("brackets", {}).get(leg, {}).get("error")
+    if err:
+        alert(f"{leg} not placed: {err}")   # position is unprotected
+```
+
+The usual cause is a market minimum: a bracket leg below 5 shares fails even though the entry succeeded.
+
+## Find your order afterwards
+
+This is the part that generates the most confusion, so it is worth a table:
 
 | Type | Returns | Find it on |
 | --- | --- | --- |
-| `LIMIT`, `MARKET`, `TAKE_PROFIT` | `order_id` | `GET /v2/trade/orders/open` |
-| `TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP` | `record_id` | `GET /v2/trade/strategies` |
-| `STOP_LOSS` before trigger | `record_id` | `GET /v2/trade/strategies` only |
-| `STOP_LOSS` after trigger | `record_id` | `GET /v2/trade/orders/open` with `is_stop_loss: true` |
+| `LIMIT` | `order_id` | `GET /v2/trade/orders/open` |
+| `MARKET` | `order_id` | Open orders, briefly |
+| `TAKE_PROFIT` | `order_id` | Open orders, `is_take_profit: true` |
+| `STOP_LOSS` before trigger | `record_id` | `GET /v2/trade/strategies` **only** |
+| `STOP_LOSS` after trigger | `record_id` | Open orders, `is_stop_loss: true` |
+| `TWAP` | `record_id` | Strategies |
+| `PEGGED` | `record_id` | Strategies |
+| `TRAILING_STOP` | `record_id` | Strategies |
+| `ICEBERG` parent | `record_id` | Strategies |
+| `ICEBERG` active slice | child `order_id` | Open orders |
+
+Two rows deserve attention. **Iceberg appears in both places at once**: the parent is a strategy, the currently resting slice is a CLOB order. And **stop-loss migrates** from one list to the other when it fires.
+
+So a client that polls only open orders will report a running TWAP as missing. Poll both:
+
+```python
+orders     = read("/v2/trade/orders/open")["orders"]
+strategies = read("/v2/trade/strategies")["strategies"]
+```
 
 <Note>
-  A managed strategy sitting in `PENDING` has **not** been rejected. It is waiting for its entry conditions. Cancel strategies with `DELETE /v2/trade/strategies/{id}`, and CLOB orders with `DELETE /v2/trade/orders/{order_id}`.
+  A strategy sitting in `PENDING` has **not** been rejected. It has been accepted and is waiting for its entry conditions. Cancelling and re-placing on `PENDING` churns fees and stops the strategy ever working. See [Track order and strategy state](/guides/track-order-and-strategy-state).
 </Note>
+
+## Cancel correctly
+
+```bash
+# a CLOB order
+curl -X DELETE $BASE/v2/trade/orders/{order_id} \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)"
+
+# a managed strategy
+curl -X DELETE $BASE/v2/trade/strategies/{record_id} \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)"
+```
+
+<Warning>
+  `POST /v2/trade/orders/cancel-all` clears **CLOB orders only**. Running strategies continue afterwards. A "cancel everything" button wired to just that endpoint leaves a TWAP quietly executing, which is a genuinely bad surprise for someone who believes they are flat.
+</Warning>
 
 ## Confirm the position
 
 ```bash
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions \
+curl $BASE/v2/trade/positions \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 
-## Next
+```json
+{
+  "positions": [
+    {
+      "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+      "outcome": "YES",
+      "size": "16.129032",
+      "average_entry_price": "0.62",
+      "current_price": "0.63",
+      "unrealized_pnl": "0.161290",
+      "side": "long"
+    }
+  ],
+  "total_unrealized_pnl": "0.161290"
+}
+```
 
-- [Execute a large position](/guides/large-position-twap-iceberg)
-- [Safe retries with Idempotency-Key](/guides/safe-retries-idempotency)
-- [Trade API reference](/products/trade-api)
+Cost basis comes back computed. You do not need to reconstruct it from your own fill history, and you should not try: splits, merges, and redemptions are not ordinary buys and sells, and treating them as such produces a basis that disagrees with the chain.
+
+## Wrapping up
+
+One endpoint, eight strategies, and the field set changes with the type. The two things worth carrying forward are that **`symbol` is an outcome and not a market**, and that **where your order lives afterwards depends on the type you sent**.
+
+Everything else is detail you can look up. Those two cause the bugs.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Why was my price rejected?">
+    Prices are decimal probabilities between `0.001` and `0.999`. Sending `"62"` instead of `"0.62"` puts you outside the range. The error message names the value it received and suggests the decimal you probably meant.
+  </Accordion>
+
+  <Accordion title="Why was my 1-share order rejected?">
+    Most markets require at least 5 shares on a resting order, and market orders need \$1 minimum notional. Both are venue rules enforced by the CLOB, not Bravado validation.
+  </Accordion>
+
+  <Accordion title="My TWAP disappeared from open orders. Where did it go?">
+    Nowhere. Managed strategies live on `GET /v2/trade/strategies`, not open orders. Only `LIMIT`, `MARKET`, and `TAKE_PROFIT` appear in open orders.
+  </Accordion>
+
+  <Accordion title="Why did my iceberg slice get rejected for crossing the book?">
+    Iceberg slices are post-only. For a buy, the price has to be at or below the current best bid so the slice provides liquidity rather than taking it. Price it above and it is rejected.
+  </Accordion>
+
+  <Accordion title="Do I need an Idempotency-Key on every order?">
+    You should send one on every mutating request. Without it, a request that times out leaves you unable to tell whether the order was placed, and retrying risks a duplicate position. See [Safe retries](/guides/safe-retries-idempotency).
+  </Accordion>
+
+  <Accordion title="Can I place several orders in one request?">
+    Yes, `POST /v2/trade/order/batch` submits several at once, and `POST /v2/trade/orders/cancel-batch` cancels a targeted set. Both still take an idempotency key.
+  </Accordion>
+
+  <Accordion title="What happens to my order when the market resolves?">
+    Resolution settles outcome tokens at \$1 or \$0. An unfilled order on a resolved market will not fill, and a stop that never triggered is not protection. Review open exits as an event approaches. See [UMA resolution](/markets/polymarket/uma-resolution).
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Trade API reference](/products/trade-api), full field and response documentation
+- [Order endpoints](/api/trade/orders), request shapes for every type
+- [Execute a large position](/guides/large-position-twap-iceberg), TWAP and Iceberg in depth
+- [Stop-loss and take-profit](/guides/stop-loss-take-profit), exits and brackets in depth
+- [Track order and strategy state](/guides/track-order-and-strategy-state), where each order type lives
+- [Safe retries](/guides/safe-retries-idempotency), idempotency keys
+- [Error reference](/reference/errors), status codes and common messages
