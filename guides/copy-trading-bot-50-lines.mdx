@@ -1,0 +1,150 @@
+---
+title: "How to Build a Polymarket Copy Trading Bot"
+sidebarTitle: "Copy-trading bot"
+description: "Build a copy trading bot for Polymarket: select leaders on evidence, subscribe with risk controls, and supervise mirrored fills."
+icon:
+  name: "bot"
+  library: "lucide"
+---
+
+Most of copy-trading is already handled by the Copytrade API: fill detection, sizing, and execution happen on Bravado's side. What you build is the layer around it, deciding who to follow, applying your own rules, and reacting when things drift.
+
+## What you are actually building
+
+<Steps>
+  <Step title="Selection">
+    Rank candidate wallets and filter on evidence, not headline PnL.
+  </Step>
+  <Step title="Subscription">
+    Create a copytrade subscription with sizing, filters, and risk controls.
+  </Step>
+  <Step title="Supervision">
+    Watch mirrored performance and pause or unsubscribe when the thesis breaks.
+  </Step>
+</Steps>
+
+You are not polling the chain, matching fills, or racing to execute. That is the part you are buying.
+
+## A minimal follower service
+
+```python
+import os, uuid, requests
+
+BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+
+
+def write(method, path, body=None):
+    """Any mutating call: one idempotency key per intended action."""
+    return requests.request(
+        method, f"{BASE}{path}",
+        headers={**H, "Idempotency-Key": str(uuid.uuid4())},
+        json=body,
+    ).json()
+
+
+def shortlist(window="30d", limit=25, min_trades=50, min_win_rate=0.55):
+    """Rank by PnL, then keep only wallets with a real track record."""
+    board = requests.get(
+        f"{BASE}/leaderboard", headers=H,
+        params={"window": window, "limit": limit},
+    ).json()
+
+    keep = []
+    for row in board["traders"]:
+        addr = row["address"]
+        m = requests.get(f"{BASE}/traders/{addr}/metrics", headers=H).json()
+
+        # a single lucky bet should not qualify
+        if m["trade_count"] < min_trades:
+            continue
+        if float(m["win_rate"]) < min_win_rate:
+            continue
+
+        cats = requests.get(f"{BASE}/traders/{addr}/categories", headers=H).json()
+        best = max(cats["categories"], key=lambda c: float(c["realized_pnl"]))
+        keep.append({"address": addr, "category": best["category"]})
+
+    return keep
+
+
+def follow(addr, category, fraction="0.10", simulate=True):
+    """Mirror a leader, but only in the category where they have an edge."""
+    return write("POST", "/v2/trade/copytrade", {
+        "leader_address": addr,
+        "sizing": {"mode": "proportional", "value": fraction},
+        "filters": {"categories": [category]},
+        "simulation": simulate,
+    })
+
+
+def review(sub_id, max_drawdown=-0.15):
+    """Pause a subscription that has drifted past tolerance."""
+    pnl = requests.get(f"{BASE}/v2/trade/copytrade/pnl", headers=H).json()
+    row = next(s for s in pnl["subscriptions"] if s["id"] == sub_id)
+
+    if float(row["return_pct"]) < max_drawdown:
+        write("PATCH", f"/v2/trade/copytrade/{sub_id}/status", {"status": "paused"})
+        return "paused"
+    return "ok"
+
+
+if __name__ == "__main__":
+    for c in shortlist():
+        sub = follow(c["address"], c["category"])
+        print("following", c["address"], "in", c["category"], "->", sub["id"])
+```
+
+<Warning>
+  Response field names above follow the documented shapes, but confirm them against the [endpoint reference](/products/copytrade-api) before running this against real money. Paper-trade first with `simulation: true`.
+</Warning>
+
+## The selection filter is the product
+
+The two checks in `shortlist()` do the real work:
+
+- **`trade_count`** rejects wallets whose record is one correct large bet. A 30-day PnL leaderboard is full of them.
+- **`win_rate`** rejects wallets that make money on rare outsized wins while losing steadily. Copying those means eating the losses without necessarily catching the win.
+
+Then `categories` narrows the subscription to where the leader demonstrably has an edge, rather than following them into markets they happen to be bad at.
+
+## Run it in simulation until it is boring
+
+```python
+sim = requests.get(f"{BASE}/v2/trade/copytrade/simulation", headers=H).json()
+```
+
+Simulation executes the whole subscription against live prices without touching the chain. Watch for:
+
+- **Mirrored return diverging from the leader's own PnL.** Usually sizing or filters.
+- **Fill counts far higher than expected.** At 25 bips per side, a busy leader is expensive.
+- **Insufficient-funds events.** Your collateral cannot keep up with the leader's cadence.
+
+Reset between experiments:
+
+```python
+write("POST", f"/v2/trade/copytrade/{sub_id}/simulation/reset")
+```
+
+## Going live
+
+```python
+write("PATCH", f"/v2/trade/copytrade/{sub_id}", {"simulation": False})
+```
+
+Keep `review()` on a schedule. A leader who was good for six months can stop being good, and nothing about a subscription notices that on your behalf.
+
+## Operational details worth getting right
+
+| Concern | What to do |
+| --- | --- |
+| Duplicate subscriptions | Creating one for a leader you already follow returns `409 Conflict`. Treat it as already-done, not an error. |
+| Rate limits | Read `rate_limit_per_min` from `GET /v2/trade/account` rather than hard-coding a poll interval. |
+| Numeric precision | Every number is a JSON string. Parse with `Decimal`, never `float`. |
+| Pausing vs unsubscribing | `PATCH /status` keeps the configuration; `DELETE` discards it. |
+
+## Next
+
+- [Track a whale wallet](/guides/track-whale-wallet)
+- [Safe retries](/guides/safe-retries-idempotency)
+- [Copytrade API reference](/products/copytrade-api)

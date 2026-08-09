@@ -1,0 +1,147 @@
+---
+title: "How to Generate a US Tax Statement for Polymarket Trading"
+sidebarTitle: "Generate a tax statement"
+description: "Pull Form-8949-style disposition rows for a Polymarket wallet, reconcile them, and export for a preparer."
+icon:
+  name: "receipt"
+  library: "lucide"
+---
+
+Prediction market tax reporting is awkward because a position can end in three different ways: sold on the book, redeemed after resolution, or expired worthless. Each is a disposition, and reconstructing them from raw fills is where home-grown tooling usually goes wrong.
+
+Bravado computes them from on-chain settlement records using a share-level FIFO cost-basis engine, so the output is derived rather than estimated.
+
+<Warning>
+  This guide covers pulling and checking the data. It is not tax advice. Rules vary by jurisdiction and by how the taxpayer's activity is characterised. A qualified preparer should make those calls.
+</Warning>
+
+## Start with the summary
+
+```bash
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/tax-report \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -d year=2025
+```
+
+Per-calendar-year totals: short-term and long-term capital gains, income by kind, and capital flows. This is the number that goes on a return, and the detail below is what supports it.
+
+## Then the line items
+
+Form-8949-style disposition rows, one per closed lot:
+
+```bash
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/statements/r1 \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -d year=2025 -d limit=500
+```
+
+Each row carries acquisition date, disposition date, proceeds, cost basis, and the resulting gain or loss.
+
+<Note>
+  Use the standalone `/statements/r1` endpoint rather than the full `/statements` response for active wallets. The complete §20 statement contains all eight reports and gets large fast.
+</Note>
+
+## Pull every page
+
+Disposition sets run long. Missing the tail silently understates gains:
+
+```python
+import os, requests
+from decimal import Decimal
+
+BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+
+
+def dispositions(address, year):
+    rows, cursor = [], None
+    while True:
+        params = {"year": year, "limit": 500}
+        if cursor:
+            params["cursor"] = cursor
+
+        r = requests.get(f"{BASE}/traders/{address}/statements/r1",
+                         headers=H, params=params)
+
+        if r.status_code == 503 and not r.json().get("available", True):
+            raise RuntimeError("statement still processing, retry shortly")
+
+        page = r.json()
+        rows.extend(page["rows"])
+        cursor = page.get("next_cursor")
+        if not cursor:
+            return rows
+
+
+rows = dispositions("0xWALLET", 2025)
+total = sum(Decimal(r["gain_loss"]) for r in rows)
+print(f"{len(rows)} dispositions, net {total:,.2f}")
+```
+
+## Reconcile before you file
+
+This is the step that makes the output defensible. The R8 certificate verifies the statement is internally consistent:
+
+```bash
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/reconciliation \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -d year=2025
+```
+
+Two independent checks worth running yourself:
+
+<Steps>
+  <Step title="Line items should sum to the summary">
+    Total `gain_loss` across R1 rows should match the capital gains in the tax report. A mismatch means a page was missed or the year filter differs between the two calls.
+  </Step>
+  <Step title="Every disposition should trace to a trade">
+    Cross-check against `GET /traders/{address}/trades` for the same period. Every disposition should correspond to a sale, a redemption, or an expiry.
+  </Step>
+</Steps>
+
+<Warning>
+  Do not reconstruct cost basis yourself from the trade log. Splits, merges, and redemptions are not ordinary buys and sells, and treating them as such produces basis that does not match the on-chain reality. The R1 rows already account for them.
+</Warning>
+
+## Three ways a position ends
+
+Worth understanding, because they look different in the data and users will ask:
+
+| Ending | What happens | Appears as |
+| --- | --- | --- |
+| Sold on the book | Shares sold before resolution | Ordinary disposition at the sale price |
+| Redeemed after resolution | Winning shares redeemed at \$1 | Disposition with proceeds of \$1 per share |
+| Expired worthless | Losing shares settle at \$0 | Disposition with zero proceeds, realising the full loss |
+
+That third case matters: the loss is real and realised, but nothing about it looks like a trade. Tooling that only reads fills misses it entirely.
+
+## Handling 503
+
+Tax and PMWAS endpoints return `503` with `available: false` while a wallet is still being computed. For a wallet with long history this can take a while on first request.
+
+```python
+if r.status_code == 503 and not r.json().get("available", True):
+    # expected, not an error: poll on an interval and show a processing state
+    ...
+```
+
+Do not treat it as a hard failure or retry aggressively.
+
+## Exporting
+
+```python
+import csv
+
+with open("dispositions-2025.csv", "w", newline="") as f:
+    w = csv.DictWriter(f, fieldnames=rows[0].keys())
+    w.writeheader()
+    w.writerows(rows)
+```
+
+Keep values as strings on the way out. Converting to float for a CSV reintroduces the rounding the FIFO engine exists to avoid.
+
+## Next
+
+- [Build a PnL leaderboard](/guides/pnl-leaderboard)
+- [Data API reference](/products/data-api)
+- [Numeric conventions](/reference/numeric-conventions)

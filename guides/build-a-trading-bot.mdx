@@ -1,0 +1,167 @@
+---
+title: "How to Build a Prediction Market Trading Bot"
+sidebarTitle: "Build a trading bot"
+description: "Build a Polymarket trading bot with the Bravado API: signal, sizing, execution, and reconciling state after a restart."
+icon:
+  name: "bot"
+  library: "lucide"
+---
+
+A trading bot is four things: a signal, a sizing rule, an execution path, and a way to recover when it restarts. The last one is what separates a bot that runs unattended from a script you have to babysit, and it is the part most tutorials skip.
+
+## Architecture
+
+<Steps>
+  <Step title="Reconcile on startup">
+    Read existing positions, open orders, and running strategies before doing anything. A bot that assumes it starts flat will double its exposure after every restart.
+  </Step>
+  <Step title="Evaluate a signal">
+    Decide what you want to hold. This is your edge and the only part Bravado does not provide.
+  </Step>
+  <Step title="Compute a delta">
+    Compare target against actual. Trade the difference, not the target.
+  </Step>
+  <Step title="Execute with an idempotency key">
+    One key per intended order, reused across retries.
+  </Step>
+</Steps>
+
+## Reconcile before trading
+
+Three calls give you complete state. Skipping the third is the common bug: a TWAP placed before the restart is still running, and it does not appear in open orders.
+
+```python
+import os, uuid, requests
+from decimal import Decimal
+
+BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+
+
+def current_state():
+    positions = requests.get(f"{BASE}/v2/trade/positions", headers=H).json()
+    open_orders = requests.get(f"{BASE}/v2/trade/orders/open", headers=H).json()
+    strategies = requests.get(f"{BASE}/v2/trade/strategies", headers=H).json()
+
+    held = {p["symbol"]: Decimal(p["size"]) for p in positions["positions"]}
+
+    # size already committed but not yet filled, so we do not order it twice
+    pending = {}
+    for o in open_orders["orders"]:
+        pending[o["symbol"]] = pending.get(o["symbol"], Decimal(0)) + Decimal(o["remaining_size"])
+    for s in strategies["strategies"]:
+        if s["status"] in ("ACTIVE", "PENDING"):
+            pending[s["symbol"]] = pending.get(s["symbol"], Decimal(0)) + Decimal(s["remaining_size"])
+
+    return held, pending
+```
+
+<Warning>
+  Managed strategies (`TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP`, and pre-trigger `STOP_LOSS`) appear only on `GET /v2/trade/strategies`. A bot that reconciles against open orders alone will treat a running TWAP as if it does not exist and place the same size again.
+</Warning>
+
+## Trade the delta
+
+```python
+def rebalance(target: dict[str, Decimal]):
+    held, pending = current_state()
+
+    for symbol, want in target.items():
+        have = held.get(symbol, Decimal(0)) + pending.get(symbol, Decimal(0))
+        delta = want - have
+
+        if abs(delta) < Decimal("5"):     # venue minimum for a resting order
+            continue
+
+        place(symbol, "BUY" if delta > 0 else "SELL", abs(delta))
+```
+
+The 5-share floor is a venue rule, not a Bravado one. Orders below it are rejected, and a bot that retries them in a loop will hammer the rate limit.
+
+## Execute
+
+```python
+def place(symbol, side, size, price=None):
+    payload = {
+        "type": "LIMIT" if price else "MARKET",
+        "symbol": symbol,
+        "side": side,
+    }
+    if price:
+        payload["price"] = str(price)
+        payload["size"] = str(size)
+    else:
+        payload["size"] = str(size)
+
+    return requests.post(
+        f"{BASE}/v2/trade/order",
+        headers={**H, "Idempotency-Key": str(uuid.uuid4())},
+        json=payload,
+    ).json()
+```
+
+## Choosing an order type
+
+| Situation | Type | Why |
+| --- | --- | --- |
+| Small size, need the fill | `MARKET` | Takes the book, minimum \$1 notional |
+| You have a price in mind | `LIMIT` | Rests, minimum 5 shares |
+| Size that would move the book | `TWAP` | Clips over a window, survives your restart |
+| Patient and want the spread | `ICEBERG` | Post-only, waits to be hit |
+| Following the touch | `PEGGED` | Tracks best bid or ask within a budget |
+
+For anything above small size, see [Execute a large position](/guides/large-position-twap-iceberg).
+
+## The main loop
+
+```python
+import time
+
+def run(interval_sec=60):
+    while True:
+        try:
+            rebalance(compute_target())    # your signal
+        except requests.HTTPError as e:
+            if e.response.status_code == 429:
+                time.sleep(int(e.response.headers.get("Retry-After", 30)))
+                continue
+            raise
+        time.sleep(interval_sec)
+```
+
+Set the poll interval from your actual quota rather than guessing:
+
+```python
+acct = requests.get(f"{BASE}/v2/trade/account", headers=H).json()
+budget = acct["api_key"]["rate_limit_per_min"]
+```
+
+## Things that will bite you
+
+<AccordionGroup>
+  <Accordion title="Treating PENDING as a failure">
+    A managed strategy sits in `PENDING` until its entry conditions are met. A bot that cancels and re-places on `PENDING` will churn fees and never let a strategy work.
+  </Accordion>
+
+  <Accordion title="Parsing numbers as floats">
+    Every numeric field is a JSON string. `float("0.1") + float("0.2")` will eventually produce a size the venue rejects. Use `Decimal` throughout.
+  </Accordion>
+
+  <Accordion title="Generating the idempotency key inside the retry loop">
+    Each attempt then carries a different key, and every one that reaches the server creates its own order. Generate once per intended order. See [Safe retries](/guides/safe-retries-idempotency).
+  </Accordion>
+
+  <Accordion title="Assuming cancel-all clears everything">
+    `POST /v2/trade/orders/cancel-all` clears CLOB orders only. Running strategies continue. Cancel those individually with `DELETE /v2/trade/strategies/{id}`.
+  </Accordion>
+
+  <Accordion title="Ignoring warnings on a 200">
+    Order responses carry a `warnings[]` array for non-fatal problems such as partial fills and clamped prices. A bot that only checks status codes will silently misreport its own fills.
+  </Accordion>
+</AccordionGroup>
+
+## Next
+
+- [Stop-loss and take-profit](/guides/stop-loss-take-profit)
+- [Execute a large position](/guides/large-position-twap-iceberg)
+- [Track order and strategy state](/guides/track-order-and-strategy-state)

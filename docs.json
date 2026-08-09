@@ -262,6 +262,56 @@
         ]
       },
       {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Start Here",
+            "pages": [
+              "guides/overview"
+            ]
+          },
+          {
+            "group": "Trading Bots",
+            "pages": [
+              "guides/place-an-order",
+              "guides/build-a-trading-bot",
+              "guides/stop-loss-take-profit",
+              "guides/large-position-twap-iceberg",
+              "guides/quote-both-sides-split-merge",
+              "guides/safe-retries-idempotency"
+            ]
+          },
+          {
+            "group": "Terminals",
+            "pages": [
+              "guides/build-a-trading-terminal",
+              "guides/display-positions-and-pnl",
+              "guides/track-order-and-strategy-state",
+              "guides/white-label-sub-accounts"
+            ]
+          },
+          {
+            "group": "Copy Trading",
+            "pages": [
+              "guides/track-whale-wallet",
+              "guides/copy-trading-bot-50-lines"
+            ]
+          },
+          {
+            "group": "Analytics",
+            "pages": [
+              "guides/pnl-leaderboard"
+            ]
+          },
+          {
+            "group": "Tax and Accounting",
+            "pages": [
+              "guides/us-tax-statement"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Use Cases",
         "groups": [
           {

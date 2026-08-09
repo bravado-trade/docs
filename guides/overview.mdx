@@ -1,0 +1,112 @@
+---
+title: "Prediction Market API Guides"
+sidebarTitle: "Overview"
+description: "Build on prediction markets with the Bravado API: trading bots, terminals, copy trading, analytics dashboards, and tax reporting for Polymarket."
+icon:
+  name: "book-open"
+  library: "lucide"
+---
+
+Every guide here takes one job and walks it end to end, with requests you can run. They assume the [Bravado API](/introduction), which gives you order execution, copy trading, and wallet analytics across prediction markets through a single integration.
+
+For endpoint-level detail, field types, and response shapes, see the [API reference](/api/trade/overview).
+
+## Trading bots
+
+**Automate execution on prediction markets with advanced order types.** Polymarket's own API accepts limit and market orders. Bravado adds TWAP, Iceberg, Pegged, and three stop variants, executed server-side so a strategy keeps running when your process does not. These guides cover placing orders, working large size into thin books, and building a bot that survives retries and restarts.
+
+<CardGroup cols={2}>
+  <Card title="Place an order" icon="arrow-left-right" href="/guides/place-an-order">
+    Your first order, then the same call shaped into each of the eight order types.
+  </Card>
+
+  <Card title="Build a trading bot" icon="bot" href="/guides/build-a-trading-bot">
+    A complete bot: signal, sizing, execution, and reconciliation on restart.
+  </Card>
+
+  <Card title="Stop-loss and take-profit" icon="trending-down" href="/guides/stop-loss-take-profit">
+    Protect a position with stops, brackets, and trailing exits.
+  </Card>
+
+  <Card title="Execute a large position" icon="layers" href="/guides/large-position-twap-iceberg">
+    TWAP and Iceberg for working size without moving the price against yourself.
+  </Card>
+
+  <Card title="Quote both sides" icon="split" href="/guides/quote-both-sides-split-merge">
+    Split collateral into a complete outcome set and make markets on both sides.
+  </Card>
+
+  <Card title="Safe retries" icon="refresh-cw" href="/guides/safe-retries-idempotency">
+    Idempotency keys, so a timeout never becomes a duplicate position.
+  </Card>
+</CardGroup>
+
+## Terminals
+
+**Build trading front ends for prediction markets.** A terminal has to show what a user holds, what it is worth, and how to act on it, in one place. These guides cover the four calls a terminal needs on load, rendering positions with cost basis already computed, and the state distinctions that cause support tickets when a UI gets them wrong.
+
+<CardGroup cols={2}>
+  <Card title="Build a trading terminal" icon="monitor" href="/guides/build-a-trading-terminal">
+    Order entry, portfolio, and discovery from a single API surface.
+  </Card>
+
+  <Card title="Display positions and PnL" icon="chart-line" href="/guides/display-positions-and-pnl">
+    Render holdings, cost basis, and realized versus unrealized correctly.
+  </Card>
+
+  <Card title="Track order and strategy state" icon="list-checks" href="/guides/track-order-and-strategy-state">
+    Why a TWAP is missing from your open orders, and how to show it properly.
+  </Card>
+
+  <Card title="White-label sub-accounts" icon="users" href="/guides/white-label-sub-accounts">
+    Provision end users under a partner master key.
+  </Card>
+</CardGroup>
+
+## Copy trading
+
+**Mirror profitable traders automatically.** Polymarket has no native copy trading, so this exists only through Bravado. The engine handles fill detection and execution; what you build is the layer that decides who to follow and how much to size them.
+
+<CardGroup cols={2}>
+  <Card title="Track a whale wallet" icon="users-round" href="/guides/track-whale-wallet">
+    Find a trader worth following, check their record, then mirror their fills.
+  </Card>
+
+  <Card title="Copy-trading bot" icon="bot" href="/guides/copy-trading-bot-50-lines">
+    A follower service: selection filters, subscription, and supervision.
+  </Card>
+</CardGroup>
+
+## Analytics
+
+**Surface trader performance and market data.** Every figure is derived from on-chain settlement records replayed through a share-level FIFO cost-basis engine, and works on any public wallet without a funded account.
+
+<CardGroup cols={2}>
+  <Card title="Build a PnL leaderboard" icon="trophy" href="/guides/pnl-leaderboard">
+    Rank traders by realized PnL or volume, and render profiles that hold up.
+  </Card>
+</CardGroup>
+
+## Tax and accounting
+
+**Generate compliant reports from on-chain activity.** Positions end three different ways on a prediction market, and only one of them looks like a trade. These guides cover pulling dispositions that account for all three.
+
+<CardGroup cols={2}>
+  <Card title="Generate a tax statement" icon="receipt" href="/guides/us-tax-statement">
+    Form-8949-style dispositions, reconciliation, and export.
+  </Card>
+</CardGroup>
+
+## Conventions used throughout
+
+Stated once here rather than repeated in every guide:
+
+- **Base URLs.** Trade, Copytrade, and Combos live under `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade`. The Data API is at the root of the same host.
+- **Auth.** A Bearer token in the `Authorization` header on every request.
+- **Numbers are strings.** Prices, sizes, and PnL are JSON strings to preserve precision. Parse with a decimal type, never a float.
+- **Prices are probabilities.** `"0.62"` means 62 cents per share, valid range `0.001` to `0.999`.
+- **Mutations need an idempotency key.** Every write accepts `Idempotency-Key`. See [Safe retries](/guides/safe-retries-idempotency).
+
+<Warning>
+  Examples read `$BRAVADO_API_KEY` from the environment. Never hardcode a token or commit one.
+</Warning>

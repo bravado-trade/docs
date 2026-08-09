@@ -1,0 +1,286 @@
+---
+title: "How to Place an Order on Polymarket with the Bravado API"
+sidebarTitle: "Place an order"
+description: "Place an order on Polymarket via a single endpoint, then shape the same call into each of the eight supported order types."
+icon:
+  name: "arrow-left-right"
+  library: "lucide"
+---
+
+Every order type on Bravado goes through one endpoint, `POST /v2/trade/order`. The `type` field selects the execution strategy, and the other fields change with it. This guide places a simple market order first, then shows the same call shaped into each type.
+
+## Before you start
+
+You need a key with the `trade.execute` scope and collateral in your wallet. Check both in one call:
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+Confirm `trade.execute` appears in `api_key.scopes` and that `onboarding_status` is `complete`. Then check spendable collateral:
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/balances \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+## Find the token you want to trade
+
+Orders trade a single **outcome**, not a market. A binary market has two outcome tokens, and `symbol` is the ERC-1155 token id of the one you want. A YES and a NO token are different symbols with different prices.
+
+## Your first order
+
+Buy \$10 of an outcome at whatever the book offers:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{
+    "type": "MARKET",
+    "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+    "side": "BUY",
+    "quote_amount": "10"
+  }'
+```
+
+```python Python
+import os, uuid, requests
+
+BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+
+res = requests.post(
+    f"{BASE}/v2/trade/order",
+    headers={
+        "Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}",
+        "Idempotency-Key": str(uuid.uuid4()),
+    },
+    json={
+        "type": "MARKET",
+        "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+        "side": "BUY",
+        "quote_amount": "10",
+    },
+)
+order = res.json()
+print(order["order_id"], order["status"], order["average_price"])
+```
+
+```typescript TypeScript
+const BASE = "https://bravado-api-k7kaq.ondigitalocean.app";
+
+const res = await fetch(`${BASE}/v2/trade/order`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
+    "Content-Type": "application/json",
+    "Idempotency-Key": crypto.randomUUID(),
+  },
+  body: JSON.stringify({
+    type: "MARKET",
+    symbol: "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+    side: "BUY",
+    quote_amount: "10",
+  }),
+});
+
+const order = await res.json();
+console.log(order.order_id, order.status, order.average_price);
+```
+
+</CodeGroup>
+
+A filled market order returns the shares you received and the effective price:
+
+```json
+{
+  "order_id": "ord_01hxab2c3d4e5f6g7h8i9j0k",
+  "status": "filled",
+  "filled_size": "16.129032",
+  "matched_amount": "10.000000",
+  "average_price": "0.62",
+  "warnings": []
+}
+```
+
+<Warning>
+  Check `warnings[]` even on a `200`. It carries non-fatal problems such as partial fills and clamped prices that would otherwise pass silently.
+</Warning>
+
+## Sizing: `quote_amount` vs `size`
+
+Two ways to express how much to trade, and mixing them up is a common first bug:
+
+| Field | Unit | Use when |
+| --- | --- | --- |
+| `quote_amount` | US dollars to spend | You want to spend a budget. Natural for `MARKET` buys. |
+| `size` | Shares | You want a specific share count. Required for resting orders and sells. |
+
+## The eight order types
+
+Same endpoint, different `type`. Only the distinguishing fields are shown.
+
+<AccordionGroup>
+  <Accordion title="LIMIT: rest on the book at your price">
+    ```json
+    {
+      "type": "LIMIT",
+      "symbol": "7132104567925221259462638553270691275033272857194253228963137931245558399264",
+      "side": "BUY",
+      "price": "0.62",
+      "size": "100"
+    }
+    ```
+    Returns an `order_id` and appears on `GET /v2/trade/orders/open`. Most markets require **at least 5 shares** on a resting order.
+  </Accordion>
+
+  <Accordion title="MARKET: take liquidity now">
+    ```json
+    {
+      "type": "MARKET",
+      "symbol": "...",
+      "side": "BUY",
+      "quote_amount": "10"
+    }
+    ```
+    Minimum spend is **\$1**. Fills against whatever is resting, so the price you get is the price the book gives you.
+  </Accordion>
+
+  <Accordion title="TWAP: spread a large order over time">
+    ```json
+    {
+      "type": "TWAP",
+      "symbol": "...",
+      "side": "BUY",
+      "budget_usdc": "200",
+      "execution": {
+        "duration_sec": 3600,
+        "interval_sec": 60,
+        "price_tolerance_pct": 2
+      }
+    }
+    ```
+    Returns a `record_id`, not an `order_id`. `interval_sec` has a minimum of 10. See [Execute a large position](/guides/large-position-twap-iceberg).
+  </Accordion>
+
+  <Accordion title="ICEBERG: show only a slice at a time">
+    ```json
+    {
+      "type": "ICEBERG",
+      "symbol": "...",
+      "side": "BUY",
+      "price": "0.60",
+      "size": "1000",
+      "execution": { "clip_size": "50" }
+    }
+    ```
+    Each slice is **post-only**. For a buy, the price must be at or below the current best bid or the slice is rejected for crossing the book.
+  </Accordion>
+
+  <Accordion title="PEGGED: follow the touch price">
+    ```json
+    {
+      "type": "PEGGED",
+      "symbol": "...",
+      "side": "BUY",
+      "budget_usdc": "100",
+      "execution": { "offset_ticks": 0, "price_ceiling": "0.70" }
+    }
+    ```
+    Tracks the best bid or ask as it moves. `offset_ticks` is in CLOB ticks, where one tick is 0.1 cents.
+  </Accordion>
+
+  <Accordion title="STOP_LOSS: sell if price falls">
+    ```json
+    {
+      "type": "STOP_LOSS",
+      "symbol": "...",
+      "side": "SELL",
+      "size": "500",
+      "price": "0.40"
+    }
+    ```
+    Before it triggers, this exists only as a `record_id` on `GET /v2/trade/strategies`. Once triggered it becomes a CLOB order with `is_stop_loss: true`.
+  </Accordion>
+
+  <Accordion title="TAKE_PROFIT: sell if price rises">
+    ```json
+    {
+      "type": "TAKE_PROFIT",
+      "symbol": "...",
+      "side": "SELL",
+      "size": "500",
+      "price": "0.85"
+    }
+    ```
+    Unlike the other stops, this goes straight onto the CLOB and returns an `order_id`.
+  </Accordion>
+
+  <Accordion title="TRAILING_STOP: follow the high-water mark">
+    ```json
+    {
+      "type": "TRAILING_STOP",
+      "symbol": "...",
+      "side": "SELL",
+      "size": "500",
+      "execution": {
+        "high_water_mark": "0.80",
+        "trailing_offset": "0.05"
+      }
+    }
+    ```
+    `trailing_offset` is a decimal probability, so `"0.05"` trails by 5 cents. Sending `"5"` is rejected.
+  </Accordion>
+</AccordionGroup>
+
+## Attach exits at entry
+
+A bracket attaches take-profit and stop-loss legs to a `LIMIT` or `MARKET` buy. When the entry fills, the legs are submitted for you:
+
+```json
+{
+  "type": "LIMIT",
+  "symbol": "...",
+  "side": "BUY",
+  "price": "0.55",
+  "size": "200",
+  "take_profit": { "price": "0.80", "size": "200" },
+  "stop_loss":   { "price": "0.40", "size": "200" }
+}
+```
+
+<Warning>
+  Brackets are **best-effort**. If the entry fills but a leg cannot be placed, the entry is **not** rolled back: you hold the position with no exit attached. Always inspect `brackets.take_profit.error` and `brackets.stop_loss.error` in the response.
+</Warning>
+
+## Where your order went
+
+Which endpoint shows your order depends on the type. Polling only the open-orders endpoint is why people think a TWAP vanished:
+
+| Type | Returns | Find it on |
+| --- | --- | --- |
+| `LIMIT`, `MARKET`, `TAKE_PROFIT` | `order_id` | `GET /v2/trade/orders/open` |
+| `TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP` | `record_id` | `GET /v2/trade/strategies` |
+| `STOP_LOSS` before trigger | `record_id` | `GET /v2/trade/strategies` only |
+| `STOP_LOSS` after trigger | `record_id` | `GET /v2/trade/orders/open` with `is_stop_loss: true` |
+
+<Note>
+  A managed strategy sitting in `PENDING` has **not** been rejected. It is waiting for its entry conditions. Cancel strategies with `DELETE /v2/trade/strategies/{id}`, and CLOB orders with `DELETE /v2/trade/orders/{order_id}`.
+</Note>
+
+## Confirm the position
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+## Next
+
+- [Execute a large position](/guides/large-position-twap-iceberg)
+- [Safe retries with Idempotency-Key](/guides/safe-retries-idempotency)
+- [Trade API reference](/products/trade-api)

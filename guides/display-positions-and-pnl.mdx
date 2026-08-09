@@ -1,0 +1,125 @@
+---
+title: "How to Display Positions and PnL in a Prediction Market App"
+sidebarTitle: "Display positions and PnL"
+description: "Render Polymarket positions with cost basis, realized versus unrealized PnL, and the resolution states that a simple open-or-closed model gets wrong."
+icon:
+  name: "chart-line"
+  library: "lucide"
+---
+
+Showing a position is harder than it looks on a prediction market, because a position can be finished without being closed, and closed without being sold.
+
+## Positions come with cost basis
+
+You do not reconstruct this from fills. The Trade API returns it:
+
+```bash
+curl $BASE/v2/trade/positions -H "Authorization: Bearer $KEY"
+```
+
+```json
+{
+  "positions": [
+    {
+      "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+      "outcome": "YES",
+      "size": "16.129032",
+      "average_entry_price": "0.62",
+      "current_price": "0.63",
+      "unrealized_pnl": "0.161290",
+      "collateral_value": "10.161290",
+      "side": "long"
+    }
+  ],
+  "total_unrealized_pnl": "0.161290"
+}
+```
+
+<Warning>
+  Do not recompute cost basis client-side from the trade log. Splits, merges, and redemptions are not ordinary buys and sells, and treating them as such produces a basis that disagrees with the venue. The engine already accounts for them.
+</Warning>
+
+## Realized and unrealized are different questions
+
+| | Means | Source |
+| --- | --- | --- |
+| Unrealized | Mark-to-market on what you still hold | `unrealized_pnl` on the position |
+| Realized | Cash that actually moved | Data API, cashflow model |
+
+Bravado's realized PnL is a **cashflow model**: it measures USDC that entered and left the wallet, net of fees, rather than inferring profit from price differences. That is why it reconciles with a bank-statement view of the account and why the tax endpoints can be built on it.
+
+For a wallet-level view across history rather than current holdings:
+
+```bash
+curl $BASE/traders/{address}/pnl -H "Authorization: Bearer $KEY"
+```
+
+## The state model that actually works
+
+Most apps model a position as open or closed. That is wrong here, and produces the single most common support complaint: a user sees a winning balance they cannot withdraw.
+
+<Steps>
+  <Step title="Open">
+    The market is still trading. Value is a mark, not a realization. The user can sell or add.
+  </Step>
+  <Step title="Awaiting resolution">
+    The event concluded but the outcome is not final on-chain. Nothing can be done, and showing this as "closed" implies money that is not available.
+  </Step>
+  <Step title="Resolved, unredeemed">
+    The outcome is final. Winning shares are worth \$1 each but the collateral is not in the wallet until redeemed. Surface a redeem action here.
+  </Step>
+  <Step title="Redeemed">
+    Collateral is back. Now it is realized.
+  </Step>
+</Steps>
+
+```typescript
+function positionState(p: Position): State {
+  if (!p.market_resolved) return p.event_concluded ? "awaiting_resolution" : "open";
+  return p.redeemed ? "redeemed" : "resolved_unredeemed";
+}
+```
+
+<Note>
+  Field names for resolution flags depend on the response shape; confirm against the [positions reference](/api/trade/positions). The distinction between the four states is the part that matters, not the exact field.
+</Note>
+
+## Losing positions go to zero, and that is correct
+
+A losing outcome settles at \$0 per share. There is no partial recovery and nothing to sell.
+
+Apps often render this as a bug, or hide the position entirely. Neither is right: the loss is real and realized, and the user needs to see it, particularly for tax purposes where an expired-worthless position is a disposition like any other.
+
+## Historical view
+
+For charts and closed-position history, use the Data API rather than the Trade API. It works on any public wallet and carries the full history from the wallet's first trade:
+
+| View | Endpoint |
+| --- | --- |
+| Equity curve | `GET /traders/{address}/pnl` |
+| Open positions | `GET /traders/{address}/positions/active` |
+| Closed positions | `GET /traders/{address}/positions/closed` |
+| Category exposure | `GET /traders/{address}/categories` |
+| Summary stats | `GET /traders/{address}/metrics` |
+
+## Formatting
+
+```typescript
+import { Decimal } from "decimal.js";
+
+const pnl   = new Decimal(pos.unrealized_pnl);
+const pct   = pnl.div(new Decimal(pos.average_entry_price).times(pos.size)).times(100);
+const price = `${new Decimal(pos.current_price).times(100).toFixed(1)}¢`;
+```
+
+Prices are decimal probabilities, so `0.62` is 62 cents **and** a 62% implied chance. Showing both reads well: `62¢ (62%)`.
+
+## Handling 503 on analytics
+
+Data API statement endpoints return `503` with `available: false` while a wallet is still being computed. For a first-time wallet this is expected, not an error. Show a processing state and poll, rather than an error toast.
+
+## Next
+
+- [Build a trading terminal](/guides/build-a-trading-terminal)
+- [Track order and strategy state](/guides/track-order-and-strategy-state)
+- [Generate a tax statement](/guides/us-tax-statement)

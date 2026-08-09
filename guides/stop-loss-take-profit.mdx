@@ -1,0 +1,144 @@
+---
+title: "How to Use Stop-Loss and Take-Profit Orders on Polymarket"
+sidebarTitle: "Stop-loss and take-profit"
+description: "Protect a prediction market position with stop-loss, take-profit, trailing stops, and bracket orders using the Bravado Trade API."
+icon:
+  name: "trending-down"
+  library: "lucide"
+---
+
+Prediction markets resolve to \$1 or \$0, so a position that goes against you does not drift, it goes to zero. Exits matter more here than on a spot venue, and Polymarket's native API has none of these order types.
+
+## The four exit types
+
+| Type | Fires when | Returns |
+| --- | --- | --- |
+| `STOP_LOSS` | Price falls to your level | `record_id` |
+| `TAKE_PROFIT` | Price rises to your target | `order_id` |
+| `TRAILING_STOP` | Price reverses from its high-water mark | `record_id` |
+| Bracket | Attached to an entry, both legs at once | With the entry |
+
+That `TAKE_PROFIT` returns an `order_id` while the others return a `record_id` is not an inconsistency. A take-profit can rest on the book immediately because it is a sell above the current price. A stop-loss cannot, because a sell below the market would fill instantly, so Bravado holds it and places the order when the trigger hits.
+
+## Stop-loss
+
+```json
+{
+  "type": "STOP_LOSS",
+  "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+  "side": "SELL",
+  "size": "500",
+  "price": "0.40"
+}
+```
+
+Before it triggers, this exists only on `GET /v2/trade/strategies`. After it triggers, Bravado places a CLOB order and it appears on `GET /v2/trade/orders/open` with `is_stop_loss: true`.
+
+<Warning>
+  A stop-loss can only be cancelled while it is still pre-trigger. Once it fires, the strategy completes and you are cancelling the resulting **order** instead, with `DELETE /v2/trade/orders/{order_id}`.
+</Warning>
+
+## Take-profit
+
+```json
+{
+  "type": "TAKE_PROFIT",
+  "symbol": "...",
+  "side": "SELL",
+  "size": "500",
+  "price": "0.85"
+}
+```
+
+Straight onto the book, so it also provides liquidity while it waits.
+
+## Trailing stop
+
+Follows the price up and fires when it reverses by your offset:
+
+```json
+{
+  "type": "TRAILING_STOP",
+  "symbol": "...",
+  "side": "SELL",
+  "size": "500",
+  "execution": {
+    "high_water_mark": "0.80",
+    "trailing_offset": "0.05"
+  }
+}
+```
+
+<Warning>
+  `trailing_offset` is a **decimal probability**, not a percent. `"0.05"` trails by 5 cents. Sending `"5"` is rejected for being outside the valid `0.001` to `0.999` range. If you want a percentage instead, use `trailing_offset_pct`, which does take `0` to `100`.
+</Warning>
+
+Two fields exist because traders think in both. Pick one:
+
+| Field | Unit | `"5"` means |
+| --- | --- | --- |
+| `trailing_offset` | Decimal probability | 5 cents |
+| `trailing_offset_pct` | Percent | 5% |
+
+## Brackets: both exits at entry
+
+Rather than placing exits after a fill, attach them to the entry:
+
+```json
+{
+  "type": "LIMIT",
+  "symbol": "...",
+  "side": "BUY",
+  "price": "0.55",
+  "size": "200",
+  "take_profit": { "price": "0.80", "size": "200" },
+  "stop_loss":   { "price": "0.40", "size": "200" }
+}
+```
+
+When the entry fills, both legs are submitted automatically. This closes the window where you hold an unprotected position between fill and exit placement.
+
+<Warning>
+  Brackets are **best-effort**. If the entry fills but a leg cannot be placed, the entry is **not** rolled back. You hold the position with no exit attached, and the response tells you so in `brackets.take_profit.error` and `brackets.stop_loss.error`. A `200` does not mean both legs exist.
+</Warning>
+
+```python
+res = place_order(payload)
+
+for leg in ("take_profit", "stop_loss"):
+    err = res.get("brackets", {}).get(leg, {}).get("error")
+    if err:
+        alert(f"{leg} not placed: {err}")   # position is unprotected
+```
+
+The usual cause is a market minimum: a bracket leg below 5 shares is rejected even though the entry succeeded.
+
+## Sizing an exit
+
+An exit cannot sell more than you hold:
+
+```
+"Not enough shares to place this sell — holding X…"
+```
+
+Check the position first, and remember size is in shares while a market buy is usually expressed in dollars:
+
+```python
+pos = requests.get(f"{BASE}/v2/trade/positions", headers=H).json()
+held = next(p for p in pos["positions"] if p["symbol"] == symbol)
+size = held["size"]        # shares, as a string
+```
+
+## Resolution changes the picture
+
+A stop-loss is protection against price movement. It does nothing about resolution: once a market resolves against you, the shares are worth \$0 and there is nobody to sell to.
+
+<Note>
+  Exits are worth reviewing as an event approaches. A stop that has not triggered by resolution is not protection, it is an order that will never fill. See [UMA resolution](/markets/polymarket/uma-resolution).
+</Note>
+
+## Next
+
+- [Build a trading bot](/guides/build-a-trading-bot)
+- [Place an order](/guides/place-an-order)
+- [Track order and strategy state](/guides/track-order-and-strategy-state)

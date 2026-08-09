@@ -1,0 +1,150 @@
+---
+title: "How to Retry Orders Safely with Idempotency Keys"
+sidebarTitle: "Safe retries"
+description: "Use Idempotency-Key so a timed-out Polymarket order can be retried without creating a duplicate position."
+icon:
+  name: "refresh-cw"
+  library: "lucide"
+---
+
+A request times out. You do not know whether the order was placed. Retrying risks a duplicate position; not retrying risks no position at all. `Idempotency-Key` removes the guess.
+
+## The rule
+
+Every mutating request on Bravado accepts an `Idempotency-Key` header. Retry with the **same key** and you get the original response back rather than a second order.
+
+```bash
+curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: e4b9c1a2-38df-4f77-a3c5-012bd9e8f231" \
+  -d '{"type":"MARKET","symbol":"...","side":"BUY","quote_amount":"10"}'
+```
+
+A replayed response carries a header marking it as such, so you can tell a fresh execution from a replay.
+
+## Generating keys correctly
+
+The key must identify **one intended action**, not one HTTP attempt. This is where implementations usually go wrong.
+
+<CodeGroup>
+
+```python Python
+import uuid, requests, time
+
+def place_order(payload, attempts=4):
+    key = str(uuid.uuid4())          # once per intended order
+    for i in range(attempts):
+        try:
+            r = requests.post(
+                f"{BASE}/v2/trade/order",
+                headers={
+                    "Authorization": f"Bearer {API_KEY}",
+                    "Idempotency-Key": key,   # same key on every retry
+                },
+                json=payload,
+                timeout=10,
+            )
+        except requests.Timeout:
+            time.sleep(2 ** i)
+            continue                  # retry, same key
+
+        if r.status_code < 500 and r.status_code != 429:
+            return r.json()
+
+        retry_after = int(r.headers.get("Retry-After", 2 ** i))
+        time.sleep(retry_after)
+
+    raise RuntimeError("order not confirmed after retries")
+```
+
+```typescript TypeScript
+async function placeOrder(payload: object, attempts = 4) {
+  const key = crypto.randomUUID();        // once per intended order
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(`${BASE}/v2/trade/order`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": key,          // same key on every retry
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status < 500 && res.status !== 429) return res.json();
+
+      const wait = Number(res.headers.get("Retry-After") ?? 2 ** i);
+      await new Promise(r => setTimeout(r, wait * 1000));
+    } catch {
+      await new Promise(r => setTimeout(r, 2 ** i * 1000));
+    }
+  }
+  throw new Error("order not confirmed after retries");
+}
+```
+
+</CodeGroup>
+
+<Warning>
+  Generating the key **inside** the retry loop defeats the entire mechanism. Each attempt would carry a new key, and every one that reached the server would create its own order. Generate it once, outside the loop.
+</Warning>
+
+## Choosing what the key represents
+
+| Approach | Verdict |
+| --- | --- |
+| Fresh UUID per intended order | Correct. The default choice. |
+| Fresh UUID per HTTP attempt | Broken. Produces duplicates on retry. |
+| Deterministic hash of the payload | Works, but two genuinely separate identical orders collapse into one. Only use if that is what you want. |
+| Reusing a key across different payloads | Wrong. The key is bound to the original request. |
+
+## Which calls need it
+
+Anything that changes state. In practice:
+
+- Placing orders: `POST /v2/trade/order`, `POST /v2/trade/order/batch`
+- Cancelling: `DELETE /v2/trade/orders/{order_id}`, `POST /v2/trade/orders/cancel-batch`, `POST /v2/trade/orders/cancel-all`
+- Positions: `POST /v2/trade/positions/redeem`, `/split`, `/merge`
+- Copytrade: `POST /v2/trade/copytrade`, `PATCH`, `DELETE`
+- Combos: `POST /v2/trade/combo/quote`, `/accept`, `/redeem`
+- Withdrawals: `POST /v2/trade/withdraw`
+
+Reads do not need one.
+
+## Handling 429
+
+Rate limiting is the other case where retries go wrong. A `429` carries `Retry-After` in seconds.
+
+```python
+if r.status_code == 429:
+    wait = int(r.headers["Retry-After"])
+    time.sleep(wait + random.uniform(0, 0.5))   # jitter avoids a thundering herd
+```
+
+<Warning>
+  Retrying a `429` immediately, without honouring `Retry-After`, will not succeed and can extend how long you stay limited.
+</Warning>
+
+Your per-minute quota is on the account endpoint as `rate_limit_per_min`, so a client can read its own budget instead of hard-coding one:
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+## The withdrawal case
+
+Withdrawals have a state worth handling explicitly. If the transaction does not confirm inside the latency budget, you get `state: "STATE_PENDING"` with a broadcast `transaction_hash`. The transfer is still in flight.
+
+<Warning>
+  Do not resubmit a pending withdrawal with the same `Idempotency-Key` expecting a new attempt. Poll `GET /v2/trade/activity?type=WITHDRAW` and match on `transaction_hash` to find the outcome.
+</Warning>
+
+## Next
+
+- [Place an order](/guides/place-an-order)
+- [Rate limits](/reference/rate-limits)
+- [Error reference](/reference/errors)

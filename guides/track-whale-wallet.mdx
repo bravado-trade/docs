@@ -1,0 +1,148 @@
+---
+title: "How to Track a Whale Wallet and Mirror Its Trades"
+sidebarTitle: "Track a whale wallet"
+description: "Find a profitable Polymarket trader with the Data API, verify their record, then mirror their fills with copy trading."
+icon:
+  name: "users-round"
+  library: "lucide"
+---
+
+Copying a wallet is easy. Choosing the right wallet is the hard part, and it is where the Data API earns its place: you can inspect any public address before committing a cent.
+
+## Step 1: find candidates
+
+Rank traders by realized PnL over a window:
+
+```bash
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -d window=30d \
+  -d limit=25
+```
+
+Or by volume, which surfaces active traders rather than lucky ones:
+
+```bash
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -d window=30d
+```
+
+<Note>
+  The Data API is read-only and works on any public address, so this whole step needs no funded account.
+</Note>
+
+## Step 2: check the record properly
+
+A high PnL number on its own tells you very little. Three things separate a trader worth following from one who got lucky once.
+
+**Was it one trade or many?**
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/metrics \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+Win rate and hold time tell you whether the record is a pattern or a single outsized bet.
+
+**Is the equity curve steady or one spike?**
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/pnl \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+Cumulative PnL over time, computed from their first ever trade rather than a recent window.
+
+**Is the edge concentrated in one category?**
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xWALLET/categories \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+A trader who only wins in one category is worth copying **only in that category**. This directly informs the filters you set in the next step.
+
+<Warning>
+  PnL alone is a poor selection signal. A wallet that made one correct large bet outranks a consistently profitable one on a 30-day leaderboard. Check the curve and the trade count before subscribing.
+</Warning>
+
+## Step 3: subscribe
+
+Once you have a wallet, mirror it:
+
+```bash
+curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{
+    "leader_address": "0xWALLET",
+    "sizing": { "mode": "proportional", "value": "0.10" },
+    "simulation": true
+  }'
+```
+
+`simulation: true` paper-trades it first. Leave it on until you have watched the subscription behave for a while.
+
+<Note>
+  The leader does not need a Bravado account and is not notified. Any public wallet can be followed.
+</Note>
+
+## Step 4: size it deliberately
+
+| Mode | Behaviour | Suits |
+| --- | --- | --- |
+| `proportional` | A fraction of the leader's size | Following a wallet much larger than yours |
+| `fixed` | The same amount on every mirrored fill | Predictable exposure per trade |
+| `capped` | Proportional with a ceiling per trade | Following someone whose sizing is erratic |
+
+Whatever the leader does, your risk controls apply before the order reaches the market. Use the category finding from step 2 to filter to the markets where they actually have an edge.
+
+## Step 5: watch it before going live
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/simulation \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+Compare against the leader's own PnL over the same period. If your mirrored performance diverges sharply, sizing or filters are the usual cause.
+
+When ready, switch off simulation:
+
+```bash
+curl -X PATCH https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/{id} \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"simulation": false}'
+```
+
+<Warning>
+  Mirroring is not free. Copytrade is charged at **25 bips per side**, against 10 bips on the Trade API. A high-frequency leader can generate a lot of fills, and the fee applies to each one.
+</Warning>
+
+## Step 6: monitor
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/pnl \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/history \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+Pause without losing configuration:
+
+```bash
+curl -X PATCH https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade/{id}/status \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"status": "paused"}'
+```
+
+## Next
+
+- [Build a copy-trading bot](/guides/copy-trading-bot-50-lines)
+- [Build a PnL leaderboard](/guides/pnl-leaderboard)
+- [Copytrade API reference](/products/copytrade-api)

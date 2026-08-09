@@ -1,0 +1,123 @@
+---
+title: "How to Track Order and Strategy State on Bravado"
+sidebarTitle: "Track order and strategy state"
+description: "Why a TWAP does not appear in your open orders, how CLOB orders differ from managed strategies, and how to render both correctly."
+icon:
+  name: "list-checks"
+  library: "lucide"
+---
+
+"My TWAP disappeared" is the most common integration bug on Bravado, and it is not a bug. Orders live in two places, and an app that polls only one of them will tell users their order vanished.
+
+## Two kinds of order
+
+| | CLOB orders | Managed strategies |
+| --- | --- | --- |
+| Types | `LIMIT`, `MARKET`, `TAKE_PROFIT` | `TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP`, pre-trigger `STOP_LOSS` |
+| Identifier | `order_id` | `record_id` |
+| Listed on | `GET /v2/trade/orders/open` | `GET /v2/trade/strategies` |
+| Cancel with | `DELETE /v2/trade/orders/{order_id}` | `DELETE /v2/trade/strategies/{id}` |
+| Lives on | Polymarket's book | Bravado's execution engine |
+
+A CLOB order is resting on the venue. A managed strategy is a Bravado-side supervisor that places CLOB orders over time on your behalf. They are genuinely different objects, which is why they are listed separately.
+
+## Poll both
+
+```python
+def working_orders():
+    orders     = requests.get(f"{BASE}/v2/trade/orders/open", headers=H).json()["orders"]
+    strategies = requests.get(f"{BASE}/v2/trade/strategies",  headers=H).json()["strategies"]
+
+    return (
+        [{"kind": "order",    "id": o["order_id"],  **o} for o in orders] +
+        [{"kind": "strategy", "id": s["record_id"], **s} for s in strategies]
+    )
+```
+
+Render them as one list if you like, but fetch from both and keep the `kind` so cancel hits the right endpoint.
+
+## Where each type shows up
+
+| Placed as | Returns | Appears on |
+| --- | --- | --- |
+| `LIMIT` | `order_id` | Open orders |
+| `MARKET` | `order_id` | Open orders, briefly |
+| `TAKE_PROFIT` | `order_id` | Open orders, with `is_take_profit: true` |
+| `STOP_LOSS` before trigger | `record_id` | Strategies **only** |
+| `STOP_LOSS` after trigger | `record_id` | Open orders, with `is_stop_loss: true` |
+| `TRAILING_STOP` | `record_id` | Strategies |
+| `TWAP` | `record_id` | Strategies |
+| `PEGGED` | `record_id` | Strategies |
+| `ICEBERG` parent | `record_id` | Strategies |
+| `ICEBERG` active slice | child `order_id` | Open orders |
+
+Two rows deserve attention.
+
+**Iceberg appears in both places at once.** The parent is a strategy; the slice currently resting is a CLOB order. Showing both without marking the relationship makes it look like the user has two orders when they have one.
+
+**Stop-loss migrates.** Pre-trigger it is a strategy record and nothing else. When it fires, Bravado places a CLOB order and it starts appearing in open orders. An app that only watches strategies will think it disappeared; one that only watches orders will not see it until it fires.
+
+## PENDING is not a rejection
+
+<Warning>
+  A managed strategy sits in `PENDING` until its entry conditions are met. It has been accepted. Rendering it as an error, or cancelling and re-placing on `PENDING`, churns fees and prevents the strategy from ever working.
+</Warning>
+
+```typescript
+const label = {
+  PENDING:   "Waiting for conditions",
+  ACTIVE:    "Working",
+  COMPLETED: "Finished",
+  CANCELLED: "Cancelled",
+}[strategy.status];
+```
+
+## Cancelling correctly
+
+```bash
+# a CLOB order
+curl -X DELETE $BASE/v2/trade/orders/{order_id} \
+  -H "Authorization: Bearer $KEY" -H "Idempotency-Key: $(uuidgen)"
+
+# a managed strategy
+curl -X DELETE $BASE/v2/trade/strategies/{record_id} \
+  -H "Authorization: Bearer $KEY" -H "Idempotency-Key: $(uuidgen)"
+```
+
+<Warning>
+  `POST /v2/trade/orders/cancel-all` clears **CLOB orders only**. Running strategies continue afterwards. A "cancel everything" button wired to just that endpoint will leave a TWAP quietly executing, which is a genuinely bad surprise for a user who thought they were flat.
+</Warning>
+
+A correct cancel-all:
+
+```python
+def cancel_everything():
+    write("POST", "/v2/trade/orders/cancel-all")
+
+    for s in requests.get(f"{BASE}/v2/trade/strategies", headers=H).json()["strategies"]:
+        if s["status"] in ("ACTIVE", "PENDING"):
+            write("DELETE", f"/v2/trade/strategies/{s['record_id']}")
+```
+
+Cancelling a strategy stops future clips. Anything already filled is a position you now hold, so read filled size before deciding what to do next.
+
+Note also that a stop-loss can only be cancelled pre-trigger. After it fires you are cancelling the resulting order instead.
+
+## Checking warnings
+
+Order responses carry `warnings[]` even on success, covering partial fills, clamped prices, and bracket legs that could not be placed. An app that only branches on status code will silently misreport what happened.
+
+```typescript
+if (res.warnings?.length) showNotice(res.warnings);
+
+for (const leg of ["take_profit", "stop_loss"]) {
+  const err = res.brackets?.[leg]?.error;
+  if (err) showWarning(`${leg} not placed: ${err}`);  // position is unprotected
+}
+```
+
+## Next
+
+- [Build a trading terminal](/guides/build-a-trading-terminal)
+- [Stop-loss and take-profit](/guides/stop-loss-take-profit)
+- [Execute a large position](/guides/large-position-twap-iceberg)

@@ -1,0 +1,136 @@
+---
+title: "How to Build a Prediction Market Trading Terminal"
+sidebarTitle: "Build a trading terminal"
+description: "Build a Polymarket trading terminal with the Bravado API: order entry, live portfolio, discovery, and the four calls a terminal needs on load."
+icon:
+  name: "monitor"
+  library: "lucide"
+---
+
+A terminal is the one integration that touches every Bravado product. It needs order entry, portfolio state, market discovery, and increasingly social features, all from one authenticated surface.
+
+## The four calls on load
+
+```bash
+# 1. who am I, and what can this key do
+curl $BASE/v2/trade/account -H "Authorization: Bearer $KEY"
+
+# 2. spendable collateral
+curl $BASE/v2/trade/balances -H "Authorization: Bearer $KEY"
+
+# 3. positions, with cost basis already computed
+curl $BASE/v2/trade/positions -H "Authorization: Bearer $KEY"
+
+# 4. resting orders to render on the book
+curl $BASE/v2/trade/orders/open -H "Authorization: Bearer $KEY"
+```
+
+The account call is worth making first for a reason beyond identity: it returns `api_key.scopes` and `rate_limit_per_min`. Scopes tell you which controls to render at all, and the rate limit tells you how fast to poll. Both are better read than assumed.
+
+```typescript
+const account = await api("/v2/trade/account");
+
+const canTrade    = account.api_key.scopes.includes("trade.execute");
+const canWithdraw = account.api_key.scopes.includes("trade.withdraw");
+const pollMs      = (60 / account.api_key.rate_limit_per_min) * 1000 * 4;
+```
+
+<Note>
+  A read-only terminal is a legitimate product. Data API endpoints work on any public wallet with no funded account, which makes a free tier possible without provisioning anything.
+</Note>
+
+## Order entry
+
+One endpoint serves every order type, so the same code path handles a market order and a TWAP. Only the payload changes:
+
+```typescript
+async function submitOrder(form: OrderForm) {
+  const payload: Record<string, unknown> = {
+    type: form.type,
+    symbol: form.symbol,
+    side: form.side,
+  };
+
+  if (form.type === "MARKET") payload.quote_amount = form.dollars;
+  else { payload.price = form.price; payload.size = form.shares; }
+
+  return api("/v2/trade/order", {
+    method: "POST",
+    headers: { "Idempotency-Key": form.clientOrderId },  // stable per submission
+    body: JSON.stringify(payload),
+  });
+}
+```
+
+<Warning>
+  Generate the idempotency key when the user opens the ticket, not when the request fires. A terminal is the worst place to double-submit: users retry on a spinner, and a duplicate order is real money. See [Safe retries](/guides/safe-retries-idempotency).
+</Warning>
+
+## Layout that matches the data
+
+| Panel | Source |
+| --- | --- |
+| Balances | `GET /v2/trade/balances` |
+| Positions | `GET /v2/trade/positions` |
+| Working orders | `GET /v2/trade/orders/open` |
+| Running strategies | `GET /v2/trade/strategies` |
+| Activity | `GET /v2/trade/activity` |
+| Leaderboard | `GET /leaderboard` |
+| Trader profile | `GET /traders/{address}` |
+
+Working orders and running strategies are **separate panels for a reason**, covered in [Track order and strategy state](/guides/track-order-and-strategy-state). Merging them into one list is the single most common terminal bug.
+
+## Polling without hitting limits
+
+Different panels change at different rates. Polling everything on one fast timer burns quota on data that did not move:
+
+```typescript
+const schedule = [
+  { path: "/v2/trade/balances",    everyMs: 15_000 },
+  { path: "/v2/trade/positions",   everyMs: 10_000 },
+  { path: "/v2/trade/orders/open", everyMs:  5_000 },
+  { path: "/v2/trade/strategies",  everyMs: 15_000 },
+  { path: "/leaderboard",          everyMs: 120_000 },  // rarely moves
+];
+```
+
+On `429`, honour `Retry-After` and back off that panel rather than the whole app.
+
+## Discovery and social
+
+Leaderboards give a terminal something to show a user who has not traded yet, and the profile endpoints turn a wallet into a page worth visiting. A follow button wired to the Copytrade API turns that into a product feature rather than a stat.
+
+See [Build a PnL leaderboard](/guides/pnl-leaderboard) and [Track a whale wallet](/guides/track-whale-wallet).
+
+## Rendering money correctly
+
+Every numeric field is a JSON string. This matters more in a terminal than anywhere else, because the user compares your number against the venue's:
+
+```typescript
+import { Decimal } from "decimal.js";
+
+const value = new Decimal(pos.size).times(pos.current_price);  // not parseFloat
+```
+
+<Warning>
+  `parseFloat` on these values will eventually show a balance that disagrees with Polymarket by a cent, and users will report it as a bug. See [Numeric conventions](/reference/numeric-conventions).
+</Warning>
+
+## Four states a position can be in
+
+A terminal that models positions as simply open or closed will mislead users:
+
+| State | What it means | What the user can do |
+| --- | --- | --- |
+| Open | Market still trading | Sell, or add |
+| Awaiting resolution | Event concluded, outcome not final | Nothing, wait |
+| Resolved, unredeemed | Outcome final, shares not claimed | Redeem |
+| Redeemed | Collateral back in the wallet | Nothing |
+
+The middle two are what makes prediction markets different, and collapsing them means showing a balance the user cannot access. See [Display positions and PnL](/guides/display-positions-and-pnl).
+
+## Next
+
+- [Display positions and PnL](/guides/display-positions-and-pnl)
+- [Track order and strategy state](/guides/track-order-and-strategy-state)
+- [White-label sub-accounts](/guides/white-label-sub-accounts)

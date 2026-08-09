@@ -1,0 +1,147 @@
+---
+title: "How to Execute a Large Position with TWAP and Iceberg Orders"
+sidebarTitle: "Execute a large position"
+description: "Work a large position into a thin Polymarket order book using TWAP and Iceberg without moving the price against yourself."
+icon:
+  name: "layers"
+  library: "lucide"
+---
+
+Prediction market books are thin. A market order for size does not get filled at the price you saw; it walks the book and you pay the average. This guide covers the two tools for working size in gradually, and when each is the right one.
+
+## The problem, concretely
+
+Say the best ask is `0.62` with 200 shares behind it, then `0.64` with 300, then `0.68`. A market buy for 1,000 shares takes all three levels and your average lands near `0.66`, not `0.62`. On a thin book you moved the price yourself, and anyone watching saw it happen.
+
+Two ways to avoid that:
+
+| | TWAP | Iceberg |
+| --- | --- | --- |
+| Splits by | Time | Displayed size |
+| Takes or makes | Takes liquidity in clips | Rests passively, post-only |
+| Fill certainty | Higher, it keeps buying | Lower, waits to be hit |
+| Best when | You must get filled within a window | You would rather wait than pay the spread |
+
+## TWAP: spread it over a window
+
+Break a budget into clips executed at intervals:
+
+```json
+{
+  "type": "TWAP",
+  "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
+  "side": "BUY",
+  "budget_usdc": "2000",
+  "execution": {
+    "duration_sec": 3600,
+    "interval_sec": 60,
+    "price_tolerance_pct": 2,
+    "randomize_pct": 10
+  }
+}
+```
+
+That spends \$2,000 over an hour in roughly 60 clips.
+
+<AccordionGroup>
+  <Accordion title="duration_sec and interval_sec">
+    Seconds, not minutes. `interval_sec` has a **minimum of 10**. Clip count is roughly `duration_sec / interval_sec`, so the pair determines how big each clip is: too few clips and each one moves the market, too many and the strategy runs longer than your edge lasts.
+  </Accordion>
+
+  <Accordion title="price_tolerance_pct">
+    A percent, `0` to `100`. Clips are skipped when the price has moved beyond this from the strategy's reference. This is your protection against filling into a spike. Setting it too tight means the strategy silently does nothing in a moving market.
+  </Accordion>
+
+  <Accordion title="randomize_pct">
+    A percent that jitters clip timing and size, so execution does not appear as an obvious metronome. Useful when predictability itself is the cost.
+  </Accordion>
+</AccordionGroup>
+
+The response gives you a `record_id`, not an `order_id`:
+
+```json
+{ "record_id": "rec_twap_abc123", "status": "ACTIVE", "type": "TWAP" }
+```
+
+## Iceberg: show a slice, hide the rest
+
+Rest a large order while only exposing a clip at a time:
+
+```json
+{
+  "type": "ICEBERG",
+  "symbol": "...",
+  "side": "BUY",
+  "price": "0.60",
+  "size": "5000",
+  "execution": { "clip_size": "100" }
+}
+```
+
+<Warning>
+  **Iceberg slices are post-only.** For a buy, the price must be at or below the current best bid. Price it above and the slice is rejected with `order crosses book`, because it would take liquidity rather than provide it. Iceberg cannot be used to fill aggressively.
+</Warning>
+
+That constraint is the whole trade-off: an Iceberg waits to be hit. If the market runs away from your price, you do not get filled at all.
+
+## Monitoring
+
+Managed strategies do not appear on the open orders endpoint. This trips people up constantly:
+
+```bash
+curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/strategies \
+  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```
+
+An Iceberg is visible in two places at once: the parent as a `record_id` on `/strategies`, and whichever slice is currently resting as a child `order_id` on `/v2/trade/orders/open`.
+
+<Note>
+  `PENDING` means the engine has accepted the strategy and is waiting for conditions to be met. It is not a rejection.
+</Note>
+
+## Cancelling
+
+```bash
+curl -X DELETE https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/strategies/rec_twap_abc123 \
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)"
+```
+
+Cancelling stops future clips. Anything already filled is yours, so read the strategy record for filled size before deciding what to do with the position.
+
+<Warning>
+  `POST /v2/trade/orders/cancel-all` does **not** touch managed strategies. It clears CLOB orders only. A TWAP keeps running after it. Cancel strategies individually.
+</Warning>
+
+## A practical combination
+
+For a large position where you want most of it passively but need a floor on completion:
+
+<Steps>
+  <Step title="Rest the bulk as an Iceberg">
+    Place 70% at or below the touch. If the market comes to you, this is the cheap fill.
+  </Step>
+  <Step title="Run a TWAP for the remainder">
+    Put the other 30% on a duration that matches your deadline, with a `price_tolerance_pct` you can live with.
+  </Step>
+  <Step title="Watch both on /strategies">
+    Poll for filled size across the two records rather than assuming either completes.
+  </Step>
+  <Step title="Cancel the Iceberg once the TWAP finishes">
+    Otherwise it keeps resting and you end up with more size than intended.
+  </Step>
+</Steps>
+
+## Venue constraints that cause rejections
+
+These come from the venue, not Bravado:
+
+- Resting orders need **at least 5 shares**, which sets a floor on `clip_size`.
+- Market orders need **\$1 minimum** notional, which sets a floor on TWAP clip size via `budget_usdc / clip count`.
+- Prices are decimal probabilities from `0.001` to `0.999`.
+
+## Next
+
+- [Place an order](/guides/place-an-order)
+- [Safe retries](/guides/safe-retries-idempotency)
+- [Trade API reference](/products/trade-api)
