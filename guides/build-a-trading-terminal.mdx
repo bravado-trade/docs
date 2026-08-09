@@ -1,136 +1,363 @@
 ---
 title: "How to Build a Prediction Market Trading Terminal"
 sidebarTitle: "Build a trading terminal"
-description: "Build a Polymarket trading terminal with the Bravado API: order entry, live portfolio, discovery, and the four calls a terminal needs on load."
+description: "Build a Polymarket trading terminal with the Bravado API: the four calls on load, order entry, polling budgets, and the position states a UI must not collapse."
 icon:
   name: "monitor"
   library: "lucide"
 ---
 
-A terminal is the one integration that touches every Bravado product. It needs order entry, portfolio state, market discovery, and increasingly social features, all from one authenticated surface.
+## Overview
 
-## The four calls on load
+A terminal has to answer four questions at a glance: what do I hold, what is it worth, what is working, and how do I act. On a spot exchange that is largely solved by rendering the API's response objects.
 
-```bash
-# 1. who am I, and what can this key do
-curl $BASE/v2/trade/account -H "Authorization: Bearer $KEY"
+Prediction markets break that assumption in one specific way. **A position can be finished without being closed.** The event concluded, the outcome is decided, the shares are worth a dollar each, and none of that money is available yet. A UI that models positions as open or closed will show users balances they cannot withdraw, and that generates support tickets faster than any other bug in this class of product.
 
-# 2. spendable collateral
-curl $BASE/v2/trade/balances -H "Authorization: Bearer $KEY"
-
-# 3. positions, with cost basis already computed
-curl $BASE/v2/trade/positions -H "Authorization: Bearer $KEY"
-
-# 4. resting orders to render on the book
-curl $BASE/v2/trade/orders/open -H "Authorization: Bearer $KEY"
-```
-
-The account call is worth making first for a reason beyond identity: it returns `api_key.scopes` and `rate_limit_per_min`. Scopes tell you which controls to render at all, and the rate limit tells you how fast to poll. Both are better read than assumed.
-
-```typescript
-const account = await api("/v2/trade/account");
-
-const canTrade    = account.api_key.scopes.includes("trade.execute");
-const canWithdraw = account.api_key.scopes.includes("trade.withdraw");
-const pollMs      = (60 / account.api_key.rate_limit_per_min) * 1000 * 4;
-```
+This guide builds the terminal around that distinction.
 
 <Note>
-  A read-only terminal is a legitimate product. Data API endpoints work on any public wallet with no funded account, which makes a free tier possible without provisioning anything.
+  Read time: about 17 minutes. TypeScript and general front-end experience assumed. No prediction market background needed.
 </Note>
 
-## Order entry
+## TL;DR
 
-One endpoint serves every order type, so the same code path handles a market order and a TWAP. Only the payload changes:
+- Four calls on load: account, balances, positions, open orders. Make **account** first, because it tells you which controls to render and how fast you may poll.
+- Working orders and running strategies are **separate endpoints**. Merging them into one panel without fetching both is the most common terminal bug.
+- Positions have **four** states, not two. Open, awaiting resolution, resolved-unredeemed, redeemed.
+- Cost basis arrives computed. Do not reconstruct it from fills.
+- Every number is a JSON string. Render with a decimal type or your balances will disagree with the venue by a cent.
+- Generate the idempotency key when the user opens the ticket, not when the request fires.
+
+## What you will do
+
+- Bootstrap a terminal with four calls and read capability off the account
+- Render balances, positions, working orders, and running strategies
+- Build an order ticket that handles all eight types through one code path
+- Set per-panel polling intervals from your actual rate limit
+- Model the four position states so users are never shown inaccessible money
+- Handle `429` and `503` without breaking the whole app
+
+## What you will need
+
+**Knowledge**
+
+- TypeScript, and a UI framework of your choice
+- A decimal library. Examples use `decimal.js`.
+
+**Tools and access**
+
+- A Bravado API key with `trade.read`, plus `trade.execute` if the terminal places orders
+- A backend. Keys must never reach the browser.
+
+```bash
+npm install decimal.js
+```
+
+<Warning>
+  A Bravado key can trade and potentially withdraw. It belongs on your server, never in a browser bundle or mobile app where it can be extracted. Your frontend talks to your API; your API talks to Bravado.
+</Warning>
+
+## Bootstrap: the four calls
 
 ```typescript
-async function submitOrder(form: OrderForm) {
+const BASE = "https://bravado-api-k7kaq.ondigitalocean.app";
+
+async function api(path: string, init: RequestInit = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
+      "Content-Type": "application/json",
+      ...init.headers,
+    },
+  });
+  if (!res.ok) throw Object.assign(new Error(res.statusText), { status: res.status, res });
+  return res.json();
+}
+
+export async function bootstrap() {
+  const [account, balances, positions, orders] = await Promise.all([
+    api("/v2/trade/account"),
+    api("/v2/trade/balances"),
+    api("/v2/trade/positions"),
+    api("/v2/trade/orders/open"),
+  ]);
+  return { account, balances, positions, orders };
+}
+```
+
+### Why account comes first
+
+It is not just identity. It carries two things that shape the entire UI:
+
+```typescript
+const { api_key } = account;
+
+const canTrade    = api_key.scopes.includes("trade.execute");
+const canCancel   = api_key.scopes.includes("trade.cancel");
+const canWithdraw = api_key.scopes.includes("trade.withdraw");
+
+const budgetPerMin = api_key.rate_limit_per_min;   // your polling allowance
+```
+
+Rendering a withdraw button for a key without `trade.withdraw` produces a `403` the user cannot act on. Reading scopes lets you hide it instead of explaining it.
+
+<Note>
+  A read-only terminal is a legitimate product. Every Data API endpoint works on any public wallet with no funded account, so a free tier that shows any trader's portfolio needs no provisioning at all.
+</Note>
+
+## Render the panels
+
+Each panel has one source:
+
+| Panel | Endpoint | Changes |
+| --- | --- | --- |
+| Balances | `/v2/trade/balances` | Slowly |
+| Positions | `/v2/trade/positions` | On fills |
+| Working orders | `/v2/trade/orders/open` | Fast |
+| Running strategies | `/v2/trade/strategies` | Slowly |
+| Activity | `/v2/trade/activity` | On events |
+| Leaderboard | `/leaderboard` | Rarely |
+
+**Working orders and running strategies are separate for a reason.** A resting `LIMIT` is on Polymarket's book. A `TWAP` is a Bravado-side supervisor placing orders over time. They are genuinely different objects.
+
+You can render them in one list, but you must fetch both, and you must keep track of which is which so cancel hits the right endpoint:
+
+```typescript
+type Working =
+  | { kind: "order";    id: string; symbol: string; remaining: string }
+  | { kind: "strategy"; id: string; symbol: string; remaining: string; status: string };
+
+async function workingItems(): Promise<Working[]> {
+  const [o, s] = await Promise.all([
+    api("/v2/trade/orders/open"),
+    api("/v2/trade/strategies"),
+  ]);
+
+  return [
+    ...o.orders.map((x: any) => ({ kind: "order" as const, id: x.order_id,
+                                   symbol: x.symbol, remaining: x.remaining_size })),
+    ...s.strategies.map((x: any) => ({ kind: "strategy" as const, id: x.record_id,
+                                       symbol: x.symbol, remaining: x.remaining_size,
+                                       status: x.status })),
+  ];
+}
+```
+
+<Warning>
+  A terminal that polls only `orders/open` will show a user's TWAP as having vanished the moment they place it. See [Track order and strategy state](/guides/track-order-and-strategy-state).
+</Warning>
+
+## The order ticket
+
+One endpoint serves all eight types, so the ticket is one code path with a changing payload:
+
+```typescript
+type Ticket = {
+  clientOrderId: string;      // generated when the ticket opens
+  type: "MARKET" | "LIMIT" | "TWAP" | "ICEBERG" | "PEGGED"
+      | "STOP_LOSS" | "TAKE_PROFIT" | "TRAILING_STOP";
+  symbol: string;
+  side: "BUY" | "SELL";
+  dollars?: string;
+  shares?: string;
+  price?: string;
+};
+
+export async function submit(t: Ticket) {
   const payload: Record<string, unknown> = {
-    type: form.type,
-    symbol: form.symbol,
-    side: form.side,
+    type: t.type, symbol: t.symbol, side: t.side,
   };
 
-  if (form.type === "MARKET") payload.quote_amount = form.dollars;
-  else { payload.price = form.price; payload.size = form.shares; }
+  if (t.type === "MARKET") payload.quote_amount = t.dollars;
+  else {
+    payload.size = t.shares;
+    if (t.price) payload.price = t.price;
+  }
 
   return api("/v2/trade/order", {
     method: "POST",
-    headers: { "Idempotency-Key": form.clientOrderId },  // stable per submission
+    headers: { "Idempotency-Key": t.clientOrderId },
     body: JSON.stringify(payload),
   });
 }
 ```
 
-<Warning>
-  Generate the idempotency key when the user opens the ticket, not when the request fires. A terminal is the worst place to double-submit: users retry on a spinner, and a duplicate order is real money. See [Safe retries](/guides/safe-retries-idempotency).
-</Warning>
-
-## Layout that matches the data
-
-| Panel | Source |
-| --- | --- |
-| Balances | `GET /v2/trade/balances` |
-| Positions | `GET /v2/trade/positions` |
-| Working orders | `GET /v2/trade/orders/open` |
-| Running strategies | `GET /v2/trade/strategies` |
-| Activity | `GET /v2/trade/activity` |
-| Leaderboard | `GET /leaderboard` |
-| Trader profile | `GET /traders/{address}` |
-
-Working orders and running strategies are **separate panels for a reason**, covered in [Track order and strategy state](/guides/track-order-and-strategy-state). Merging them into one list is the single most common terminal bug.
-
-## Polling without hitting limits
-
-Different panels change at different rates. Polling everything on one fast timer burns quota on data that did not move:
+### Generate the key at ticket-open
 
 ```typescript
-const schedule = [
-  { path: "/v2/trade/balances",    everyMs: 15_000 },
-  { path: "/v2/trade/positions",   everyMs: 10_000 },
-  { path: "/v2/trade/orders/open", everyMs:  5_000 },
-  { path: "/v2/trade/strategies",  everyMs: 15_000 },
-  { path: "/leaderboard",          everyMs: 120_000 },  // rarely moves
+function openTicket(symbol: string): Ticket {
+  return { clientOrderId: crypto.randomUUID(), type: "MARKET", symbol, side: "BUY" };
+}
+```
+
+<Warning>
+  A terminal is the worst place to double-submit. Users press submit again when a spinner hangs, and a duplicate order is real money. Generating the key when the ticket opens means every retry of that one intent carries the same key. Generating it at request time means each click creates a new order. See [Safe retries](/guides/safe-retries-idempotency).
+</Warning>
+
+### Surface warnings
+
+```typescript
+const res = await submit(ticket);
+
+if (res.warnings?.length) notify(res.warnings);
+
+for (const leg of ["take_profit", "stop_loss"] as const) {
+  const err = res.brackets?.[leg]?.error;
+  if (err) warn(`${leg} not placed: ${err}`);   // position is unprotected
+}
+```
+
+A `200` with a failed bracket leg means the user holds a position with no exit and no indication anything went wrong. Show it.
+
+## Poll within budget
+
+Different panels change at different rates, and polling everything on one fast timer burns quota on data that did not move:
+
+```typescript
+const SCHEDULE = [
+  { path: "/v2/trade/orders/open", everyMs:   5_000 },
+  { path: "/v2/trade/positions",   everyMs:  10_000 },
+  { path: "/v2/trade/balances",    everyMs:  15_000 },
+  { path: "/v2/trade/strategies",  everyMs:  15_000 },
+  { path: "/leaderboard",          everyMs: 120_000 },
 ];
 ```
 
-On `429`, honour `Retry-After` and back off that panel rather than the whole app.
+Sanity-check the total against your actual quota rather than guessing:
 
-## Discovery and social
+```typescript
+const perMin = SCHEDULE.reduce((n, s) => n + 60_000 / s.everyMs, 0);
+if (perMin > account.api_key.rate_limit_per_min * 0.7) {
+  console.warn(`polling ${perMin.toFixed(0)}/min against a budget of ${account.api_key.rate_limit_per_min}`);
+}
+```
 
-Leaderboards give a terminal something to show a user who has not traded yet, and the profile endpoints turn a wallet into a page worth visiting. A follow button wired to the Copytrade API turns that into a product feature rather than a stat.
+Leave headroom. Order submissions and cancels come out of the same budget, and they arrive exactly when the user is least tolerant of a `429`.
 
-See [Build a PnL leaderboard](/guides/pnl-leaderboard) and [Track a whale wallet](/guides/track-whale-wallet).
+### Back off one panel, not the app
 
-## Rendering money correctly
+```typescript
+async function poll(path: string) {
+  try {
+    return await api(path);
+  } catch (e: any) {
+    if (e.status === 429) {
+      const wait = Number(e.res.headers.get("Retry-After") ?? 30);
+      backoff(path, wait * 1000);      // pause this panel only
+      return null;
+    }
+    throw e;
+  }
+}
+```
 
-Every numeric field is a JSON string. This matters more in a terminal than anywhere else, because the user compares your number against the venue's:
+## Model four position states
+
+This is the part that matters most, and the part generic exchange UIs get wrong.
+
+```typescript
+type PositionState = "open" | "awaiting_resolution" | "resolved_unredeemed" | "redeemed";
+
+function stateOf(p: any): PositionState {
+  if (!p.market_resolved) return p.event_concluded ? "awaiting_resolution" : "open";
+  return p.redeemed ? "redeemed" : "resolved_unredeemed";
+}
+```
+
+| State | What it means | What the user can do |
+| --- | --- | --- |
+| `open` | Market still trading | Sell, or add |
+| `awaiting_resolution` | Event over, outcome not final on-chain | Nothing. Wait. |
+| `resolved_unredeemed` | Outcome final, collateral not claimed | **Redeem** |
+| `redeemed` | Collateral back in the wallet | Nothing |
+
+The two middle states are what make prediction markets different. Collapsing them into "closed" tells the user they have money when they cannot touch it. Collapsing them into "open" hides a redeem action they need to take.
+
+```tsx
+{state === "awaiting_resolution" && (
+  <Badge tone="muted">Awaiting resolution</Badge>
+)}
+{state === "resolved_unredeemed" && (
+  <Button onClick={() => redeem(p.symbol)}>Redeem ${value}</Button>
+)}
+```
+
+<Note>
+  Field names for the resolution flags depend on the response shape; confirm against the [positions reference](/api/trade/positions). The four-state distinction is the part that matters, not the exact field.
+</Note>
+
+## Render money correctly
 
 ```typescript
 import { Decimal } from "decimal.js";
 
-const value = new Decimal(pos.size).times(pos.current_price);  // not parseFloat
+const size  = new Decimal(pos.size);
+const price = new Decimal(pos.current_price);
+const value = size.times(price);
+
+const cents = `${price.times(100).toFixed(1)}¢`;
+const pct   = `${price.times(100).toFixed(0)}%`;
 ```
 
+Prices are decimal probabilities, so `0.62` is both 62 cents and a 62% implied chance. Showing `62¢ (62%)` reads well and teaches the user the model without a tooltip.
+
 <Warning>
-  `parseFloat` on these values will eventually show a balance that disagrees with Polymarket by a cent, and users will report it as a bug. See [Numeric conventions](/reference/numeric-conventions).
+  `parseFloat` on these values will eventually produce a balance that disagrees with Polymarket by a cent, and the user will report it as a bug in your product. See [Numeric conventions](/reference/numeric-conventions).
 </Warning>
 
-## Four states a position can be in
+## Handle 503 as a state, not an error
 
-A terminal that models positions as simply open or closed will mislead users:
+Data API statement endpoints return `503` with `available: false` while a wallet is still being computed. For a wallet nobody has queried before, this is normal.
 
-| State | What it means | What the user can do |
-| --- | --- | --- |
-| Open | Market still trading | Sell, or add |
-| Awaiting resolution | Event concluded, outcome not final | Nothing, wait |
-| Resolved, unredeemed | Outcome final, shares not claimed | Redeem |
-| Redeemed | Collateral back in the wallet | Nothing |
+```typescript
+if (e.status === 503) {
+  const body = await e.res.json();
+  if (body.available === false) return { state: "processing" };  // spinner, poll later
+}
+```
 
-The middle two are what makes prediction markets different, and collapsing them means showing a balance the user cannot access. See [Display positions and PnL](/guides/display-positions-and-pnl).
+An error toast here is wrong. Nothing failed.
 
-## Next
+## Wrapping up
 
-- [Display positions and PnL](/guides/display-positions-and-pnl)
-- [Track order and strategy state](/guides/track-order-and-strategy-state)
-- [White-label sub-accounts](/guides/white-label-sub-accounts)
+Four calls to bootstrap, one endpoint for every order type, and two things to get right that a generic exchange UI would not prompt you to consider: **orders live in two places**, and **positions have four states**.
+
+Everything else in a terminal is ordinary product work. Those two are where the domain leaks into the interface, and where users notice if you got it wrong.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Why can I not put the API key in the frontend?">
+    A Bravado key can place orders and, with the right scope, move funds. Anything shipped to a browser or mobile app can be extracted. Your frontend should call your backend, and only your backend should hold the key.
+  </Accordion>
+
+  <Accordion title="Do I need websockets for live prices?">
+    The guides here use polling with per-panel intervals, which is sufficient for portfolio and order state. Match your interval to `rate_limit_per_min` rather than polling as fast as possible.
+  </Accordion>
+
+  <Accordion title="Why does a user's TWAP not appear in their open orders?">
+    Managed strategies live on `/v2/trade/strategies`. Only `LIMIT`, `MARKET`, and `TAKE_PROFIT` appear on `/v2/trade/orders/open`. Fetch both.
+  </Accordion>
+
+  <Accordion title="A user says their winning position shows a balance they cannot withdraw.">
+    They are in `resolved_unredeemed`. The outcome is final and the shares are worth a dollar each, but the collateral is not in the wallet until redeemed. Surface a redeem action rather than showing it as available cash.
+  </Accordion>
+
+  <Accordion title="Should I recompute cost basis from the trade log?">
+    No. Splits, merges, and redemptions are not ordinary buys and sells, and treating them as such produces a basis that disagrees with the chain. Positions come with cost basis already computed.
+  </Accordion>
+
+  <Accordion title="How do I support multiple end users?">
+    Provision each under a partner master key so they get their own wallet and scoped key, which makes positions and PnL attributable per user. See [White-label sub-accounts](/guides/white-label-sub-accounts).
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Display positions and PnL](/guides/display-positions-and-pnl), cost basis and the four states in depth
+- [Track order and strategy state](/guides/track-order-and-strategy-state), the two-endpoint problem
+- [White-label sub-accounts](/guides/white-label-sub-accounts), provisioning end users
+- [Place an order](/guides/place-an-order), every order type and its payload
+- [Trade API reference](/products/trade-api), full field documentation
+- [Rate limits](/reference/rate-limits), quotas and backoff
