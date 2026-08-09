@@ -1,30 +1,86 @@
 ---
 title: "How to Track Order and Strategy State on Bravado"
 sidebarTitle: "Track order and strategy state"
-description: "Why a TWAP does not appear in your open orders, how CLOB orders differ from managed strategies, and how to render both correctly."
+description: "Why a TWAP does not appear in your open orders, how CLOB orders differ from managed strategies, and how to render and cancel both correctly."
 icon:
   name: "list-checks"
   library: "lucide"
 ---
 
-"My TWAP disappeared" is the most common integration bug on Bravado, and it is not a bug. Orders live in two places, and an app that polls only one of them will tell users their order vanished.
+## Overview
 
-## Two kinds of order
+"My TWAP disappeared" is the most common integration report on Bravado, and every time the order is exactly where it should be. The client was looking in the wrong place.
 
-| | CLOB orders | Managed strategies |
+Orders live in **two** systems. Some rest on Polymarket's central limit order book. Others are supervised by Bravado's execution engine, which places CLOB orders on your behalf over time. They are different objects with different identifiers, different endpoints, and different cancellation semantics.
+
+Once that model is clear, a whole class of bugs stops happening: orders that look missing, cancel-all buttons that do not cancel everything, and strategies churned into oblivion because `PENDING` was read as failure.
+
+<Note>
+  Read time: about 12 minutes. Useful before you build any UI or bot that displays order state.
+</Note>
+
+## TL;DR
+
+- `LIMIT`, `MARKET`, `TAKE_PROFIT` return an **`order_id`** and live on `GET /v2/trade/orders/open`.
+- `TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP`, and pre-trigger `STOP_LOSS` return a **`record_id`** and live on `GET /v2/trade/strategies`.
+- **Iceberg appears in both at once**: parent strategy plus the currently resting slice.
+- **Stop-loss migrates** from strategies to open orders when it triggers.
+- `PENDING` is accepted-and-waiting, **not** rejected.
+- `cancel-all` clears CLOB orders only. Strategies keep running.
+
+## What you will do
+
+- Understand why the two systems exist rather than memorising a table
+- Fetch complete working state across both endpoints
+- Map every order type to where it will appear
+- Render a unified list without losing the ability to cancel correctly
+- Implement a cancel-everything that actually cancels everything
+- Read `warnings[]` and bracket errors that a status code hides
+
+## What you will need
+
+**Knowledge**
+
+- You have placed an order. [Place an order](/guides/place-an-order) if not.
+
+**Tools and access**
+
+- A Bravado API key with `trade.read` and `trade.cancel`
+
+```bash
+export BRAVADO_API_KEY="your-bearer-token"
+export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+```
+
+## Why there are two systems
+
+A CLOB order is a standing instruction sitting on Polymarket: *buy 100 shares at 62 cents*. The venue holds it and matches it when someone crosses.
+
+A managed strategy is not an order at all. It is a supervisor running on Bravado: *over the next hour, buy \$2,000 worth in clips, skipping any clip where the price has moved more than 2%*. To do that it places ordinary CLOB orders, waits, evaluates, and places more.
+
+So a TWAP is not resting anywhere for the venue to show you. It is a process, and at any given instant it may have no order on the book at all.
+
+That distinction explains everything else:
+
+| | CLOB order | Managed strategy |
 | --- | --- | --- |
+| What it is | A resting instruction on the venue | A process on Bravado |
 | Types | `LIMIT`, `MARKET`, `TAKE_PROFIT` | `TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP`, pre-trigger `STOP_LOSS` |
 | Identifier | `order_id` | `record_id` |
-| Listed on | `GET /v2/trade/orders/open` | `GET /v2/trade/strategies` |
+| Listed on | `/v2/trade/orders/open` | `/v2/trade/strategies` |
 | Cancel with | `DELETE /v2/trade/orders/{order_id}` | `DELETE /v2/trade/strategies/{id}` |
-| Lives on | Polymarket's book | Bravado's execution engine |
+| Survives your process dying | Yes, it is on the venue | Yes, it runs on Bravado |
 
-A CLOB order is resting on the venue. A managed strategy is a Bravado-side supervisor that places CLOB orders over time on your behalf. They are genuinely different objects, which is why they are listed separately.
-
-## Poll both
+## Fetch complete state
 
 ```python
-def working_orders():
+import os, requests
+
+BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+
+
+def working():
     orders     = requests.get(f"{BASE}/v2/trade/orders/open", headers=H).json()["orders"]
     strategies = requests.get(f"{BASE}/v2/trade/strategies",  headers=H).json()["strategies"]
 
@@ -34,33 +90,41 @@ def working_orders():
     )
 ```
 
-Render them as one list if you like, but fetch from both and keep the `kind` so cancel hits the right endpoint.
+Render them as one list if that suits your UI. Just fetch from both, and keep `kind` so cancellation routes to the right endpoint.
 
-## Where each type shows up
+## Where each type appears
 
 | Placed as | Returns | Appears on |
 | --- | --- | --- |
 | `LIMIT` | `order_id` | Open orders |
 | `MARKET` | `order_id` | Open orders, briefly |
-| `TAKE_PROFIT` | `order_id` | Open orders, with `is_take_profit: true` |
+| `TAKE_PROFIT` | `order_id` | Open orders, `is_take_profit: true` |
 | `STOP_LOSS` before trigger | `record_id` | Strategies **only** |
-| `STOP_LOSS` after trigger | `record_id` | Open orders, with `is_stop_loss: true` |
+| `STOP_LOSS` after trigger | `record_id` | Open orders, `is_stop_loss: true` |
 | `TRAILING_STOP` | `record_id` | Strategies |
 | `TWAP` | `record_id` | Strategies |
 | `PEGGED` | `record_id` | Strategies |
 | `ICEBERG` parent | `record_id` | Strategies |
 | `ICEBERG` active slice | child `order_id` | Open orders |
 
-Two rows deserve attention.
+### Iceberg appears twice, and that is correct
 
-**Iceberg appears in both places at once.** The parent is a strategy; the slice currently resting is a CLOB order. Showing both without marking the relationship makes it look like the user has two orders when they have one.
+The parent is a strategy holding 5,000 shares of intent. The slice currently on the book is a real CLOB order for 100. Both are true at once.
 
-**Stop-loss migrates.** Pre-trigger it is a strategy record and nothing else. When it fires, Bravado places a CLOB order and it starts appearing in open orders. An app that only watches strategies will think it disappeared; one that only watches orders will not see it until it fires.
+If your UI lists them side by side without indicating the relationship, users will believe they have two orders and try to cancel both. Group the slice under its parent, or hide slices whose parent you are already showing.
 
-## PENDING is not a rejection
+### Stop-loss moves between lists
+
+Pre-trigger, a stop-loss cannot rest on the book: a sell below the current market would fill instantly, which is the opposite of a stop. So Bravado holds it as a strategy and watches.
+
+When the trigger price hits, Bravado places a real CLOB order. At that moment the item stops being purely a strategy and starts appearing in open orders with `is_stop_loss: true`.
+
+A client watching only strategies will think it vanished. One watching only orders will not see it until it fires.
+
+## PENDING is not a failure
 
 <Warning>
-  A managed strategy sits in `PENDING` until its entry conditions are met. It has been accepted. Rendering it as an error, or cancelling and re-placing on `PENDING`, churns fees and prevents the strategy from ever working.
+  A strategy in `PENDING` has been **accepted** and is waiting for its entry conditions. Rendering it as an error, or cancelling and re-placing on `PENDING`, churns fees and guarantees the strategy never does the job it was created for.
 </Warning>
 
 ```typescript
@@ -69,55 +133,111 @@ const label = {
   ACTIVE:    "Working",
   COMPLETED: "Finished",
   CANCELLED: "Cancelled",
-}[strategy.status];
+}[strategy.status] ?? strategy.status;
 ```
 
-## Cancelling correctly
+Distinguish it visually from an error state. A muted badge reads correctly; a red one generates support tickets.
+
+## Cancel correctly
 
 ```bash
 # a CLOB order
 curl -X DELETE $BASE/v2/trade/orders/{order_id} \
-  -H "Authorization: Bearer $KEY" -H "Idempotency-Key: $(uuidgen)"
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)"
 
 # a managed strategy
 curl -X DELETE $BASE/v2/trade/strategies/{record_id} \
-  -H "Authorization: Bearer $KEY" -H "Idempotency-Key: $(uuidgen)"
+  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)"
 ```
 
-<Warning>
-  `POST /v2/trade/orders/cancel-all` clears **CLOB orders only**. Running strategies continue afterwards. A "cancel everything" button wired to just that endpoint will leave a TWAP quietly executing, which is a genuinely bad surprise for a user who thought they were flat.
-</Warning>
+### Cancel-all does not cancel everything
 
-A correct cancel-all:
+<Warning>
+  `POST /v2/trade/orders/cancel-all` clears **CLOB orders only**. Running strategies continue afterwards. A flatten-everything button wired to that endpoint alone leaves a TWAP quietly executing, and the user believes they are flat.
+</Warning>
 
 ```python
 def cancel_everything():
     write("POST", "/v2/trade/orders/cancel-all")
 
-    for s in requests.get(f"{BASE}/v2/trade/strategies", headers=H).json()["strategies"]:
+    for s in read("/v2/trade/strategies")["strategies"]:
         if s["status"] in ("ACTIVE", "PENDING"):
             write("DELETE", f"/v2/trade/strategies/{s['record_id']}")
 ```
 
-Cancelling a strategy stops future clips. Anything already filled is a position you now hold, so read filled size before deciding what to do next.
+Two further points:
 
-Note also that a stop-loss can only be cancelled pre-trigger. After it fires you are cancelling the resulting order instead.
+- **Cancelling a strategy stops future execution, not past.** Whatever already filled is a position you hold. Read `filled_size` before deciding what happens next.
+- **A stop-loss can only be cancelled pre-trigger.** Once it fires, the strategy completes and you are cancelling the resulting *order* instead, via `DELETE /v2/trade/orders/{order_id}`.
 
-## Checking warnings
+## Read warnings, not just status codes
 
-Order responses carry `warnings[]` even on success, covering partial fills, clamped prices, and bracket legs that could not be placed. An app that only branches on status code will silently misreport what happened.
+Order responses carry `warnings[]` even on success:
 
-```typescript
-if (res.warnings?.length) showNotice(res.warnings);
-
-for (const leg of ["take_profit", "stop_loss"]) {
-  const err = res.brackets?.[leg]?.error;
-  if (err) showWarning(`${leg} not placed: ${err}`);  // position is unprotected
+```json
+{
+  "order_id": "abc123",
+  "status": "filled",
+  "warnings": ["take_profit leg could not be placed: insufficient liquidity"],
+  "brackets": {
+    "take_profit": { "error": "insufficient liquidity" },
+    "stop_loss":   { "order_id": "def456" }
+  }
 }
 ```
 
-## Next
+That is a `200`. The entry filled, the stop-loss attached, and the take-profit did not. A client branching only on status code reports complete success while the user holds a half-protected position.
 
-- [Build a trading terminal](/guides/build-a-trading-terminal)
-- [Stop-loss and take-profit](/guides/stop-loss-take-profit)
-- [Execute a large position](/guides/large-position-twap-iceberg)
+```typescript
+if (res.warnings?.length) notify(res.warnings);
+
+for (const leg of ["take_profit", "stop_loss"] as const) {
+  const err = res.brackets?.[leg]?.error;
+  if (err) warn(`${leg} not placed: ${err}`);
+}
+```
+
+## Wrapping up
+
+Two systems, because two genuinely different things are happening: a standing instruction on a venue, and a process running on your behalf. Every quirk in this guide follows from that.
+
+If you take one habit away, make it **fetching both endpoints**. Almost every "order disappeared" report resolves to a client that polled one.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="My TWAP is not in open orders. Is it running?">
+    Check `GET /v2/trade/strategies`. A TWAP is a process, not a resting order, and may legitimately have nothing on the book at the instant you look.
+  </Accordion>
+
+  <Accordion title="Why does my iceberg show up twice?">
+    The parent strategy and the currently resting slice are both real. One is your full intent, the other is the 100 shares visible to the market right now.
+  </Accordion>
+
+  <Accordion title="My stop-loss vanished from strategies.">
+    It triggered. Look for it on `/v2/trade/orders/open` with `is_stop_loss: true`. To cancel it now, cancel the order rather than the strategy.
+  </Accordion>
+
+  <Accordion title="Should I show PENDING as an error?">
+    No. It means accepted and waiting for entry conditions. Treating it as failure and re-placing is how people accidentally run three copies of the same strategy.
+  </Accordion>
+
+  <Accordion title="I cancelled everything but a strategy kept filling.">
+    `cancel-all` covers CLOB orders only. Iterate `/v2/trade/strategies` and cancel each `ACTIVE` or `PENDING` record individually.
+  </Accordion>
+
+  <Accordion title="Do cancels need an idempotency key?">
+    Yes, cancellation is a mutating request. Retrying a timed-out cancel with the same key returns the original outcome instead of erroring on an already-cancelled order.
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Place an order](/guides/place-an-order), what each type returns
+- [Execute a large position](/guides/large-position-twap-iceberg), TWAP and Iceberg lifecycle
+- [Stop-loss and take-profit](/guides/stop-loss-take-profit), why exits differ
+- [Build a trading terminal](/guides/build-a-trading-terminal), rendering both lists
+- [Strategy endpoints](/api/trade/strategies), reference
+- [Order endpoints](/api/trade/orders), reference
