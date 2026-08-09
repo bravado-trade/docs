@@ -1,89 +1,155 @@
 ---
 title: "How to Provision Sub-Accounts for a White-Label Prediction Market Product"
 sidebarTitle: "White-label sub-accounts"
-description: "Use a Bravado partner master key to provision end users with their own wallets and scoped API keys, without holding their credentials."
+description: "Use a Bravado partner master key to provision end users with their own Polymarket wallets and scoped API keys, without ever holding their credentials."
 icon:
   name: "users"
   library: "lucide"
 ---
 
-If your product trades on behalf of end users, you need each user to have their own wallet and their own key. Running everyone through a single account means you cannot attribute positions, cannot separate risk, and cannot show a user their own PnL.
+## Overview
 
-Polymarket has no concept of this. Bravado provides it through master-key provisioning.
+If your product trades on behalf of end users, the tempting shortcut is to run everyone through one account and track ownership in your own database. It works until the first time you need to answer a real question: what is *this user's* PnL, what happens if they want to withdraw, and how do you stop one user's losses touching another's collateral.
+
+Polymarket has no concept of sub-accounts. Bravado provides one through **master-key provisioning**: your partner key can create end users, each with their own wallet and their own scoped API key.
+
+This guide covers provisioning them safely, including the one place where a deterministic idempotency key is the right call.
+
+<Note>
+  Read time: about 13 minutes. Backend engineering context assumed. This is server-side work throughout.
+</Note>
+
+## TL;DR
+
+- A **master key** carries `trade.users` and can provision. A **user key** is bound to one wallet.
+- `POST /v2/trade/users` creates a wallet and returns a key bound to it. The key is shown once.
+- Use a **deterministic** idempotency key here, derived from your user id, so a retry cannot mint a second wallet.
+- Keys live server-side. Never ship one to a browser or mobile app.
+- Scope user keys to what they need. `trade.withdraw` is not included by default and should usually stay off.
+- Rate limits are **per key**, so each user gets their own budget rather than competing for one.
+
+## What you will do
+
+- Confirm your master key can provision
+- Create a user with an identifier from your own system
+- Store the returned key safely and map it to your user
+- Understand why this call in particular needs a deterministic idempotency key
+- Scope user keys to limit blast radius
+- Show a user their own balances, positions, and history
+
+## What you will need
+
+**Knowledge**
+
+- Backend engineering, and a secrets store you trust
+
+**Tools and access**
+
+- A Bravado **master key** with the `trade.users` scope
+- Somewhere encrypted to keep per-user keys
+
+```bash
+export BRAVADO_MASTER_KEY="your-master-bearer-token"
+export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+```
+
+## Confirm the master key
+
+```bash
+curl $BASE/v2/trade/account \
+  -H "Authorization: Bearer $BRAVADO_MASTER_KEY"
+```
+
+Two things to check in the response:
+
+- `api_key.scopes` contains **`trade.users`**
+- `binding` describes the partner rather than a single user
+
+A key without `trade.users` cannot provision, and the failure is a `403` that looks like an auth problem rather than a scope problem.
 
 ## Key types
 
-| Key | Bound to | Can do |
+| | Master key | User key |
 | --- | --- | --- |
-| **Master key** | Your partner account | Provision users, plus its own trading |
-| **User key** | One end-user wallet | Trade and read for that user only |
-
-A master key carries the `trade.users` scope. Confirm before building against it:
-
-```bash
-curl $BASE/v2/trade/account -H "Authorization: Bearer $MASTER_KEY"
-```
-
-Look for `trade.users` in `api_key.scopes` and `binding` describing the partner rather than a single user.
+| Bound to | Your partner account | One end-user wallet |
+| Can provision users | Yes | No |
+| Can trade | Yes, its own wallet | Yes, that user's wallet |
+| Rate limit | Its own | Its own, per user |
+| Where it lives | Your backend, one copy | Your backend, one per user |
 
 ## Provision a user
 
 ```bash
 curl -X POST $BASE/v2/trade/users \
-  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Authorization: Bearer $BRAVADO_MASTER_KEY" \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -d '{ "external_id": "your-internal-user-id" }'
+  -H "Idempotency-Key: provision:user_8813" \
+  -d '{ "external_id": "user_8813" }'
 ```
 
-Pass your own identifier so you can map the result back to your user record. The response returns the provisioned wallet and a key bound to it.
+Pass your own identifier as `external_id` so you can map the result back to your user record without maintaining a separate lookup.
 
 <Warning>
-  Store the returned key in a secrets manager, encrypted at rest, keyed by your user id. It is shown once. Treat it exactly as you would a password, and never send it to a browser or mobile client.
+  The returned key is shown **once**. Store it in a secrets manager, encrypted at rest, keyed by your user id. Treat it exactly as you would a password. It can trade, and with the wrong scope it can move funds.
 </Warning>
 
-## Idempotency matters more here
+## Why this call needs a deterministic key
 
-Provisioning is the call where a duplicate is most expensive: you end up with two wallets for one user, funds split across them, and no clean way to merge.
+Everywhere else in these guides, the advice is a fresh UUID per intended action. Provisioning is the exception.
+
+A duplicate order is bad. A duplicate **wallet** is worse: you now have one user with two wallets, funds split across them, positions in both, and no clean way to merge. Nothing in the API will stop you, because two provisioning calls with different idempotency keys are two legitimate requests.
+
+Keying on your own user id makes that impossible:
 
 ```python
-def provision(user_id: str):
-    # deterministic key: retrying the same user cannot create a second wallet
-    key = f"provision:{user_id}"
+import os, requests
 
-    return requests.post(
+BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+MASTER = {"Authorization": f"Bearer {os.environ['BRAVADO_MASTER_KEY']}"}
+
+
+def provision(user_id: str):
+    """Deterministic key: retrying this user can never create a second wallet."""
+    r = requests.post(
         f"{BASE}/v2/trade/users",
-        headers={**MASTER_H, "Idempotency-Key": key},
+        headers={**MASTER, "Idempotency-Key": f"provision:{user_id}"},
         json={"external_id": user_id},
-    ).json()
+        timeout=20,
+    )
+    r.raise_for_status()
+    return r.json()
 ```
 
-This is the one place a deterministic idempotency key is better than a random one. Elsewhere a fresh UUID per intended action is right; here, keying on your user id means a retry can never produce a second wallet. See [Safe retries](/guides/safe-retries-idempotency).
+Retry it a hundred times, from a hundred workers, and you get one wallet and the same response every time.
+
+<Note>
+  This is the opposite of the guidance in [Safe retries](/guides/safe-retries-idempotency), and deliberately so. There, a random key per intended order is right because two identical orders are usually two real intentions. Here, two provisioning calls for the same user are never two intentions.
+</Note>
 
 ## Architecture
 
 <Steps>
   <Step title="User signs up in your product">
-    They never see Bravado. Your app is the interface.
+    They never see Bravado. Your app is the entire interface.
   </Step>
   <Step title="Your backend provisions">
     Call `POST /v2/trade/users` with the master key and your user id.
   </Step>
   <Step title="Store the key server-side">
-    Encrypted, mapped to your user. Never exposed to the client.
+    Encrypted, mapped to your user. It never leaves your infrastructure.
   </Step>
   <Step title="Trade on their behalf">
-    Your backend uses that user's key, so positions and PnL are attributed to them.
+    Use that user's key so positions, balances, and PnL are attributed to them.
   </Step>
 </Steps>
 
 <Warning>
-  Requests must originate from your backend. A user key in a browser or mobile app can be extracted, and it can trade and potentially withdraw. Your frontend talks to your API; your API talks to Bravado.
+  Requests must originate from your backend. A user key in a browser bundle or mobile app can be extracted, and it can trade. Your frontend talks to your API; your API talks to Bravado. There is no safe way to shortcut this.
 </Warning>
 
-## Scoping what a user key can do
+## Scope user keys deliberately
 
-Scopes limit blast radius. A key that never needs to move funds off-platform should not carry `trade.withdraw`:
+Scopes limit what a compromised or misused key can do:
 
 | Scope | Grants |
 | --- | --- |
@@ -94,34 +160,86 @@ Scopes limit blast radius. A key that never needs to move funds off-platform sho
 | `trade.combos` | Multi-leg parlays |
 
 <Note>
-  `trade.withdraw` is **not** included in a standard partner key and must be requested explicitly. If your product handles withdrawals through your own flow rather than per-user, keep it off user keys entirely.
+  `trade.withdraw` is **not** included in a standard partner key and must be requested explicitly. If withdrawals run through your own flow rather than per-user, keep it off user keys entirely. It is the one scope where a mistake is irreversible.
 </Note>
 
 ## Per-user rate limits
 
-Limits are per key, so each provisioned user gets their own budget rather than competing for one pool. Read it rather than assuming:
+Limits are per key, so a hundred provisioned users have a hundred budgets rather than sharing one:
 
 ```python
-acct = requests.get(f"{BASE}/v2/trade/account", headers=user_headers).json()
-budget = acct["api_key"]["rate_limit_per_min"]
+def budget_for(user_key: str) -> int:
+    acct = requests.get(f"{BASE}/v2/trade/account",
+                        headers={"Authorization": f"Bearer {user_key}"}).json()
+    return acct["api_key"]["rate_limit_per_min"]
 ```
 
-That is worth surfacing in your own scheduling: a hundred users polling at once is a hundred separate budgets, not one shared ceiling.
+Worth reflecting in your own scheduling. A naive implementation that funnels all user polling through one shared worker will hit a self-imposed bottleneck that does not exist at the API level.
 
-## Showing a user their account
+## Show a user their account
 
-Once provisioned, everything a normal integration does works with that user's key:
+Everything a normal integration does works with that user's key:
 
 ```python
-requests.get(f"{BASE}/v2/trade/balances",  headers=user_headers)
-requests.get(f"{BASE}/v2/trade/positions", headers=user_headers)
-requests.get(f"{BASE}/v2/trade/activity",  headers=user_headers)
+def portfolio(user_key: str):
+    H = {"Authorization": f"Bearer {user_key}"}
+    return {
+        "balances":  requests.get(f"{BASE}/v2/trade/balances",  headers=H).json(),
+        "positions": requests.get(f"{BASE}/v2/trade/positions", headers=H).json(),
+        "activity":  requests.get(f"{BASE}/v2/trade/activity",  headers=H).json(),
+    }
 ```
 
-Because each user has a real wallet address, the Data API also works on them, so you can show a user the same PnL history, category breakdown, and tax statements available for any public wallet.
+And because each user has a real on-chain wallet address, the Data API works on them too. That means a provisioned user gets the same PnL history, category breakdown, and tax statements available for any public wallet, with no extra plumbing:
 
-## Next
+```python
+def history(wallet: str):
+    return {
+        "pnl":        read(f"/traders/{wallet}/pnl"),
+        "categories": read(f"/traders/{wallet}/categories"),
+        "tax":        read(f"/traders/{wallet}/tax-report", year=2025),
+    }
+```
 
-- [Build a trading terminal](/guides/build-a-trading-terminal)
-- [Safe retries](/guides/safe-retries-idempotency)
-- [Account and provisioning reference](/api/trade/account)
+## Wrapping up
+
+One master key provisions many users, each with a real wallet and a scoped key. That gives you per-user attribution, per-user rate limits, and per-user risk isolation without building any of it.
+
+Two rules carry the weight: **keys stay on your backend**, and **provisioning uses a deterministic idempotency key**. The first prevents a class of compromise; the second prevents a mess that is genuinely painful to unwind.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Can I put a user key in my mobile app?">
+    No. It can be extracted, and it can trade. Route every request through your backend.
+  </Accordion>
+
+  <Accordion title="Why deterministic idempotency here but random elsewhere?">
+    Two orders with the same parameters are usually two real intentions, so a random key per order is correct. Two provisioning calls for the same user are never two intentions, so keying on the user id makes duplicates impossible.
+  </Accordion>
+
+  <Accordion title="What if I lose a user's key?">
+    It is shown once at creation. Contact support to rotate it rather than provisioning again, since a second provisioning call with a different identifier creates a second wallet.
+  </Accordion>
+
+  <Accordion title="Do users share my rate limit?">
+    No. Limits are per key, so each provisioned user has their own budget. Read it from `GET /v2/trade/account` with that user's key.
+  </Accordion>
+
+  <Accordion title="Should user keys have trade.withdraw?">
+    Usually not. It is excluded by default and must be requested. If your product handles withdrawals through its own flow, keeping it off user keys removes the possibility of funds leaving by an unintended path.
+  </Accordion>
+
+  <Accordion title="Can I show a user their tax statement?">
+    Yes. Their wallet is a real on-chain address, so every Data API endpoint works on it, including R1 dispositions and per-year tax reports. See [Generate a tax statement](/guides/us-tax-statement).
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Account and provisioning reference](/api/trade/account), `POST /v2/trade/users` and scopes
+- [Authentication](/authentication), keys, scopes, and error handling
+- [Safe retries](/guides/safe-retries-idempotency), the general idempotency rule this one departs from
+- [Build a trading terminal](/guides/build-a-trading-terminal), the UI on top of this
+- [Data API](/products/data-api), per-user history and reporting
+- [Rate limits](/reference/rate-limits), per-key budgets

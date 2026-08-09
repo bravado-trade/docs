@@ -1,29 +1,75 @@
 ---
 title: "How to Quote Both Sides of a Polymarket Market with Split and Merge"
 sidebarTitle: "Quote both sides"
-description: "Split collateral into a complete outcome set to make markets on both sides of a Polymarket question, and merge back to recover collateral."
+description: "Split USDC into a complete outcome set to make markets on both sides of a Polymarket question, manage inventory imbalance, and merge back to recover collateral."
 icon:
   name: "split"
   library: "lucide"
 ---
 
-To quote both sides of a market you need inventory in both outcomes. Buying each on the book means paying the spread twice before you have quoted anything. Splitting avoids that entirely.
+## Overview
+
+To quote both sides of a market you need inventory in both outcomes. The obvious way to get it is to buy each on the book, which means paying the spread twice before you have quoted anything, and taking directional risk on both legs while you accumulate.
+
+There is a better route, and it is specific to how prediction markets are built. Depositing collateral into a condition **mints a complete outcome set**: one YES and one NO for every dollar. Because exactly one outcome can be true, a complete set is always redeemable for the collateral that created it.
+
+So you can acquire inventory on both sides at cost, with no spread paid and no market risk from the acquisition itself. This guide covers doing that, quoting from it, and managing the one real risk involved.
+
+<Note>
+  Read time: about 14 minutes. Assumes familiarity with order books and the difference between taking and providing liquidity.
+</Note>
+
+## TL;DR
+
+- `POST /v2/trade/positions/split` turns collateral into one share of **every** outcome.
+- Holding a complete set is **market-neutral**. It redeems for what you paid regardless of outcome.
+- Quote by resting sells on each outcome. Prices summing above 1.00 is your spread.
+- `POST /v2/trade/positions/merge` turns a complete set back into collateral, bounded by your **smaller** side.
+- The risk is **inventory imbalance**: once one side fills and the other does not, you are directional.
+- Wind down before resolution. An imbalanced book at settlement is a bet, not a spread.
+
+## What you will do
+
+- Split collateral into a complete outcome set
+- Quote both sides with static limits, or dynamically with pegged orders
+- Understand exactly where the risk enters, and it is not the split
+- Monitor inventory imbalance and act on it
+- Merge unsold inventory back into collateral
+- Wind the position down before the market resolves
+
+## What you will need
+
+**Knowledge**
+
+- Order book mechanics, and comfort with the idea of quoting a two-sided market
+- [How Polymarket works](/markets/polymarket/overview) for outcome tokens and condition IDs
+
+**Tools and access**
+
+- A Bravado API key with `trade.execute` and `trade.cancel`
+- USDC collateral
+- A `condition_id` for the market you want to quote
+
+```bash
+export BRAVADO_API_KEY="your-bearer-token"
+export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+```
 
 ## The mechanic
-
-Depositing collateral into a condition mints **one full set of outcome tokens**: one YES and one NO for every dollar. Because exactly one outcome can be true, a complete set is always redeemable for the collateral that made it.
-
-That gives you inventory on both sides at cost, with no spread paid and no market risk from the split itself. You are flat: you hold both outcomes, which is worth exactly what you put in.
 
 ```
 1 USDC  ──split──▶  1 YES + 1 NO
 1 YES + 1 NO  ──merge──▶  1 USDC
 ```
 
+That equivalence holds because the outcomes are exhaustive and mutually exclusive. Whichever resolves true pays \$1; the other pays \$0; together they always pay exactly \$1.
+
+Which means holding a complete set is not a position at all in any meaningful sense. It is your collateral, wearing a different shape.
+
 ## Split
 
 ```bash
-curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions/split \
+curl -X POST $BASE/v2/trade/positions/split \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
@@ -33,26 +79,31 @@ curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions/spl
   }'
 ```
 
-You now hold 1,000 YES and 1,000 NO against 1,000 of collateral.
+You now hold 1,000 YES and 1,000 NO, against 1,000 of collateral consumed.
 
 <Note>
-  `condition_id` identifies the **market**, not an outcome. This is one of the few calls that takes a condition rather than a `symbol`, because it acts on the whole outcome set.
+  `condition_id` identifies the **market**, not an outcome. Split and merge are among the few calls that take a condition rather than a `symbol`, because they act on the whole outcome set at once.
 </Note>
 
 ## Quote both sides
 
-With inventory on both sides you can rest sells on each outcome. Two ways to price them:
+Two approaches, and they suit different levels of attention.
 
-**Static, with limit orders.** Simple and predictable:
+### Static, with limit orders
 
 ```json
 { "type": "LIMIT", "symbol": "<YES token>", "side": "SELL", "price": "0.56", "size": "500" }
+```
+
+```json
 { "type": "LIMIT", "symbol": "<NO token>",  "side": "SELL", "price": "0.48", "size": "500" }
 ```
 
-Note the two prices sum to more than 1.00. That difference is your spread: if both sides fill you collect 1.04 against the 1.00 the set cost you.
+Notice those prices sum to `1.04`, not `1.00`. That four-cent difference is your spread: if both sides fill you collect \$1.04 for a set that cost you \$1.00.
 
-**Dynamic, with pegged orders.** Tracks the touch as the book moves:
+The wider you quote, the more you make per round trip and the less often you fill. That trade-off is the entire business.
+
+### Dynamic, with pegged orders
 
 ```json
 {
@@ -64,14 +115,62 @@ Note the two prices sum to more than 1.00. That difference is your spread: if bo
 }
 ```
 
-`offset_ticks` is in CLOB ticks where one tick is 0.1 cents, so `2` quotes two ticks off the touch. `price_floor` stops it chasing the market down past a level you are unwilling to sell at.
+`offset_ticks` is in CLOB ticks where one tick is 0.1 cents, so `2` quotes two ticks off the touch and follows it as the book moves. `price_floor` stops it chasing the market down past a level you are unwilling to sell at.
+
+Pegged orders return a `record_id` and live on `/v2/trade/strategies`, not open orders. See [Track order and strategy state](/guides/track-order-and-strategy-state).
+
+## Where the risk actually is
+
+Splitting is riskless. Quoting is not. The moment one side fills and the other does not, you stop being flat.
+
+| State | You hold | Exposure |
+| --- | --- | --- |
+| After split | 1,000 YES + 1,000 NO | None. Complete set. |
+| YES sells, NO does not | 1,000 NO | **Long NO** |
+| Both sell evenly | Collateral plus spread | None |
+| Neither sells | Complete set | None. Merge back. |
+
+That second row is the whole risk of the strategy, and it is not random. If one outcome keeps filling and the other does not, the market is telling you your prices are wrong, and you are accumulating precisely the side nobody wants.
+
+<Warning>
+  Inventory imbalance is adverse selection, not bad luck. The fills you get are the ones informed traders wanted to give you. Track imbalance actively rather than assuming it averages out.
+</Warning>
+
+## Monitor imbalance
+
+```python
+from decimal import Decimal
+
+MAX_IMBALANCE = Decimal("200")
+
+
+def imbalance(yes_symbol, no_symbol):
+    pos = read("/v2/trade/positions")["positions"]
+    by_symbol = {p["symbol"]: Decimal(p["size"]) for p in pos}
+
+    yes = by_symbol.get(yes_symbol, Decimal(0))
+    no  = by_symbol.get(no_symbol,  Decimal(0))
+    return yes, no, abs(yes - no)
+
+
+def rebalance(condition_id, yes_symbol, no_symbol):
+    yes, no, gap = imbalance(yes_symbol, no_symbol)
+
+    if gap > MAX_IMBALANCE:
+        # recover collateral from the complete portion, shrink the exposure
+        write("POST", "/v2/trade/positions/merge",
+              {"condition_id": condition_id, "amount": str(min(yes, no))})
+        return "merged"
+
+    return "ok"
+```
+
+Two responses when imbalance grows: **re-price**, because your quotes are wrong, or **merge back**, because you would rather hold collateral than a directional bet you did not intend.
 
 ## Merge back
 
-Unsold inventory on both sides can be recombined into collateral rather than sold at a loss:
-
 ```bash
-curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions/merge \
+curl -X POST $BASE/v2/trade/positions/merge \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
@@ -81,52 +180,78 @@ curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions/mer
   }'
 ```
 
-Merging needs a **complete set**. You can only merge the amount you hold in the smaller side: 500 YES and 300 NO merges 300, leaving 200 YES outstanding.
+Merging requires a **complete set**, so you can only merge up to your smaller side. Holding 500 YES and 300 NO merges 300, leaving 200 YES outstanding and still directional.
 
-## The risk you actually carry
+That residual is the position you actually took, whether you meant to or not.
 
-Splitting is riskless. Quoting is not. Once one side fills and the other does not, you are no longer flat, you are directionally long the unsold outcome.
+## Resolution turns inventory into a bet
 
-| State | Position | Exposure |
-| --- | --- | --- |
-| After split | 1,000 YES + 1,000 NO | None, a complete set |
-| YES sells, NO does not | 1,000 NO | Long NO |
-| Both sell evenly | Collateral plus spread | None |
-| Neither sells | Complete set | None, merge back |
+A complete set is safe through resolution: it redeems for collateral either way. An **imbalanced** book is not. The surplus side is worth \$1 or \$0, decided by an event you were not trying to forecast.
 
 <Warning>
-  Inventory imbalance is the whole risk of this strategy. If one outcome keeps filling and the other does not, the market is telling you your prices are wrong, and you are accumulating the side nobody wants. Track the imbalance and either re-price or merge back.
+  Wind down or rebalance before an event concludes. Resolution does not wait for your quotes to fill, and once UMA settles the outcome the losing side is worthless. See [UMA resolution](/markets/polymarket/uma-resolution).
 </Warning>
 
-A simple imbalance check:
+A sensible wind-down:
 
-```python
-pos = requests.get(f"{BASE}/v2/trade/positions", headers=H).json()
-by_symbol = {p["symbol"]: Decimal(p["size"]) for p in pos["positions"]}
-
-yes, no = by_symbol.get(YES, Decimal(0)), by_symbol.get(NO, Decimal(0))
-imbalance = abs(yes - no)
-
-if imbalance > MAX_IMBALANCE:
-    merge(condition_id, min(yes, no))   # recover collateral, reduce exposure
-```
-
-## Resolution risk
-
-Held inventory becomes a directional bet the moment the market resolves. A complete set is safe, it redeems for collateral either way. An imbalanced book is not: the surplus side is worth \$1 or \$0.
-
-<Note>
-  Wind down or rebalance before an event concludes. Resolution does not wait for your quotes to fill, and once UMA settles the outcome the losing side is worthless. See [UMA resolution](/markets/polymarket/uma-resolution).
-</Note>
+<Steps>
+  <Step title="Stop quoting">
+    Cancel resting orders and any pegged strategies. Remember `cancel-all` does not stop strategies.
+  </Step>
+  <Step title="Merge the complete portion">
+    Recover collateral from whatever matched set you still hold.
+  </Step>
+  <Step title="Decide about the residual">
+    Sell it, or knowingly hold it as a directional position. Either is fine; drifting into it is not.
+  </Step>
+</Steps>
 
 ## Venue constraints
 
-- Resting orders need **at least 5 shares**, which sets a floor on quote size.
+- Resting orders need **at least 5 shares**, which floors your quote size.
 - Prices are decimal probabilities from `0.001` to `0.999`.
-- Merges require a complete set, bounded by your smaller side.
+- Merges are bounded by your smaller side.
+- Split and merge are mutating calls and take an `Idempotency-Key`.
 
-## Next
+## Wrapping up
 
-- [Build a trading bot](/guides/build-a-trading-bot)
-- [Execute a large position](/guides/large-position-twap-iceberg)
-- [Trade API reference](/products/trade-api)
+Split gives you two-sided inventory at cost, which is a genuinely better starting point than buying both legs on the book. The spread you quote is the business, and inventory imbalance is the cost of doing it.
+
+The discipline that matters: **know your imbalance at all times**, and never carry an imbalanced book into resolution without deciding to. A market maker who accidentally becomes a directional trader usually finds out at settlement.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Is splitting risky?">
+    No. A complete outcome set redeems for the collateral that created it regardless of which outcome resolves true. The risk begins when one side sells and the other does not.
+  </Accordion>
+
+  <Accordion title="Why does split take condition_id instead of symbol?">
+    It acts on the entire outcome set at once, so it needs to identify the market rather than a single outcome. Most other calls take the outcome token id as `symbol`.
+  </Accordion>
+
+  <Accordion title="Can I merge more than my smaller side?">
+    No. Merging destroys a complete set, so it is bounded by whichever outcome you hold least of. The remainder stays as a directional position.
+  </Accordion>
+
+  <Accordion title="How wide should I quote?">
+    Wider earns more per round trip and fills less often. Start wide enough that adverse selection does not eat the spread, then tighten while watching whether one side fills far more than the other.
+  </Accordion>
+
+  <Accordion title="My pegged order is not in open orders.">
+    Pegged is a managed strategy and lives on `/v2/trade/strategies`. See [Track order and strategy state](/guides/track-order-and-strategy-state).
+  </Accordion>
+
+  <Accordion title="What happens if I hold an imbalanced book through resolution?">
+    The surplus side settles at \$1 or \$0. You took a directional bet on the outcome, which is a fine thing to do deliberately and an expensive thing to do by accident.
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Positions endpoints](/api/trade/positions), split, merge, and redeem reference
+- [Place an order](/guides/place-an-order), limit and pegged order payloads
+- [Track order and strategy state](/guides/track-order-and-strategy-state), where pegged orders live
+- [Execute a large position](/guides/large-position-twap-iceberg), the taking-liquidity alternative
+- [UMA resolution](/markets/polymarket/uma-resolution), what settlement does to inventory
+- [Trade API reference](/products/trade-api), full field documentation
