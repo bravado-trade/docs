@@ -1,48 +1,89 @@
 ---
 title: "How to Build a Polymarket PnL Leaderboard"
 sidebarTitle: "Build a PnL leaderboard"
-description: "Rank Polymarket traders by realized PnL or volume with the Bravado Data API, and render trader profiles that hold up."
+description: "Rank Polymarket traders by realized PnL or volume with the Bravado Data API, build trader profiles, and cache it so you stay inside your rate limit."
 icon:
   name: "trophy"
   library: "lucide"
 ---
 
-A leaderboard is the cheapest way to make a prediction market product feel alive, and it needs no funded account: the Data API reads any public wallet.
+## Overview
 
-## Two rankings, different meanings
+A leaderboard is the cheapest way to make a prediction market product feel alive. It gives a new user something to look at before they have traded, it turns wallets into pages worth visiting, and it feeds directly into copy trading.
+
+It is also the easiest thing in this API to build, because the Data API reads **any public wallet with no funded account**. You can ship a fully populated leaderboard before a single user signs up.
+
+The parts worth getting right are subtler: which ranking you show, which fields the window actually applies to, and how to cache it so a popular page does not consume your entire rate limit.
+
+<Note>
+  Read time: about 12 minutes. Front-end or full-stack context assumed.
+</Note>
+
+## TL;DR
+
+- `GET /leaderboard` ranks by realized PnL. `/leaderboard/volume` ranks by USDC traded. They surface different people.
+- The `window` parameter does **not** apply to every field. Fee totals, streaks, and drawdown are all-time regardless.
+- Cost basis always comes from the wallet's **first ever trade**, not the window start. That is what makes a 7-day figure meaningful.
+- Numbers are JSON strings. Parse with a decimal type.
+- Cache aggressively. Rankings move slower than users refresh.
+- `503` with `available: false` means computing, not failed.
+
+## What you will do
+
+- Fetch both rankings and understand what each is telling you
+- Render a leaderboard without float precision bugs
+- Build a trader profile page from four endpoints
+- Paginate a full trade history correctly
+- Cache within your rate limit
+- Handle the processing state for wallets nobody has queried before
+
+## What you will need
+
+**Knowledge**
+
+- A backend and a front-end framework of your choice
+
+**Tools and access**
+
+- A Bravado API key. No collateral needed; every endpoint here is read-only.
 
 ```bash
-# ranked by realized PnL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard \
+export BRAVADO_API_KEY="your-bearer-token"
+export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+```
+
+## Two rankings
+
+```bash
+curl -G $BASE/leaderboard \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -d window=30d -d limit=50
 
-# ranked by USDC volume traded
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume \
+curl -G $BASE/leaderboard/volume \
   -H "Authorization: Bearer $BRAVADO_API_KEY" \
   -d window=30d -d limit=50
 ```
 
-They answer different questions, and showing only one gives a misleading picture:
-
-| Ranking | Surfaces | Blind spot |
+| Ranking | Answers | Blind spot |
 | --- | --- | --- |
 | PnL | Who made money | One lucky large bet outranks steady skill |
 | Volume | Who is active | High volume can mean high churn and no profit |
 
-Offering both as a toggle is usually the right call.
+Showing only PnL is the common choice and the misleading one. It puts a wallet that made one correct call above a trader who has been consistently profitable for a year, because the leaderboard sorts on total rather than repeatability.
 
-## The window parameter
+Offering both as a toggle costs almost nothing and gives users a much more honest picture. If you show only one, say which.
 
-`window` controls the period the ranking covers. Two things about it that cause support tickets:
+## The window parameter is partial
 
 <Warning>
-  Some fields ignore the window entirely. Fee totals, streak metadata, and drawdown statistics are computed **all-time** regardless of what you pass. Do not label them as belonging to the selected period.
+  `window` does **not** apply to every field in the response. Fee totals, streak metadata, and drawdown statistics are computed **all-time** regardless of what you pass. Labelling them as belonging to the selected period is wrong, and users will notice when a "7-day" drawdown does not change as they switch windows.
 </Warning>
 
-Cost basis is always reconstructed from the wallet's first ever trade, not from the start of the window. A 7-day PnL figure still uses the true cost basis of positions opened years ago, which is what makes the number meaningful rather than an artefact of where you cut the period.
+What the window does control is which trades are included in the ranking metric.
 
-## Fetching and rendering
+What it never changes is **cost basis**. That is always reconstructed from the wallet's first ever trade. A 7-day PnL figure still uses the true cost of a position opened two years ago, which is exactly what makes the number meaningful rather than an artefact of where you cut the period.
+
+## Fetch and render
 
 ```python
 import os, requests
@@ -55,31 +96,40 @@ H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
 def leaderboard(metric="pnl", window="30d", limit=50):
     path = "/leaderboard" if metric == "pnl" else "/leaderboard/volume"
     data = requests.get(f"{BASE}{path}", headers=H,
-                        params={"window": window, "limit": limit}).json()
+                        params={"window": window, "limit": limit},
+                        timeout=20).json()
 
-    rows = []
-    for rank, t in enumerate(data["traders"], start=1):
-        rows.append({
-            "rank": rank,
+    return [
+        {
+            "rank": i,
             "address": t["address"],
-            # every numeric field is a string: parse as Decimal, never float
+            # strings in, Decimal out: never float
             "pnl": Decimal(t["realized_pnl"]),
             "volume": Decimal(t["volume"]),
-        })
-    return rows
+        }
+        for i, t in enumerate(data["traders"], start=1)
+    ]
 
 
 for r in leaderboard()[:10]:
-    print(f'{r["rank"]:>3}  {r["address"][:10]}…  {r["pnl"]:>12,.2f}')
+    print(f'{r["rank"]:>3}  {r["address"][:10]}…  {r["pnl"]:>14,.2f}')
+```
+
+Expected output:
+
+```text
+  1  0x3a2b1c4d…      184,205.50
+  2  0x9f8e7d6c…       97,310.24
+  3  0x1122aabb…       81,004.19
 ```
 
 <Warning>
-  Parsing these as floats will produce totals that disagree with the API. Values are returned as JSON strings specifically to avoid that. Use `Decimal`, `BigDecimal`, or your language's arbitrary-precision equivalent.
+  Parsing these as floats produces totals that disagree with the API. Values are strings specifically to prevent that. Use `Decimal`, `BigDecimal`, or your language's arbitrary-precision equivalent. See [Numeric conventions](/reference/numeric-conventions).
 </Warning>
 
 ## Trader profiles
 
-Clicking a row should open something worth reading. Four calls cover it:
+A leaderboard row should open something worth reading. Four calls cover a good profile:
 
 | Panel | Endpoint |
 | --- | --- |
@@ -88,47 +138,117 @@ Clicking a row should open something worth reading. Four calls cover it:
 | Open positions | `GET /traders/{address}/positions/active` |
 | Category breakdown | `GET /traders/{address}/categories` |
 
-The category breakdown is the most interesting one for users: it shows whether a trader is broadly good or good at exactly one thing.
+The **category breakdown** is the most interesting of these in product terms and the most often omitted. It shows whether someone is broadly capable or good at exactly one thing, which is the difference between a trader worth following and a trader worth following *in politics only*.
 
-## Pagination
+```python
+def profile(address):
+    return {
+        "summary":    requests.get(f"{BASE}/traders/{address}", headers=H).json(),
+        "pnl":        requests.get(f"{BASE}/traders/{address}/pnl", headers=H).json(),
+        "positions":  requests.get(f"{BASE}/traders/{address}/positions/active", headers=H).json(),
+        "categories": requests.get(f"{BASE}/traders/{address}/categories", headers=H).json(),
+    }
+```
 
-Large wallets return a lot of rows. Trade logs and position lists are paginated, and pulling a full history means following the cursor rather than raising `limit`:
+That profile is also the input to copy trading. See [Track a whale wallet](/guides/track-whale-wallet).
+
+## Paginate history
+
+Trade logs and position lists are paginated. Raising `limit` is not a substitute for following the cursor:
 
 ```python
 def all_trades(address):
     trades, cursor = [], None
+
     while True:
         params = {"limit": 500}
         if cursor:
             params["cursor"] = cursor
+
         page = requests.get(f"{BASE}/traders/{address}/trades",
-                            headers=H, params=params).json()
+                            headers=H, params=params, timeout=30).json()
         trades.extend(page["trades"])
+
         cursor = page.get("next_cursor")
         if not cursor:
             return trades
 ```
 
-## Caching
+For a heavy wallet this can be a lot of rows, which is a good reason to do it in a background job rather than in a request handler.
 
-Leaderboards are read far more often than they change, and every request counts against `rate_limit_per_min`.
+## Cache within your budget
 
-- Cache board results for a minute or two; ranking does not move meaningfully faster than that.
-- Cache profile responses per address on a similar TTL.
-- Read your quota from `GET /v2/trade/account` rather than guessing.
-- Honour `Retry-After` on `429` instead of retrying immediately.
-
-## Handling 503
-
-PMWAS and statement endpoints return `503` with `available: false` while a wallet's data is still being computed. This is expected for wallets never queried before, not an error.
+A leaderboard is read far more often than it changes, and every request counts against `rate_limit_per_min`.
 
 ```python
-if r.status_code == 503 and not r.json().get("available", True):
-    return {"state": "processing"}   # show a spinner, poll later
+def budget():
+    acct = requests.get(f"{BASE}/v2/trade/account", headers=H).json()
+    return acct["api_key"]["rate_limit_per_min"]
 ```
 
-## Next
+Sensible defaults:
 
-- [Track a whale wallet](/guides/track-whale-wallet)
-- [Generate a tax statement](/guides/us-tax-statement)
-- [Data API reference](/products/data-api)
+| Data | TTL | Why |
+| --- | --- | --- |
+| Leaderboard | 60 to 120s | Rankings do not move faster than this |
+| Trader profile | 60s | Per address, so cache keys are natural |
+| Trade history | Hours | Append-only, and expensive to pull |
+
+Without caching, a leaderboard page that renders 50 rows and fetches a profile per row will exhaust a 120-per-minute budget on a single page load. Cache the board, and fetch profiles only when a row is opened.
+
+On `429`, honour `Retry-After` rather than retrying immediately, which extends the limit rather than clearing it.
+
+## Handle the processing state
+
+```python
+r = requests.get(f"{BASE}/traders/{address}/statements", headers=H)
+
+if r.status_code == 503 and not r.json().get("available", True):
+    return {"state": "processing"}     # spinner, poll later
+```
+
+PMWAS and statement endpoints compute a wallet's full history on first request. For an address nobody has queried before, `available: false` is expected. An error toast here is wrong; nothing failed.
+
+## Wrapping up
+
+The leaderboard itself is two endpoints and some formatting. The judgement is in what you show and how you label it.
+
+Show both rankings if you can, because PnL alone rewards luck over repeatability. Do not label all-time fields as belonging to the selected window. Cache, because the data changes far more slowly than users refresh. And parse everything as decimals, because a leaderboard that disagrees with the venue by a cent is the kind of bug users screenshot.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Which ranking should I show by default?">
+    PnL is the more intuitive default, but pair it with a volume toggle. On its own it puts one lucky bet above a year of consistency, and users will draw the wrong conclusion from that.
+  </Accordion>
+
+  <Accordion title="Why do fee totals not change when I change the window?">
+    They are computed all-time regardless of the window. So are streak metadata and drawdown statistics. Label them accordingly rather than implying they belong to the selected period.
+  </Accordion>
+
+  <Accordion title="Do I need a funded account to build this?">
+    No. Every Data API read works on any public address with no collateral and no permission from the wallet owner.
+  </Accordion>
+
+  <Accordion title="Why is my total slightly different from Polymarket's?">
+    Almost certainly float parsing. Values arrive as JSON strings to preserve precision, and converting them to floats introduces exactly the drift you are seeing.
+  </Accordion>
+
+  <Accordion title="How often should I refresh the leaderboard?">
+    Every 60 to 120 seconds is ample. Rankings do not move meaningfully faster, and refreshing harder mostly consumes rate limit you will want for profile loads.
+  </Accordion>
+
+  <Accordion title="A wallet returns 503 the first time I query it.">
+    Its history is being computed. Poll on a reasonable interval and show a processing state rather than an error.
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Leaderboard endpoint](/api/analytics/leaderboard), PnL ranking reference
+- [Volume leaderboard](/api/analytics/leaderboard-volume), volume ranking reference
+- [Track a whale wallet](/guides/track-whale-wallet), turning a leaderboard into a copy trade
+- [Display positions and PnL](/guides/display-positions-and-pnl), rendering a profile correctly
+- [Data API](/products/data-api), the accounting model behind these numbers
+- [Pagination](/reference/pagination), cursor behaviour
+- [Rate limits](/reference/rate-limits), budgets and backoff
