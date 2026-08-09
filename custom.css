@@ -34,6 +34,18 @@ html.dark #navbar-transition {
   height: 36px !important;
 }
 
+/* Venue cards on the guides hub: show the logo at a size that reads as a
+   button rather than a list icon. Mintlify sizes card icons at 24px via a
+   size-6 class on both the image and its wrapper, so both need overriding.
+   Scoped to the content area, so sidebar icons stay 16px. */
+#content-container .card div:has(> img[src^="/logo/"]),
+#content-container .card img[src^="/logo/"] {
+  width: 44px !important;
+  height: 44px !important;
+  max-width: none !important;
+  border-radius: 10px;
+}
+
 /* Vertical divider between sidebar and content */
 #sidebar {
   border-right: 1px solid #303030;

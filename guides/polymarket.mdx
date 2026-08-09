@@ -1,0 +1,125 @@
+---
+title: "Polymarket API Guides"
+sidebarTitle: "Polymarket"
+description: "Build on Polymarket with the Bravado API: trading bots, advanced order types, copy trading, terminals, leaderboards, and tax reporting."
+icon: "/logo/polymarket.png"
+---
+
+Polymarket is the largest prediction market by volume, running on Polygon. Every guide in this section works against it today, across all five Bravado products.
+
+Polymarket's own API accepts limit and market orders and reports recent activity. Bravado adds the execution and data layers on top: six more order types, copy trading, full wallet history with cost basis, and multi-leg parlays. These guides cover building on that.
+
+<Note>
+  New to the venue? [How Polymarket works](/markets/polymarket/overview) covers outcome tokens, condition IDs, and the CLOB before you write any code.
+</Note>
+
+## Trading bots
+
+**Automate execution on Polymarket with order types the native API does not have.** TWAP, Iceberg, Pegged, and three stop variants run server-side, so a strategy keeps working when your process restarts.
+
+<CardGroup cols={2}>
+  <Card title="Place an order" icon="arrow-left-right" href="/guides/place-an-order">
+    Your first Polymarket order, then the same call shaped into each of the eight order types.
+  </Card>
+
+  <Card title="Build a trading bot" icon="bot" href="/guides/build-a-trading-bot">
+    Signal, sizing, execution, and reconciling state after a restart.
+  </Card>
+
+  <Card title="Stop-loss and take-profit" icon="trending-down" href="/guides/stop-loss-take-profit">
+    Protect a position with stops, brackets, and trailing exits.
+  </Card>
+
+  <Card title="Execute a large position" icon="layers" href="/guides/large-position-twap-iceberg">
+    TWAP and Iceberg for working size into a thin Polymarket book.
+  </Card>
+
+  <Card title="Quote both sides" icon="split" href="/guides/quote-both-sides-split-merge">
+    Split USDC into a complete outcome set and make markets on both sides.
+  </Card>
+
+  <Card title="Safe retries" icon="refresh-cw" href="/guides/safe-retries-idempotency">
+    Idempotency keys, so a timeout never becomes a duplicate position.
+  </Card>
+</CardGroup>
+
+## Terminals
+
+**Build front ends for Polymarket trading.** Order entry, live portfolio, and the position states that a simple open-or-closed model gets wrong.
+
+<CardGroup cols={2}>
+  <Card title="Build a trading terminal" icon="monitor" href="/guides/build-a-trading-terminal">
+    The four calls a terminal needs on load, and how to poll without hitting limits.
+  </Card>
+
+  <Card title="Display positions and PnL" icon="chart-line" href="/guides/display-positions-and-pnl">
+    Cost basis, realized versus unrealized, and the four resolution states.
+  </Card>
+
+  <Card title="Track order and strategy state" icon="list-checks" href="/guides/track-order-and-strategy-state">
+    Why a TWAP is missing from your open orders, and how to show it properly.
+  </Card>
+
+  <Card title="White-label sub-accounts" icon="users" href="/guides/white-label-sub-accounts">
+    Provision Polymarket wallets for your end users under a master key.
+  </Card>
+</CardGroup>
+
+## Copy trading
+
+**Mirror profitable Polymarket wallets.** Polymarket has no native copy trading, so this exists only through Bravado. Any public wallet can be a leader, and the Data API lets you check their record before committing.
+
+<CardGroup cols={2}>
+  <Card title="Track a whale wallet" icon="users-round" href="/guides/track-whale-wallet">
+    Find a trader worth following, verify the record, then mirror their fills.
+  </Card>
+
+  <Card title="Copy-trading bot" icon="bot" href="/guides/copy-trading-bot-50-lines">
+    A follower service: selection filters, subscription, and supervision.
+  </Card>
+</CardGroup>
+
+## Analytics and reporting
+
+**Query any public Polymarket wallet.** Figures come from on-chain Polygon settlement records replayed through a share-level FIFO cost-basis engine, and the read endpoints need no funded account.
+
+<CardGroup cols={2}>
+  <Card title="Build a PnL leaderboard" icon="trophy" href="/guides/pnl-leaderboard">
+    Rank Polymarket traders by realized PnL or volume.
+  </Card>
+
+  <Card title="Generate a tax statement" icon="receipt" href="/guides/us-tax-statement">
+    Form-8949-style dispositions, reconciliation, and export.
+  </Card>
+</CardGroup>
+
+## Polymarket specifics worth knowing
+
+These come up in almost every integration, and getting them wrong is the usual cause of a first rejection:
+
+| | Detail |
+| --- | --- |
+| Chain | Polygon |
+| Collateral | USDC |
+| Market structure | Binary YES / NO outcomes, each its own ERC-1155 token |
+| `symbol` | The outcome token id, not the market. A binary market has two. |
+| Prices | Decimal probabilities from `0.001` to `0.999`, so `"0.62"` is 62 cents |
+| Resting order minimum | 5 shares on most markets |
+| Market order minimum | \$1 notional |
+| Resolution | UMA Optimistic Oracle, with a dispute path |
+
+<Warning>
+  Prices are probabilities, not cents. Sending `price: "62"` is rejected for being outside the valid range. Send `"0.62"`.
+</Warning>
+
+## Resolution changes what a position means
+
+Polymarket positions do not simply close. An event can conclude while the outcome is still being finalised on-chain, and shares are not redeemable during that window. Any application that treats a concluded event as realized money will show users balances they cannot access.
+
+See [UMA resolution](/markets/polymarket/uma-resolution) for the lifecycle, and [Display positions and PnL](/guides/display-positions-and-pnl) for how to model it in a UI.
+
+## Reference
+
+- [Polymarket coverage](/markets/polymarket/overview), which Bravado products work here
+- [Trade API](/products/trade-api), [Copytrade API](/products/copytrade-api), [Data API](/products/data-api)
+- [Error reference](/reference/errors), [Rate limits](/reference/rate-limits)

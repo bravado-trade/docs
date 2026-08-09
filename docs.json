@@ -271,6 +271,13 @@
             ]
           },
           {
+            "group": "By Venue",
+            "pages": [
+              "guides/polymarket",
+              "guides/predict-fun"
+            ]
+          },
+          {
             "group": "Trading Bots",
             "pages": [
               "guides/place-an-order",

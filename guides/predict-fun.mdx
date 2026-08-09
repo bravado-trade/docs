@@ -1,0 +1,45 @@
+---
+title: "Predict.fun API Guides"
+sidebarTitle: "Predict.fun"
+description: "Guides for building on Predict.fun with the Bravado API. Product coverage is partial and being confirmed."
+icon: "/logo/predict-fun.png"
+---
+
+<Info>
+  **Guides for Predict.fun are not written yet.** Bravado supports the venue for a subset of products, and which surfaces are live has not been confirmed. Rather than publish guides that may not work, this page is deliberately empty until that is settled.
+</Info>
+
+Predict.fun is a prediction market venue supported by Bravado for a subset of products. As with any prediction market, outcomes trade as tokens that settle at \$1 if the event happens and \$0 if it does not, so live prices read as implied probabilities.
+
+## Current coverage
+
+| Bravado product | Status |
+| --- | --- |
+| [Trade API](/markets/predict-fun/trade-api) | *To be confirmed* |
+| [Copytrade API](/markets/predict-fun/copytrade-api) | *To be confirmed* |
+| [Data API](/markets/predict-fun/data-api) | *To be confirmed* |
+| Combos API | *To be confirmed* |
+
+<Warning>
+  Do not build against a surface listed as unconfirmed. Treat only [Polymarket](/guides/polymarket) as fully supported until these rows are filled in.
+</Warning>
+
+## What lands here once coverage is confirmed
+
+The same guide set as Polymarket, adjusted for whatever differs at this venue:
+
+- **Trading bots**, placing orders and working size
+- **Terminals**, order entry and portfolio rendering
+- **Copy trading**, if the Copytrade API covers this venue
+- **Analytics**, if the Data API indexes these wallets
+
+The techniques transfer; what changes is settlement asset, price representation, minimum order sizes, and how markets resolve. See [what differs between venues](/markets/overview#what-differs-between-venues).
+
+## In the meantime
+
+Start with [Polymarket](/guides/polymarket). Everything Bravado exposes is fully supported there, and most of what you learn carries over once Predict.fun coverage is confirmed.
+
+## Reference
+
+- [Predict.fun coverage](/markets/predict-fun/overview)
+- [Supported prediction markets](/markets/overview)
