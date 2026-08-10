@@ -15,6 +15,10 @@ On **7 August 2026** the way these markets settle changed. They no longer read a
 
 This guide covers what settles these markets, how to find and price them, what the fees do to your edge, and how to execute through the Bravado Trade API.
 
+<Card title="Spin up a Trade API key" icon="key" href="https://portal.bravadotrade.com/dashboard">
+  Create a key with `trade.read`, `trade.execute`, and `trade.cancel` in the **Bravado Portal**. Every example below runs in dry mode without one, and needs one the moment you go live.
+</Card>
+
 <Note>
   Read time: about 20 minutes. Python and REST experience assumed. Read [Build a trading bot](/guides/build-a-trading-bot) first for the state and reconciliation patterns this guide leans on.
 </Note>
@@ -48,7 +52,7 @@ This guide covers what settles these markets, how to find and price them, what t
 
 **Tools and access**
 
-- A Bravado API key with `trade.read`, `trade.execute`, and `trade.cancel`
+- A Bravado API key with `trade.read`, `trade.execute`, and `trade.cancel`, created in the [Bravado Portal](https://portal.bravadotrade.com/dashboard)
 - `pip install requests websockets`
 - pUSD collateral for live trading. Dry-run mode needs none.
 - A machine with a clock disciplined by NTP. Window boundaries are absolute times and drift will cost you.
@@ -370,7 +374,7 @@ This is a placeholder and it is deliberately naive. It assumes no drift, constan
 
 ### Executing through Bravado
 
-One endpoint, one key per intended order.
+One endpoint, one idempotency key per intended order. If you have not created an API key yet, do it now in the [Bravado Portal](https://portal.bravadotrade.com/dashboard) and grant `trade.read`, `trade.execute`, and `trade.cancel`, since the flatten step below needs all three.
 
 ```python
 import os, uuid, requests
@@ -620,5 +624,6 @@ What is left is an execution problem with an unusually explicit cost. You know t
 - [Safe retries](/guides/safe-retries-idempotency), idempotency keys in depth
 - [Trade API reference](/products/trade-api), fields, fees, and position mechanics
 - [Polymarket coverage](/markets/polymarket/overview), venue constraints and supported products
+- [Bravado Portal](https://portal.bravadotrade.com/dashboard), create and manage API keys and scopes
 - [Chainlink TWAP prices](https://docs.polymarket.com/market-data/chainlink-twap), the settlement feed
 - [Geographic restrictions](https://docs.polymarket.com/api-reference/geoblock), eligibility and server regions
