@@ -282,6 +282,7 @@
             "pages": [
               "guides/place-an-order",
               "guides/build-a-trading-bot",
+              "guides/btc-5m-15m-bot",
               "guides/stop-loss-take-profit",
               "guides/large-position-twap-iceberg",
               "guides/quote-both-sides-split-merge",
