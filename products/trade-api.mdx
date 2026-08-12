@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Every order on Bravado flows through a single endpoint, `POST /v2/trade/order`, and a `type` field selects the execution strategy. Eight order types are available, ranging from simple resting limit orders to fully managed strategies like TWAP and trailing stops. Understanding which fields belong to which type, and how each type interacts with the Polymarket CLOB, will save you time debugging unexpected rejections and miscalculated sizes.
+Every order on Bravado flows through a single endpoint, `POST /v2/trade/order`, and a `type` field selects the execution strategy. Eight order types are available, ranging from simple resting limit orders to fully managed strategies like TWAP and trailing stops. Understanding which fields belong to which type, and how each type interacts with each venue, will save you time debugging unexpected rejections and miscalculated sizes.
 
 <Warning>
   **Price is a decimal probability, not cents.** A price of `"0.62"` means 62 cents per share. If you send `price: "62"`, the API will return an error because 62 is outside the valid range of 0.001–0.999. Always express prices as decimals.
@@ -69,16 +69,43 @@ Mismatched units are the single most common source of bugs when integrating the 
 
 ## Order type overview
 
-| Type | Returns | Description |
+| Type | Returns | Description | Venues |
+| --- | --- | --- | --- |
+| `LIMIT` | `order_id` | Resting limit order posted to the CLOB | Polymarket, Predict.fun |
+| `MARKET` | `order_id` | Immediate execution at the best available price | Polymarket, Predict.fun |
+| `TWAP` | `record_id` | Time-weighted average price spread over a duration | Polymarket, Predict.fun |
+| `PEGGED` | `record_id` | Automatically chases the touch price within a budget | Polymarket |
+| `ICEBERG` | `record_id` | Large order executed as hidden, repeated slices | Polymarket |
+| `STOP_LOSS` | `record_id` | Sell trigger when price falls to a threshold | Polymarket |
+| `TAKE_PROFIT` | `order_id` | Immediate CLOB sell when price rises to a target | Polymarket |
+| `TRAILING_STOP` | `record_id` | Dynamic stop that trails the high-water mark | Polymarket |
+
+<Info>
+  **Choosing a venue.** Add `"venue": "predictfun"` to route an order to Predict.fun; omit it (or send `"polymarket"`) for Polymarket. The venue must be enabled for your key. Order types not yet on a venue return `VENUE_CAPABILITY_UNSUPPORTED`.
+</Info>
+
+## Venue support
+
+The Trade API is multi-venue. Everything below is the Polymarket reference; the [venue pages](/markets/overview) document what each venue supports and where it differs.
+
+<CardGroup cols={2}>
+  <Card title="Polymarket" icon="/logo/polymarket.png" href="/markets/polymarket/trade-api">
+    Full support — all eight order types, brackets, and positions (redeem/split/merge). Polygon, pUSD.
+  </Card>
+  <Card title="Predict.fun" icon="/logo/predict-fun.png" href="/markets/predict-fun/trade-api">
+    LIMIT, MARKET, TWAP + positions (redeem/split/merge/withdraw). BNB Chain, USDT.
+  </Card>
+</CardGroup>
+
+| | Polymarket | Predict.fun |
 | --- | --- | --- |
-| `LIMIT` | `order_id` | Resting limit order posted to the CLOB |
-| `MARKET` | `order_id` | Immediate execution at the best available price |
-| `PEGGED` | `record_id` | Automatically chases the touch price within a budget |
-| `TWAP` | `record_id` | Time-weighted average price spread over a duration |
-| `ICEBERG` | `record_id` | Large order executed as hidden, repeated slices |
-| `STOP_LOSS` | `record_id` | Sell trigger when price falls to a threshold |
-| `TAKE_PROFIT` | `order_id` | Immediate CLOB sell when price rises to a target |
-| `TRAILING_STOP` | `record_id` | Dynamic stop that trails the high-water mark |
+| Chain / collateral | Polygon / pUSD | BNB Chain / USDT |
+| Order types | All 8 | LIMIT, MARKET, TWAP |
+| Price tick | `0.001` | `0.01` |
+| Minimum order | 5 shares (resting) / \$1 (market) | \$0.90 |
+| Trading fee | 0 | Market-set (`feeRateBps`, ~2%), taken in shares on buys |
+| Time in force | GTC / IOC / FOK | GTC only |
+| Order ids | `0x` hashes | Numeric strings |
 
 ## CLOB orders vs. managed strategies
 
