@@ -47,21 +47,21 @@ The mechanics are broadly the same across venues, which is what makes a shared A
 
 | Bravado product | Polymarket | Predict.fun |
 | --- | --- | --- |
-| [Trade API](/products/trade-api) | Supported | *To be confirmed* |
-| [Copytrade API](/products/copytrade-api) | Supported | *To be confirmed* |
-| [Combos API](/api/combos/overview) | Supported | *To be confirmed* |
-| [Data API](/products/data-api) | Supported | *To be confirmed* |
+| [Trade API](/products/trade-api) | Supported | Supported (LIMIT, MARKET, TWAP) |
+| [Copytrade API](/products/copytrade-api) | Supported | Not available |
+| [Combos API](/api/combos/overview) | Supported | Not available |
+| [Data API](/products/data-api) | Supported | Not available |
 | [UMA API](/products/uma-api) | Supported | Not applicable |
 
 <Info>
-  Predict.fun coverage is partial and the per-product rows above are intentionally left unconfirmed rather than guessed. Fill them in and the venue pages will be updated to match.
+  Predict.fun is supported through the Trade API v2 by adding `"venue": "predictfun"` to a request. It runs on BNB Chain with USDT collateral. See the [Predict.fun overview](/markets/predict-fun/overview) for venue rules.
 </Info>
 
 ## What differs between venues
 
 Most of the Bravado surface is venue-agnostic, but a few things are not:
 
-- **Settlement asset.** Collateral differs by venue, which changes what balances and PnL are denominated in.
+- **Settlement asset.** Collateral differs by venue, which changes what balances and PnL are denominated in — Polymarket settles in pUSD on Polygon, Predict.fun in USDT on BNB Chain.
 - **Resolution mechanism.** Polymarket resolves through UMA's Optimistic Oracle, including a dispute path. Other venues may resolve differently.
 - **Market microstructure.** Minimum resting order size, tick size, and notional minimums are set per venue and per market, and rejections that come from those limits are venue rules rather than Bravado errors.
 
