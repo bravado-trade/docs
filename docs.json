@@ -147,13 +147,9 @@
           {
             "group": "Trade API",
             "pages": [
-              "api/trade/overview",
-              "api/trade/orders",
-              "api/trade/positions",
-              "api/trade/strategies",
-              "api/trade/account",
-              "api/trade/withdraw"
-            ]
+              "api/trade/overview"
+            ],
+            "openapi": "/api-reference/openapi/v2-trade.json"
           },
           {
             "group": "Combos API",

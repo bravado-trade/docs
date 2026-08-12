@@ -1,0 +1,4710 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Bravado Trade API",
+    "version": "2.0",
+    "description": "Consolidated order execution API for Bravado partners (v2). One high-level\norder endpoint replaces the v1 limit/market/advanced split, plus native\nposition redeem, split/merge, pUSD withdraw, and managed-strategy admin.\n`/v1/trade/*` remains available and unchanged \u2014 v2 is additive.\n\nAuth, idempotency, rate-limit, numeric-as-string, timestamp, and error-\nenvelope conventions are identical to v1 (see the v1 spec), except every\npath is under `/v2/trade`.\n\nEndpoints:\n* `POST /v2/trade/order` \u2014 single consolidated order. `type` =\n  `LIMIT | MARKET | PEGGED | TWAP | ICEBERG | TAKE_PROFIT | STOP_LOSS |\n  TRAILING_STOP | TRAILING_BUY`. Optional `take_profit` / `stop_loss`\n  brackets attach to a\n  LIMIT/MARKET buy entry (best-effort). Managed strategies (PEGGED / TWAP /\n  ICEBERG / STOP_LOSS / TRAILING_STOP / TRAILING_BUY) return a `record_id`\n  instead of an\n  `order_id`.\n* `GET /v2/trade/strategies` + `DELETE /v2/trade/strategies/{record_id}` \u2014\n  list and cancel managed strategies (see the guide below).\n* `POST /v2/trade/positions/redeem` \u2014 redeem a resolved position to pUSD;\n  `/positions/split` and `/positions/merge` \u2014 on-chain CTF split/merge.\n* `POST /v2/trade/withdraw` \u2014 withdraw pUSD to an external address. Requires\n  the dedicated `trade.withdraw` scope (not granted by `trade.execute`).\n* `POST /v2/trade/combo/quote|accept|redeem` + `GET /v2/trade/combo/positions`\n  \u2014 multi-leg RFQ parlays (Combos). Quote \u2192 accept within ~8.5s \u2192 manual\n  redeem. Requires the dedicated `trade.combos` scope.\n* Reads (`account`, `balances`, `positions`, `orders/open`, `activity`),\n  cancels, and user provisioning are the same as v1, mounted under\n  `/v2/trade`.\n\nTags:\n* `trade.health` \u2014 liveness probe and OpenAPI spec.\n* `trade.read` \u2014 account, balances, positions, open orders, activity,\n  strategies.\n* `trade.execute` \u2014 consolidated order placement + position redeem.\n* `trade.cancel` \u2014 single, batch, cancel-all, and strategy cancel.\n* `trade.withdraw` \u2014 pUSD withdrawals to external addresses.\n* `trade.combos` \u2014 multi-leg RFQ parlay quote/accept/redeem + positions.\n* `trade.users` \u2014 provision integration users (white-label flow).\n\nAll endpoints return `application/json`.\n\n\n## Advanced orders \u2014 correct payloads (`POST /v2/trade/order`)\n\nMost integration bugs come from **units** \u2014 read this table first.\n\n| Field | Unit | Example | NOT |\n|---|---|---|---|\n| `price`, `take_profit.price`, `stop_loss.price`, `price_floor`, `price_ceiling`, `execution.trailing_offset`, `execution.high_water_mark`, `execution.low_water_mark` | **decimal probability** 0.001\u20130.999 | `\"0.60\"` (= 60\u00a2) | \u274c cents `\"60\"` |\n| `size`, `execution.clip_size`, bracket `size` | **shares** | `\"100\"` | \u2014 |\n| `budget_usdc`, `quote_amount` | **US dollars** | `\"50\"` | \u274c micro-units |\n| `offset_ticks` | CLOB ticks (1 tick = 0.1\u00a2) | `0` | \u2014 |\n| `execution.trailing_offset_pct`, `execution.randomize_pct`, `execution.price_tolerance_pct` | percent 0\u2013100 | `5` | \u2014 |\n| `execution.duration_sec`, `execution.interval_sec` | seconds (interval \u2265 10) | `3600`, `60` | \u2014 |\n\nAll field names are **snake_case**. Send a `price` of `72` and you'll get\n`price must be a decimal probability 0.001\u20130.999; received 72 \u2014 did you mean 0.72?`.\nEvery mutating request needs an `Idempotency-Key` header.\n\n### LIMIT / MARKET (with optional protective brackets)\n\n```jsonc\n// Limit buy at 62\u00a2 for 100 shares, with a take-profit and a partial stop-loss\n{\n  \"symbol\": \"<token_id>\", \"side\": \"buy\", \"type\": \"LIMIT\",\n  \"price\": \"0.62\", \"size\": \"100\",\n  \"take_profit\": { \"price\": \"0.72\" },              // whole entry by default\n  \"stop_loss\":   { \"price\": \"0.55\", \"size\": \"50\" } // positive size = partial\n}\n// Bracket size: omitted OR \"0\" = the whole entry.\n// Market buy = USD to spend; market sell = shares\n{ \"symbol\": \"<token_id>\", \"side\": \"buy\", \"type\": \"MARKET\", \"quote_amount\": \"10\" }\n{ \"symbol\": \"<token_id>\", \"side\": \"sell\", \"type\": \"MARKET\", \"size\": \"100\" }\n```\n\nBrackets attach only to a **buy** LIMIT/MARKET entry, best-effort: the entry\nstill succeeds if a bracket fails. **Always inspect the response** \u2014 a failed\nbracket is reported at `brackets.take_profit.error` / `brackets.stop_loss.error`\nAND surfaced in a top-level `warnings: [...]`.\n\n### PEGGED\n\n```jsonc\n{\n  \"symbol\": \"<token_id>\", \"side\": \"buy\", \"type\": \"PEGGED\",\n  \"outcome\": \"yes\", \"offset_ticks\": 0,\n  \"budget_usdc\": \"50\",                          // dollars, > 0 (snake_case)\n  \"price_floor\": 0.05, \"price_ceiling\": 0.95,   // optional decimals\n  \"condition_id\": \"0x\u2026\"\n}\n```\n\n`budget_usdc` is required (`quote_amount` is accepted as an alias \u2014 the same\ndollar field a MARKET buy uses).\n\n### ICEBERG\n\n```jsonc\n{\n  \"symbol\": \"<token_id>\", \"side\": \"buy\", \"type\": \"ICEBERG\",\n  \"price\": \"0.62\", \"size\": \"1000\",\n  \"execution\": { \"clip_size\": \"50\", \"price_tolerance_pct\": 5 }\n}\n```\n\nEach slice must be **\u2265 $1 in notional** (`clip_size \u00d7 price \u2265 1`) and\n`clip_size < size`. Slices are **post-only** \u2014 price the iceberg passively\n(at or below the bid for a buy); at/above the ask it is rejected with\n`order crosses book`.\n\n### TWAP\n\n```jsonc\n// Fully explicit\n{\n  \"symbol\": \"<token_id>\", \"side\": \"buy\", \"type\": \"TWAP\",\n  \"price\": \"0.62\", \"size\": \"1000\",\n  \"execution\": { \"duration_sec\": 3600, \"interval_sec\": 60 }\n}\n// Market-style: dollars only \u2014 price derived from the live top of book\n// (best ask for a buy, best bid for a sell); size = quote_amount / price\n{\n  \"symbol\": \"<token_id>\", \"side\": \"buy\", \"type\": \"TWAP\",\n  \"quote_amount\": \"5\",\n  \"execution\": { \"duration_sec\": 60, \"interval_sec\": 10 }\n}\n```\n\n`interval_sec` (\u2265 10) and `duration_sec` are required, plus **either** `size`\n(shares) **or** `quote_amount` (dollars). `price` is optional \u2014 when omitted\nthe derived limit is echoed in the response `message`. The derived price is a\n**limit**: slices never chase past it. `clip_size` / `randomize_pct` are\nignored (the engine auto-sizes slices) and produce a `warnings` entry.\n\n### TRAILING_STOP\n\n```jsonc\n{\n  \"symbol\": \"<token_id>\", \"side\": \"sell\", \"type\": \"TRAILING_STOP\",\n  \"size\": \"100\",\n  \"execution\": {\n    \"trailing_offset_pct\": 5,        // the trail distance\n    \"high_water_mark\": \"0.60\"        // current market price as the reference\n  }\n}\n```\n\nRequires `size` + an offset (`trailing_offset_pct` **or** `trailing_offset`)\n+ a reference (`execution.high_water_mark` or top-level `price`).\n\n### TRAILING_BUY\n\nThe entry mirror of TRAILING_STOP. A trailing stop follows the price up and\nsells when it falls back by your offset; a trailing buy follows the ask down\nand buys when it bounces back up by your offset. Use it to enter on a dip\nwithout having to pick the bottom.\n\n```jsonc\n{\n  \"symbol\": \"<token_id>\", \"side\": \"buy\", \"type\": \"TRAILING_BUY\",\n  \"quote_amount\": \"50\",              // US DOLLARS to spend, not shares\n  \"execution\": {\n    \"trailing_offset_pct\": 5,        // the bounce that triggers the entry\n    \"low_water_mark\": \"0.40\",        // optional starting reference\n    \"price_ceiling\": \"0.55\"          // optional hard cap\n  }\n}\n```\n\nRequires `quote_amount` + an offset (`trailing_offset_pct` **or**\n`trailing_offset`). It takes dollars rather than shares because the share\ncount is not known until the entry price is.\n\n`low_water_mark` is optional: omit it and the engine seeds the reference from\nthe first ask it sees, which is what you want when arming at the current market.\n\n`price_ceiling` is a veto, not a trigger. If the ask gaps straight past it the\nentry does not fire at any price, and the order stays armed in case a cheaper\nask comes back. A ceiling below the entry your offset implies is rejected at\narm time, since it could never fire.\n\n### TAKE_PROFIT / STOP_LOSS (standalone, on an existing position)\n\n```jsonc\n{ \"symbol\": \"<token_id>\", \"side\": \"sell\", \"type\": \"TAKE_PROFIT\", \"price\": \"0.72\", \"size\": \"50\" }\n{ \"symbol\": \"<token_id>\", \"side\": \"sell\", \"type\": \"STOP_LOSS\",  \"price\": \"0.55\", \"size\": \"50\" }\n```\n\nThese SELL shares you already hold \u2014 `size` is checked against your **share**\nbalance (not pUSD): `Not enough shares to place this sell \u2014 holding X\u2026`.\n\n### Market microstructure constraints (rejections that are NOT bugs)\n\n- Resting orders have a **per-market share minimum** (usually 5).\n- Market orders have a **$1 minimum amount**.\n- Iceberg slices are **post-only** (see ICEBERG above).\n\n### Tracking & canceling managed strategies\n\n\"Where do I see my iceberg / trailing stop?\" \u2014 **`GET /v2/trade/strategies`**\nlists every partner-created TWAP / ICEBERG / PEGGED / STOP_LOSS /\nTRAILING_STOP; `DELETE /v2/trade/strategies/{record_id}` cancels one.\n\n- The `record_id` returned by `POST /v2/trade/order` is the id to track/cancel.\n- Pre-trigger stop-losses and trailing stops exist **only** in this list; they\n  appear on `/orders/open` (`is_stop_loss: true`) only after the runner\n  triggers them into a real CLOB order.\n- **`price` is not the fill.** On a STOP_LOSS or TRAILING_STOP it is the level\n  the order was armed at, and on a TRAILING_BUY it is the ceiling. The price the\n  order actually got is `executed_price`, with `filled_size` alongside it.\n  Both are null until it executes. Showing `price` as the exit makes every\n  trailing stop look like it closed exactly where it opened.\n- An iceberg's working slice IS a live CLOB order and also shows on\n  `/orders/open`; the parent totals live in the strategy record.\n- Standalone TAKE_PROFIT places a real CLOB sell immediately \u2014 it lives on\n  `/orders/open` (`is_take_profit: true`), not in the strategies list.\n- A stop-loss can be canceled only while untriggered; once executing, cancel\n  the resulting order via `DELETE /v2/trade/orders/{order_id}`.\n\n### Response conventions\n\n- **Managed strategies** return `record_id` + `status: \"PENDING\" | \"ACTIVE\"`\n  plus a `message` \u2014 `PENDING` is **not** a rejection.\n- **CLOB orders** (LIMIT / MARKET / TAKE_PROFIT) return `order_id`.\n- Check `warnings: string[]` on every response \u2014 a `200` can still carry\n  \"entry OK, but the take-profit didn't place because \u2026\".\n- On `429`, respect `Retry-After` instead of retrying immediately.\n\n\n\n## Combos \u2014 multi-leg RFQ parlays (`/v2/trade/combo/*`)\n\nA **combo** is a single position that pays out only if **every** leg wins \u2014 a\nparlay. Unlike a normal order it is priced by **request-for-quote (RFQ)**: you\nask for a quote, then accept it within a short window. Requires the dedicated\n**`trade.combos`** scope.\n\nThe lifecycle is three calls (accept is money-moving and on-chain):\n\n`quote` \u2192 `accept` (within ~8.5s) \u2192 *(after the event resolves)* `redeem`\n\n### Units \u2014 read this first\n\n| Field | Unit | Example |\n|---|---|---|\n| `leg_position_ids` | 2\u201310 **YES position ids** (one per leg) | `[\"7248\u2026\", \"9931\u2026\"]` |\n| `notional_usd` | **US dollars** the user spends (BUY) | `5` |\n| `price_cents` (response) | cents per blended YES share | `2` (= $0.02) |\n| `maker_amount_usd` (response) | dollars the maker posts | `1.2` |\n| `taker_shares` (response) | combo shares received | `66.5` |\n| `payout_usd` (redeem response) | pUSD paid out for winning shares | `50` |\n\nField names are **snake_case**. Every mutating request needs an\n`Idempotency-Key` header. Only **`BUY`** is supported (there is no combo sell \u2014\nexit is redeem-on-win or let it resolve to $0).\n\n### 1) Quote \u2014 `POST /v2/trade/combo/quote`\n\n```jsonc\n{\n  \"leg_position_ids\": [\"<yes_position_id_A>\", \"<yes_position_id_B>\"],\n  \"notional_usd\": 5            // dollars to spend\n  // \"side\": \"BUY\"             // optional; BUY is the only value\n}\n```\n\nReturns the priced quote:\n\n```jsonc\n{\n  \"combo_order_id\": \"\u2026\",       // pass both of these to /accept\n  \"quote_id\": \"\u2026\",\n  \"rfq_id\": \"\u2026\",\n  \"price_cents\": 2,\n  \"maker_amount_usd\": 1.2,\n  \"taker_shares\": 66.5,\n  \"expires_at\": \"2026-07-17T15:04:05.000Z\"   // ISO \u2014 accept BEFORE this\n}\n```\n\nThe quote is valid **~8.5 seconds**. It is a real maker RFQ, not an estimate \u2014\ndon't cache it.\n\n### 2) Accept \u2014 `POST /v2/trade/combo/accept`\n\n```jsonc\n{ \"combo_order_id\": \"\u2026\", \"quote_id\": \"\u2026\" }\n```\n\n```jsonc\n{ \"combo_order_id\": \"\u2026\", \"status\": \"EXECUTED\", \"transaction_hash\": \"0x\u2026\" }\n```\n\nAccept signs and submits on-chain. It must land **before `expires_at`** \u2014 a\nstale accept returns **`410 QUOTE_EXPIRED`**. On expiry, **re-quote and accept\nthe fresh quote** \u2014 never blind-retry the same accept: the price may have moved\n(same lesson as any RFQ). Idempotency-Key protects against double-submit of the\n*same* accept, not against re-pricing.\n\n### 3) Redeem \u2014 `POST /v2/trade/combo/redeem`\n\nA combo does **not** auto-settle to cash. After the event resolves in your\nfavor, claim it manually:\n\n```jsonc\n{ \"combo_order_id\": \"\u2026\" }          // or { \"combo_position_id\": \"\u2026\" } from /positions\n```\n\n```jsonc\n{ \"combo_order_id\": \"\u2026\", \"status\": \"REDEEMED\", \"payout_usd\": 50, \"transaction_hash\": \"0x\u2026\" }\n```\n\nOnly a **`RESOLVED_WIN`** combo pays out \u2014 one losing leg zeroes the whole\ncombo (that is a correct parlay result, not a bug). Redeem before resolution or\non a losing combo is rejected.\n\n### 4) Positions \u2014 `GET /v2/trade/combo/positions`\n\nLists the bound user's combo positions. Filters:\n`status` = `OPEN | PARTIAL | RESOLVED_WIN | RESOLVED_LOSS`, plus `limit`\n(\u2264 500) and `offset`. Use the returned position id as `combo_position_id` for\nredeem.\n\n### Rejections that are NOT bugs\n\n- **`410 QUOTE_EXPIRED`** \u2014 accept came after `expires_at`. Re-quote.\n- **`422 INSUFFICIENT_BALANCE`** \u2014 the wallet can't cover `notional_usd` **plus\n  the fee**. The message states the dollars needed and the largest affordable\n  notional; size the combo a little under the balance.\n- **`422 NO_LIQUIDITY` / no maker** \u2014 no counterparty quoted the legs right now\n  (common on thin/near-event markets). Retry, or reduce `notional_usd`.\n"
+  },
+  "servers": [
+    {
+      "url": "https://api.bravadotrade.com",
+      "description": "Production"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "internalApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Internal-API-Key"
+      }
+    },
+    "schemas": {}
+  },
+  "tags": [],
+  "paths": {
+    "/v2/trade/healthz": {
+      "get": {
+        "summary": "Liveness probe",
+        "tags": [
+          "trade.health"
+        ],
+        "description": "Returns ok+ts when the partner-api module is reachable. Public; no auth.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "ts": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "ts"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/openapi.json": {
+      "get": {
+        "summary": "OpenAPI 3 spec",
+        "tags": [
+          "trade.health"
+        ],
+        "description": "Returns the OpenAPI 3 spec for /v1/trade endpoints (tags trade.*). Public; no auth.  Admin routes are excluded \u2014 they are internal-only.",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v2/trade/account": {
+      "get": {
+        "summary": "Account snapshot",
+        "tags": [
+          "trade.read"
+        ],
+        "description": "Returns the integration, binding, api key, wallet (EOA + Safe), and the builder code resolved for this key. Useful as the first call after onboarding to verify credentials and inspect quotas.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "partner": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        },
+                        "display_name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "slug",
+                        "display_name"
+                      ]
+                    },
+                    "binding": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "partner_user_id": {
+                          "type": "string"
+                        },
+                        "bravado_user_id": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "partner_user_id",
+                        "bravado_user_id"
+                      ]
+                    },
+                    "api_key": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "scopes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "rate_limit_per_min": {
+                          "type": "integer"
+                        },
+                        "last4": {
+                          "type": "string"
+                        },
+                        "builder_code_override": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "scopes",
+                        "rate_limit_per_min",
+                        "last4",
+                        "builder_code_override"
+                      ]
+                    },
+                    "wallet": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "eoa_address": {
+                          "type": "string"
+                        },
+                        "safe_address": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "eoa_address",
+                        "safe_address"
+                      ]
+                    },
+                    "builder_code_resolved": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "notional_cap_usdc": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "onboarding_status": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ready"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "pending"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "partner",
+                    "binding",
+                    "api_key",
+                    "wallet",
+                    "builder_code_resolved",
+                    "notional_cap_usdc",
+                    "onboarding_status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/positions": {
+      "get": {
+        "summary": "List positions",
+        "tags": [
+          "trade.read"
+        ],
+        "description": "Returns the user's positions sourced from the Polymarket data-api, normalised to snake_case with numeric fields encoded as JSON strings. Use `?status=active` (default) for currently-held positions with a live mark price and on-chain ERC1155 enrichment, or `?status=closed` for fully-sold positions with realized PnL only (live-only fields like size/current_value/mergeable are zeroed). Each row carries a `status` discriminator for clarity when sources are mixed downstream.",
+        "parameters": [
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "active"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "closed"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "status",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 500,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "offset",
+            "required": false
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "polymarket"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "predictfun"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "venue",
+            "required": false,
+            "description": "Trading venue; omitted = polymarket."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "positions": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "status": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "active"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "closed"
+                                ]
+                              }
+                            ]
+                          },
+                          "proxy_wallet": {
+                            "type": "string"
+                          },
+                          "token_id": {
+                            "type": "string"
+                          },
+                          "condition_id": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "string"
+                          },
+                          "avg_price": {
+                            "type": "string"
+                          },
+                          "current_value": {
+                            "type": "string"
+                          },
+                          "cur_price": {
+                            "type": "string"
+                          },
+                          "initial_value": {
+                            "type": "string"
+                          },
+                          "cash_pnl": {
+                            "type": "string"
+                          },
+                          "percent_pnl": {
+                            "type": "string"
+                          },
+                          "realized_pnl": {
+                            "type": "string"
+                          },
+                          "percent_realized_pnl": {
+                            "type": "string"
+                          },
+                          "total_bought": {
+                            "type": "string"
+                          },
+                          "redeemable": {
+                            "type": "boolean"
+                          },
+                          "mergeable": {
+                            "type": "boolean"
+                          },
+                          "negative_risk": {
+                            "type": "boolean"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "slug": {
+                            "type": "string"
+                          },
+                          "outcome": {
+                            "type": "string"
+                          },
+                          "outcome_index": {
+                            "type": "integer"
+                          },
+                          "end_date": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "proxy_wallet",
+                          "token_id",
+                          "condition_id",
+                          "size",
+                          "avg_price",
+                          "current_value",
+                          "cur_price",
+                          "initial_value",
+                          "cash_pnl",
+                          "percent_pnl",
+                          "realized_pnl",
+                          "percent_realized_pnl",
+                          "total_bought",
+                          "redeemable",
+                          "mergeable",
+                          "negative_risk",
+                          "title",
+                          "slug",
+                          "outcome",
+                          "outcome_index",
+                          "end_date"
+                        ]
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "positions",
+                    "count"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/activity": {
+      "get": {
+        "summary": "List activity timeline",
+        "tags": [
+          "trade.read"
+        ],
+        "description": "Returns the user's trade activity sourced from the Polymarket data-api: trades (BUY/SELL), redemptions, liquidity rewards, maker rebates, referral rewards, splits, merges, conversions, deposits, and withdrawals. Pagination via opaque `cursor`.",
+        "parameters": [
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "TRADE_BUY"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "TRADE_SELL"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "REDEEM"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "REWARD"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "MAKER_REBATE"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "REFERRAL_REWARD"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "SPLIT"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "MERGE"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "CONVERSION"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "DEPOSIT"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "WITHDRAW"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "type",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "polymarket"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "predictfun"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "venue",
+            "required": false,
+            "description": "Trading venue; omitted = polymarket."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "activities": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "TRADE_BUY"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "TRADE_SELL"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "REDEEM"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "REWARD"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "MAKER_REBATE"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "REFERRAL_REWARD"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "SPLIT"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "MERGE"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "CONVERSION"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "DEPOSIT"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "WITHDRAW"
+                                ]
+                              }
+                            ]
+                          },
+                          "timestamp": {
+                            "type": "integer"
+                          },
+                          "transaction_hash": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "market": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "type": "object",
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "condition_id": {
+                                    "type": "string"
+                                  },
+                                  "outcome": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "outcome_index": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "event_slug": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "icon": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "title",
+                                  "slug",
+                                  "condition_id",
+                                  "outcome",
+                                  "outcome_index",
+                                  "event_slug",
+                                  "icon"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "side": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "buy"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "sell"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "price": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "shares": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "amount_usdc": {
+                            "type": "string"
+                          },
+                          "from_asset": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "to_asset": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "timestamp",
+                          "transaction_hash",
+                          "market",
+                          "side",
+                          "price",
+                          "shares",
+                          "amount_usdc",
+                          "from_asset",
+                          "to_asset"
+                        ]
+                      }
+                    },
+                    "next_cursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "activities",
+                    "next_cursor"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/balances": {
+      "get": {
+        "summary": "Collateral balances",
+        "tags": [
+          "trade.read"
+        ],
+        "description": "Returns pUSD (active V2 collateral) and USDC.e (legacy, wrappable) for the bound user's Polymarket Safe wallet.  Decimal values as JSON strings with 6-decimal precision.  With ?venue=predictfun the `pusd` field carries the venue collateral (USDT on BNB) instead.",
+        "parameters": [
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "polymarket"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "predictfun"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "venue",
+            "required": false,
+            "description": "Trading venue; omitted = polymarket. For predictfun the `pusd` field carries the venue collateral (USDT on BNB) and `usdc_e` is 0."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "pusd": {
+                      "type": "string"
+                    },
+                    "usdc_e": {
+                      "type": "string"
+                    },
+                    "total_collateral_equivalent": {
+                      "type": "string"
+                    },
+                    "as_of": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "pusd",
+                    "usdc_e",
+                    "total_collateral_equivalent",
+                    "as_of"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/orders/open": {
+      "get": {
+        "summary": "List open orders",
+        "tags": [
+          "trade.read"
+        ],
+        "description": "Open CLOB orders for the bound user, optionally filtered by ?token_id. is_take_profit / is_stop_loss / is_pegged reflect the partner-managed-order joins: TP at creation, SL post- trigger (executionOrderId), Pegged while the runner is actively maintaining it (current_order_id). Pre-trigger SLs are correctly excluded since they have no live CLOB order until fired.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "token_id",
+            "required": false
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "polymarket"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "predictfun"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "venue",
+            "required": false,
+            "description": "Trading venue; omitted = polymarket."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "orders": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "order_id": {
+                            "type": "string"
+                          },
+                          "asset_id": {
+                            "type": "string"
+                          },
+                          "side": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "price": {
+                            "type": "string"
+                          },
+                          "original_size": {
+                            "type": "string"
+                          },
+                          "size_matched": {
+                            "type": "string"
+                          },
+                          "remaining_size": {
+                            "type": "string"
+                          },
+                          "order_type": {
+                            "type": "string"
+                          },
+                          "expiration": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "integer"
+                          },
+                          "is_take_profit": {
+                            "type": "boolean"
+                          },
+                          "is_stop_loss": {
+                            "type": "boolean"
+                          },
+                          "is_pegged": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "order_id",
+                          "asset_id",
+                          "side",
+                          "status",
+                          "price",
+                          "original_size",
+                          "size_matched",
+                          "remaining_size",
+                          "order_type",
+                          "expiration",
+                          "created_at",
+                          "is_take_profit",
+                          "is_stop_loss",
+                          "is_pegged"
+                        ]
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "orders",
+                    "count"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/orders/{order_id}": {
+      "delete": {
+        "summary": "Cancel a single order",
+        "tags": [
+          "trade.cancel"
+        ],
+        "description": "Cancels one CLOB order by id.  Idempotency-Key is optional but recommended.  Order ids that the CLOB doesn't recognise are returned in not_cancelled with reason='unknown'.",
+        "parameters": [
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "polymarket"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "predictfun"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "venue",
+            "required": false,
+            "description": "Trading venue; omitted = polymarket."
+          },
+          {
+            "schema": {
+              "minLength": 4,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "order_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "cancelled": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "not_cancelled": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "order_id": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "order_id",
+                          "reason"
+                        ]
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "cancelled",
+                    "not_cancelled",
+                    "count"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/orders/cancel-batch": {
+      "post": {
+        "summary": "Cancel a batch of orders",
+        "tags": [
+          "trade.cancel"
+        ],
+        "description": "Cancels up to 50 orders by id in a single CLOB call.  Idempotency-Key required.  Per-order outcomes are returned individually.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "venue": {
+                    "description": "Trading venue; omitted = polymarket.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "polymarket"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "predictfun"
+                        ]
+                      }
+                    ]
+                  },
+                  "order_ids": {
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "minLength": 4,
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "order_ids"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "cancelled": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "not_cancelled": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "order_id": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "order_id",
+                          "reason"
+                        ]
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "cancelled",
+                    "not_cancelled",
+                    "count"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/orders/cancel-all": {
+      "post": {
+        "summary": "Cancel all open orders",
+        "tags": [
+          "trade.cancel"
+        ],
+        "description": "Cancels every open CLOB order for the bound user.  Idempotency-Key required.  Returns the list of cancelled order ids; an empty list means there were no open orders to cancel.",
+        "parameters": [
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "polymarket"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "predictfun"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "venue",
+            "required": false,
+            "description": "Trading venue; omitted = polymarket."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "cancelled": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "not_cancelled": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "order_id": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "order_id",
+                          "reason"
+                        ]
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "cancelled",
+                    "not_cancelled",
+                    "count"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/users": {
+      "post": {
+        "summary": "Provision a partner-scoped user",
+        "tags": [
+          "trade.users"
+        ],
+        "description": "Idempotent on (partner_id, partner_user_id). Creates a Privy embedded wallet, deploys the Polymarket Safe via the Bravado relayer, issues CLOB credentials, and binds the user to the calling integration.  Returns 201 on first creation, 200 with `created:false` on subsequent calls for the same partner_user_id. Requires a master key (api key with no fixed binding); the new binding is owned by the calling integration.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "partner_user_id": {
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  "email": {
+                    "format": "email",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "partner_user_id"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "bravado_user_id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "partner_user_id": {
+                      "type": "string"
+                    },
+                    "eoa_address": {
+                      "type": "string"
+                    },
+                    "safe_address": {
+                      "type": "string"
+                    },
+                    "created": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "bravado_user_id",
+                    "partner_user_id",
+                    "eoa_address",
+                    "safe_address",
+                    "created"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "bravado_user_id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "partner_user_id": {
+                      "type": "string"
+                    },
+                    "eoa_address": {
+                      "type": "string"
+                    },
+                    "safe_address": {
+                      "type": "string"
+                    },
+                    "created": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "bravado_user_id",
+                    "partner_user_id",
+                    "eoa_address",
+                    "safe_address",
+                    "created"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/order": {
+      "post": {
+        "summary": "Place an order (consolidated)",
+        "tags": [
+          "trade.execute"
+        ],
+        "description": "Single high-level order endpoint. `type` = LIMIT | MARKET | PEGGED | TWAP | ICEBERG. Optional `take_profit` / `stop_loss` brackets attach to a LIMIT/MARKET buy entry (placed after the entry; best-effort \u2014 a failing bracket is reported, not rolled back). Idempotency-Key required.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "venue": {
+                    "description": "Trading venue. Omitted = polymarket (backward compatible). predictfun requires the partner venue entitlement; LIMIT and MARKET only for now.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "polymarket"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "predictfun"
+                        ]
+                      }
+                    ]
+                  },
+                  "symbol": {
+                    "description": "Venue-native outcome token id",
+                    "type": "string"
+                  },
+                  "side": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "buy"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "sell"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "LIMIT"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "MARKET"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PEGGED"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "TWAP"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ICEBERG"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "TAKE_PROFIT"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "STOP_LOSS"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "TRAILING_STOP"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "TRAILING_BUY"
+                        ]
+                      }
+                    ]
+                  },
+                  "price": {
+                    "description": "Decimal probability 0..1, e.g. \"0.72\" for 72\u00a2 (NOT cents). Required for LIMIT / ICEBERG / TAKE_PROFIT / STOP_LOSS. Optional for TWAP (derived from the live top of book when omitted) and TRAILING_STOP (reference; execution.high_water_mark also works).",
+                    "type": "string"
+                  },
+                  "size": {
+                    "description": "Shares. Required for LIMIT / ICEBERG / TAKE_PROFIT / STOP_LOSS / TRAILING_STOP and MARKET sell; for TWAP either size or quote_amount works.",
+                    "type": "string"
+                  },
+                  "quote_amount": {
+                    "description": "US dollars. MARKET buy notional; TWAP: shares are derived from it at the limit price; PEGGED: accepted as an alias for budget_usdc.",
+                    "type": "string"
+                  },
+                  "time_in_force": {
+                    "description": "LIMIT only. GTC (default) rests on the book (GTD when expiration is set). IOC fills whatever crosses immediately and cancels the remainder (Polymarket FAK) \u2014 the response reports the actual filled_size. FOK fills the full size instantly or cancels entirely. Incompatible with expiration. MARKET orders always behave as IOC/FAK.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "GTC"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "IOC"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "FOK"
+                        ]
+                      }
+                    ]
+                  },
+                  "expiration": {
+                    "type": "number"
+                  },
+                  "condition_id": {
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "yes"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "no"
+                        ]
+                      }
+                    ]
+                  },
+                  "offset_ticks": {
+                    "description": "PEGGED: distance from the touch in CLOB ticks (1 tick = $0.001); 0 = passive at the touch.",
+                    "type": "number"
+                  },
+                  "budget_usdc": {
+                    "description": "PEGGED buy budget in US dollars, top-level decimal string, e.g. \"50\". quote_amount is accepted as an alias.",
+                    "type": "string"
+                  },
+                  "price_floor": {
+                    "description": "PEGGED: lowest chase price, decimal probability 0..1 (NOT cents).",
+                    "type": "number"
+                  },
+                  "price_ceiling": {
+                    "description": "PEGGED: highest chase price, decimal probability 0..1 (NOT cents).",
+                    "type": "number"
+                  },
+                  "execution": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "properties": {
+                      "duration_sec": {
+                        "description": "TWAP total run length in seconds",
+                        "type": "number"
+                      },
+                      "clip_size": {
+                        "description": "Shares per slice (TWAP) / clip (Iceberg)",
+                        "type": "string"
+                      },
+                      "interval_sec": {
+                        "description": "TWAP seconds between slices (>= 10)",
+                        "type": "integer"
+                      },
+                      "randomize_pct": {
+                        "description": "TWAP slice-size jitter 0..50 (default 20)",
+                        "type": "number"
+                      },
+                      "passive": {
+                        "description": "TWAP slice style. Default false: each slice takes the touch (buy at the best ask, sell at the best bid), never past your price, so it executes. True: rest one tick inside the touch and never cross \u2014 cheaper when it fills, but often it does not. Use it on long horizons.",
+                        "type": "boolean"
+                      },
+                      "price_tolerance_pct": {
+                        "description": "ICEBERG auto-cancel drift tolerance 0..100",
+                        "type": "number"
+                      },
+                      "trailing_offset_pct": {
+                        "description": "TRAILING_STOP trail distance, percent (0..100)",
+                        "type": "number"
+                      },
+                      "trailing_offset": {
+                        "description": "TRAILING_STOP trail distance, decimal prob (0..1)",
+                        "type": "string"
+                      },
+                      "high_water_mark": {
+                        "description": "TRAILING_STOP starting reference price (decimal)",
+                        "type": "string"
+                      },
+                      "low_water_mark": {
+                        "description": "TRAILING_BUY starting reference price (decimal). Omit to let the engine seed it from the first ask it sees, which is what you want when arming at the current market.",
+                        "type": "string"
+                      },
+                      "price_ceiling": {
+                        "description": "TRAILING_BUY hard cap, decimal probability 0..1. If the ask gaps past it the entry does not fire at any price and the order stays armed for a cheaper ask.",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "take_profit": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "properties": {
+                      "price": {
+                        "description": "Decimal probability 0..1 (NOT cents)",
+                        "type": "string"
+                      },
+                      "size": {
+                        "description": "Shares for this bracket (optional). Omitted or \"0\" = the whole entry; set a positive value to protect only part of the position.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "price"
+                    ]
+                  },
+                  "stop_loss": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "properties": {
+                      "price": {
+                        "description": "Decimal probability 0..1 (NOT cents)",
+                        "type": "string"
+                      },
+                      "size": {
+                        "description": "Shares for this bracket (optional). Omitted or \"0\" = the whole entry; set a positive value to protect only part of the position.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "price"
+                    ]
+                  },
+                  "client_order_id": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "symbol",
+                  "side",
+                  "type"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "order_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "record_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "side": {
+                      "type": "string"
+                    },
+                    "price": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "size": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "filled_size": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "remaining_size": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "matched_amount": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "builder_code_used": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "number"
+                    },
+                    "brackets": {
+                      "type": "object",
+                      "properties": {
+                        "take_profit": {
+                          "additionalProperties": true,
+                          "type": "object",
+                          "properties": {
+                            "order_id": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "error": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "stop_loss": {
+                          "additionalProperties": true,
+                          "type": "object",
+                          "properties": {
+                            "order_id": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "error": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "order_id",
+                    "record_id",
+                    "status",
+                    "side",
+                    "price",
+                    "size",
+                    "filled_size",
+                    "remaining_size",
+                    "matched_amount",
+                    "builder_code_used",
+                    "created_at"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/order/batch": {
+      "post": {
+        "summary": "Place a batch of limit orders (bid ladder)",
+        "tags": [
+          "trade.execute"
+        ],
+        "description": "Places N limit orders at distinct prices in one call (up to 20 rungs). Atomic: if any rung is rejected, every already-placed rung is cancelled before the error surfaces \u2014 partners never see a partial ladder. Idempotency-Key required.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "symbol": {
+                    "description": "Polymarket outcome token id",
+                    "type": "string"
+                  },
+                  "side": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "buy"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "sell"
+                        ]
+                      }
+                    ]
+                  },
+                  "rungs": {
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "price": {
+                          "description": "Decimal probability 0..1",
+                          "type": "string"
+                        },
+                        "size": {
+                          "description": "Shares",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "price",
+                        "size"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "symbol",
+                  "side",
+                  "rungs"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "order_id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "side": {
+                            "type": "string"
+                          },
+                          "price": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "size": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "filled_size": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "remaining_size": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "matched_amount": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "builder_code_used": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "created_at": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "order_id",
+                          "status",
+                          "side",
+                          "price",
+                          "size",
+                          "filled_size",
+                          "remaining_size",
+                          "matched_amount",
+                          "builder_code_used",
+                          "created_at"
+                        ]
+                      }
+                    },
+                    "count": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "orders",
+                    "count"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/positions/redeem": {
+      "post": {
+        "summary": "Redeem a resolved position to pUSD",
+        "tags": [
+          "trade.execute"
+        ],
+        "description": "Redeems a resolved CTF position back to pUSD collateral. Synchronous: waits for on-chain confirmation and returns the actual payout in `payout_base_units` (6 decimals; 0 for a losing or already-redeemed position). Idempotency-Key required.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "condition_id": {
+                    "minLength": 66,
+                    "maxLength": 66,
+                    "description": "0x + 64 hex chars",
+                    "type": "string"
+                  },
+                  "outcome_index": {
+                    "minimum": 0,
+                    "description": "Index of the resolved winning outcome to redeem",
+                    "type": "integer"
+                  },
+                  "neg_risk_market": {
+                    "description": "Route via the NegRiskAdapter for multi-outcome markets",
+                    "type": "boolean"
+                  },
+                  "amount": {
+                    "minLength": 1,
+                    "description": "Decimal shares to redeem; full position when omitted",
+                    "type": "string"
+                  },
+                  "venue": {
+                    "description": "Trading venue; omitted = polymarket.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "polymarket"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "predictfun"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "condition_id",
+                  "outcome_index",
+                  "neg_risk_market"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transaction_hash": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "condition_id": {
+                      "type": "string"
+                    },
+                    "outcome_index": {
+                      "type": "integer"
+                    },
+                    "neg_risk_market": {
+                      "type": "boolean"
+                    },
+                    "payout_base_units": {
+                      "description": "pUSD received in base units (6 decimals); 0 if losing/already redeemed",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "transaction_hash",
+                    "state",
+                    "condition_id",
+                    "outcome_index",
+                    "neg_risk_market",
+                    "payout_base_units"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/positions/split": {
+      "post": {
+        "summary": "Split pUSD collateral into a complete outcome set",
+        "tags": [
+          "trade.execute"
+        ],
+        "description": "Splits `amount` pUSD into one share of every outcome of the market (CTF splitPosition). Returns the on-chain tx hash. Idempotency-Key required.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "venue": {
+                    "description": "Trading venue; omitted = polymarket.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "polymarket"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "predictfun"
+                        ]
+                      }
+                    ]
+                  },
+                  "condition_id": {
+                    "minLength": 66,
+                    "maxLength": 66,
+                    "description": "0x + 64 hex chars",
+                    "type": "string"
+                  },
+                  "amount": {
+                    "minLength": 1,
+                    "description": "pUSD amount (split) / share set (merge), decimal",
+                    "type": "string"
+                  },
+                  "neg_risk_market": {
+                    "description": "Route via the NegRiskAdapter for multi-outcome markets",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "condition_id",
+                  "amount",
+                  "neg_risk_market"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transaction_hash": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "condition_id": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "string"
+                    },
+                    "neg_risk_market": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "transaction_hash",
+                    "state",
+                    "condition_id",
+                    "amount",
+                    "neg_risk_market"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/positions/merge": {
+      "post": {
+        "summary": "Merge a complete outcome set back into pUSD",
+        "tags": [
+          "trade.execute"
+        ],
+        "description": "Merges one share of every outcome (`amount` sets) back into pUSD collateral (CTF mergePositions). Returns the on-chain tx hash. Idempotency-Key required.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "venue": {
+                    "description": "Trading venue; omitted = polymarket.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "polymarket"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "predictfun"
+                        ]
+                      }
+                    ]
+                  },
+                  "condition_id": {
+                    "minLength": 66,
+                    "maxLength": 66,
+                    "description": "0x + 64 hex chars",
+                    "type": "string"
+                  },
+                  "amount": {
+                    "minLength": 1,
+                    "description": "pUSD amount (split) / share set (merge), decimal",
+                    "type": "string"
+                  },
+                  "neg_risk_market": {
+                    "description": "Route via the NegRiskAdapter for multi-outcome markets",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "condition_id",
+                  "amount",
+                  "neg_risk_market"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transaction_hash": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "condition_id": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "string"
+                    },
+                    "neg_risk_market": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "transaction_hash",
+                    "state",
+                    "condition_id",
+                    "amount",
+                    "neg_risk_market"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/withdraw": {
+      "post": {
+        "summary": "Withdraw pUSD to an external address",
+        "tags": [
+          "trade.withdraw"
+        ],
+        "description": "Transfers pUSD collateral from the bound user's deposit wallet to an external address. Returns STATE_PENDING + the broadcast hash if not confirmed within the latency budget (reconcile via /activity). Requires the `trade.withdraw` scope. Idempotency-Key required.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "venue": {
+                    "description": "Trading venue; omitted = polymarket.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "polymarket"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "predictfun"
+                        ]
+                      }
+                    ]
+                  },
+                  "to": {
+                    "minLength": 42,
+                    "maxLength": 42,
+                    "description": "Destination address (0x + 40 hex)",
+                    "type": "string"
+                  },
+                  "amount": {
+                    "minLength": 1,
+                    "description": "Decimal amount to withdraw (e.g. \"10.5\")",
+                    "type": "string"
+                  },
+                  "token": {
+                    "minLength": 42,
+                    "maxLength": 42,
+                    "description": "ERC20 token contract to withdraw (0x + 40 hex). Omit to withdraw pUSD collateral; pass any token address to recover that asset.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "to",
+                  "amount"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transaction_hash": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "transaction_hash",
+                    "state",
+                    "to",
+                    "amount",
+                    "token"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/balances/withdrawable": {
+      "get": {
+        "summary": "List withdrawable ERC20 balances",
+        "tags": [
+          "trade.read"
+        ],
+        "description": "Returns the bound user's ERC20 token balances on Polygon (via Allium), scaled to human decimals with zero balances dropped. Shows what can be pulled out with POST /v2/trade/withdraw (pass the token address).",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "balances": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "token": {
+                            "description": "ERC20 contract address",
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "decimals": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "balance": {
+                            "description": "Human-decimal balance",
+                            "type": "string"
+                          },
+                          "value_usd": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "token",
+                          "symbol",
+                          "decimals",
+                          "balance",
+                          "value_usd"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "balances"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/strategies": {
+      "get": {
+        "summary": "List managed strategies (TWAP / Iceberg / Pegged / Stop-Loss / Trailing-Stop)",
+        "tags": [
+          "trade.read"
+        ],
+        "description": "Lists the bound user's partner-created managed strategies, newest first. Optional `status` filter. These are the `record_id` entries returned by POST /v2/trade/order for PEGGED/TWAP/ICEBERG/STOP_LOSS/TRAILING_STOP/TRAILING_BUY types. Pre-trigger stop-losses, trailing stops and trailing buys live ONLY here \u2014 they surface on /orders/open (is_stop_loss=true) only after the runner triggers them into a real CLOB order.",
+        "parameters": [
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "ACTIVE"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "PAUSED"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "COMPLETED"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "CANCELED"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "ERROR"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "description": "Filter by lifecycle status"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "strategies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "description": "TWAP | ICEBERG | PEGGED | STOP_LOSS | TRAILING_STOP",
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "side": {
+                            "type": "string"
+                          },
+                          "token_id": {
+                            "type": "string"
+                          },
+                          "condition_id": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "total_size": {
+                            "description": "Order total. Shares for TWAP/ICEBERG/STOP_LOSS/TRAILING_STOP; USD notional (budget) for PEGGED. Use filled_size/total_size for progress \u2014 the ratio is unit-consistent per strategy.",
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "filled_size": {
+                            "description": "Amount filled so far, in the same unit as total_size (shares, or USD for PEGGED).",
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "price": {
+                            "description": "The level the order was ARMED at (decimal). Not the fill: see executed_price. STOP_LOSS/TRAILING_STOP trigger, TRAILING_BUY ceiling.",
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "trailing_offset_pct": {
+                            "description": "Trail distance in percent; TRAILING_STOP and TRAILING_BUY",
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "high_water_mark": {
+                            "description": "Current high-water mark (decimal); TRAILING_STOP only",
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "executed_price": {
+                            "description": "Average price the fill actually got (decimal). This is the exit price for STOP_LOSS/TRAILING_STOP and the entry price for TRAILING_BUY. Null until the order executes. Do NOT use `price` for this: `price` is the level the order was armed at, so showing it as the fill makes every trailing stop look like it exited at the price you entered.",
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "low_water_mark": {
+                            "description": "Current low-water mark (decimal); TRAILING_BUY only. The entry fires when the ask bounces back up from here by your offset.",
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "last_error": {
+                            "description": "Why the strategy is in ERROR (or PAUSED, for PEGGED) \u2014 the runner's last recorded failure, e.g. a CLOB rejection. Null while healthy.",
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "created_at": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "status",
+                          "side",
+                          "token_id",
+                          "condition_id",
+                          "total_size",
+                          "filled_size",
+                          "price",
+                          "trailing_offset_pct",
+                          "high_water_mark",
+                          "executed_price",
+                          "low_water_mark",
+                          "last_error",
+                          "created_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "strategies"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/strategies/{id}": {
+      "delete": {
+        "summary": "Cancel a managed strategy",
+        "tags": [
+          "trade.cancel"
+        ],
+        "description": "Cancels a TWAP / Iceberg / Pegged / Stop-Loss / Trailing-Stop strategy by its record_id: cancels the live CLOB slice (if any) and marks the record CANCELED. A stop-loss can only be canceled while still PENDING \u2014 once triggered the runner is executing it. Idempotent for already-terminal records. Idempotency-Key required.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/copytrade": {
+      "post": {
+        "summary": "Subscribe the bound user to a leader (copytrade)",
+        "tags": [
+          "trade.copytrade"
+        ],
+        "description": "Creates a copytrade subscription for the end-user (resolved from X-Partner-User-Id) that mirrors the leader's fills per the buy/sell sizing config. The copytrade engine executes copied trades on the user's wallet. Idempotency-Key required. 409 if an active copytrade for this leader already exists.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "leader_address": {
+                    "minLength": 4,
+                    "type": "string"
+                  },
+                  "leader_username": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ACTIVE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PAUSED"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "DISABLED"
+                        ]
+                      }
+                    ]
+                  },
+                  "market_ids_include": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "market_ids_exclude": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tags_include": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tags_exclude": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "buy_enabled": {
+                    "type": "boolean"
+                  },
+                  "buy_order_type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "MARKET"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "LIMIT"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ALL"
+                        ]
+                      }
+                    ]
+                  },
+                  "buy_size_mode": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_LEADER_TRADE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "FIXED_USD_PER_TRADE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_FOLLOWER_AVAILABLE"
+                        ]
+                      }
+                    ]
+                  },
+                  "buy_size_value": {
+                    "type": "number"
+                  },
+                  "buy_min_trade_size": {
+                    "type": "number"
+                  },
+                  "buy_max_trade_size": {
+                    "type": "number"
+                  },
+                  "buy_insufficient_usdc_action": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "BUY_MAX"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "SKIP"
+                        ]
+                      }
+                    ]
+                  },
+                  "buy_time_in_force": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "GTC"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "FOK"
+                        ]
+                      }
+                    ]
+                  },
+                  "buy_min_for_percent": {
+                    "type": "boolean"
+                  },
+                  "sell_enabled": {
+                    "type": "boolean"
+                  },
+                  "sell_order_type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "MARKET"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "LIMIT"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ALL"
+                        ]
+                      }
+                    ]
+                  },
+                  "sell_size_mode": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_LEADER_TRADE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "FIXED_USD_PER_TRADE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_FOLLOWER_AVAILABLE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "MAX"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_MAX"
+                        ]
+                      }
+                    ]
+                  },
+                  "sell_size_value": {
+                    "type": "number"
+                  },
+                  "sell_insufficient_shares_action": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "SELL_MAX"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "SKIP"
+                        ]
+                      }
+                    ]
+                  },
+                  "is_simulation": {
+                    "type": "boolean"
+                  },
+                  "copy_start_date": {
+                    "anyOf": [
+                      {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "copy_end_date": {
+                    "anyOf": [
+                      {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "take_profit_levels": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "trigger_bps": {
+                          "minimum": 1,
+                          "maximum": 1000000,
+                          "type": "integer"
+                        },
+                        "portion_bps": {
+                          "minimum": 1,
+                          "maximum": 10000,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "trigger_bps",
+                        "portion_bps"
+                      ]
+                    }
+                  },
+                  "stop_loss_levels": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "trigger_bps": {
+                          "minimum": 1,
+                          "maximum": 1000000,
+                          "type": "integer"
+                        },
+                        "portion_bps": {
+                          "minimum": 1,
+                          "maximum": 10000,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "trigger_bps",
+                        "portion_bps"
+                      ]
+                    }
+                  },
+                  "close_at_price_cents": {
+                    "anyOf": [
+                      {
+                        "minimum": 1,
+                        "maximum": 9999,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "max_hold_seconds": {
+                    "anyOf": [
+                      {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "leader_address",
+                  "buy_order_type",
+                  "buy_size_mode",
+                  "buy_size_value",
+                  "buy_insufficient_usdc_action",
+                  "sell_order_type",
+                  "sell_size_mode",
+                  "sell_insufficient_shares_action"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List the bound user's active/paused copytrades",
+        "tags": [
+          "trade.copytrade"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "copytrades": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "leader_address": {
+                            "type": "string"
+                          },
+                          "leader_username": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "market_ids_include": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "market_ids_exclude": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "tags_include": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "tags_exclude": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "buy_enabled": {
+                            "type": "boolean"
+                          },
+                          "buy_order_type": {
+                            "type": "string"
+                          },
+                          "buy_size_mode": {
+                            "type": "string"
+                          },
+                          "buy_size_value": {
+                            "type": "number"
+                          },
+                          "buy_min_trade_size": {
+                            "type": "number"
+                          },
+                          "buy_max_trade_size": {
+                            "type": "number"
+                          },
+                          "buy_insufficient_usdc_action": {
+                            "type": "string"
+                          },
+                          "buy_time_in_force": {
+                            "type": "string"
+                          },
+                          "buy_min_for_percent": {
+                            "type": "boolean"
+                          },
+                          "sell_enabled": {
+                            "type": "boolean"
+                          },
+                          "sell_order_type": {
+                            "type": "string"
+                          },
+                          "sell_size_mode": {
+                            "type": "string"
+                          },
+                          "sell_size_value": {
+                            "type": "number"
+                          },
+                          "sell_insufficient_shares_action": {
+                            "type": "string"
+                          },
+                          "is_simulation": {
+                            "type": "boolean"
+                          },
+                          "copy_start_date": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "copy_end_date": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "take_profit_levels": {
+                            "type": "array",
+                            "items": {
+                              "additionalProperties": false,
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "TAKE_PROFIT"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "STOP_LOSS"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "trigger_bps": {
+                                  "type": "integer"
+                                },
+                                "portion_bps": {
+                                  "type": "integer"
+                                },
+                                "sort_order": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "trigger_bps",
+                                "portion_bps",
+                                "sort_order"
+                              ]
+                            }
+                          },
+                          "stop_loss_levels": {
+                            "type": "array",
+                            "items": {
+                              "additionalProperties": false,
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "TAKE_PROFIT"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "STOP_LOSS"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "trigger_bps": {
+                                  "type": "integer"
+                                },
+                                "portion_bps": {
+                                  "type": "integer"
+                                },
+                                "sort_order": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "trigger_bps",
+                                "portion_bps",
+                                "sort_order"
+                              ]
+                            }
+                          },
+                          "close_at_price_cents": {
+                            "type": "integer"
+                          },
+                          "max_hold_seconds": {
+                            "type": "integer"
+                          },
+                          "created_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "leader_address",
+                          "status",
+                          "market_ids_include",
+                          "market_ids_exclude",
+                          "tags_include",
+                          "tags_exclude",
+                          "buy_enabled",
+                          "buy_order_type",
+                          "buy_size_mode",
+                          "buy_size_value",
+                          "buy_insufficient_usdc_action",
+                          "buy_time_in_force",
+                          "sell_enabled",
+                          "sell_order_type",
+                          "sell_size_mode",
+                          "sell_insufficient_shares_action",
+                          "is_simulation",
+                          "take_profit_levels",
+                          "stop_loss_levels",
+                          "created_at",
+                          "updated_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "copytrades"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/copytrade/history": {
+      "get": {
+        "summary": "Copied-trade execution history for the bound user",
+        "tags": [
+          "trade.copytrade"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "copytrade_id": {
+                            "type": "string"
+                          },
+                          "leader_address": {
+                            "type": "string"
+                          },
+                          "user_wallet": {
+                            "type": "string"
+                          },
+                          "market_id": {
+                            "type": "string"
+                          },
+                          "event_slug": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "market_title": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "side": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "BUY"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "SELL"
+                                ]
+                              }
+                            ]
+                          },
+                          "order_type": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "MARKET"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "LIMIT"
+                                ]
+                              }
+                            ]
+                          },
+                          "amount": {
+                            "type": "number"
+                          },
+                          "price": {
+                            "type": "number"
+                          },
+                          "is_simulation": {
+                            "type": "boolean"
+                          },
+                          "created_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "copytrade_id",
+                          "leader_address",
+                          "user_wallet",
+                          "side",
+                          "order_type",
+                          "amount",
+                          "price",
+                          "is_simulation",
+                          "created_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "history"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/copytrade/pnl": {
+      "get": {
+        "summary": "Realized copytrade PnL (24h + lifetime) for the bound user",
+        "tags": [
+          "trade.copytrade"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "realized_pnl_24h": {
+                      "type": "number"
+                    },
+                    "realized_pnl_lifetime": {
+                      "type": "number"
+                    },
+                    "simulation": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "realized_pnl_24h": {
+                          "type": "number"
+                        },
+                        "realized_pnl_lifetime": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "realized_pnl_24h",
+                        "realized_pnl_lifetime"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "realized_pnl_24h",
+                    "realized_pnl_lifetime",
+                    "simulation"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/copytrade/simulation": {
+      "get": {
+        "summary": "Paper (simulation) portfolio for the bound user",
+        "tags": [
+          "trade.copytrade"
+        ],
+        "description": "The bound user's simulation paper account: open positions marked to the live CLOB midpoint, realized + unrealized PnL, paper cash and equity. Built from is_simulation fills only; touches no real balance. A position's mark/value/unrealized is null if the midpoint was momentarily unavailable.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "initial_balance_usdc": {
+                      "type": "number"
+                    },
+                    "cash_usdc": {
+                      "type": "number"
+                    },
+                    "realized_pnl": {
+                      "type": "number"
+                    },
+                    "unrealized_pnl": {
+                      "type": "number"
+                    },
+                    "equity_usdc": {
+                      "type": "number"
+                    },
+                    "positions": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "token_id": {
+                            "type": "string"
+                          },
+                          "shares": {
+                            "type": "number"
+                          },
+                          "avg_cost": {
+                            "type": "number"
+                          },
+                          "cost_basis": {
+                            "type": "number"
+                          },
+                          "mark_price": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "market_value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "unrealized_pnl": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "token_id",
+                          "shares",
+                          "avg_cost",
+                          "cost_basis",
+                          "mark_price",
+                          "market_value",
+                          "unrealized_pnl"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "initial_balance_usdc",
+                    "cash_usdc",
+                    "realized_pnl",
+                    "unrealized_pnl",
+                    "equity_usdc",
+                    "positions"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/copytrade/{id}": {
+      "patch": {
+        "summary": "Update a copytrade's config (partial)",
+        "tags": [
+          "trade.copytrade"
+        ],
+        "description": "All fields optional; only provided fields change.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "leader_address": {
+                    "minLength": 4,
+                    "type": "string"
+                  },
+                  "leader_username": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ACTIVE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PAUSED"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "DISABLED"
+                        ]
+                      }
+                    ]
+                  },
+                  "market_ids_include": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "market_ids_exclude": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tags_include": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tags_exclude": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "buy_enabled": {
+                    "type": "boolean"
+                  },
+                  "buy_order_type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "MARKET"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "LIMIT"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ALL"
+                        ]
+                      }
+                    ]
+                  },
+                  "buy_size_mode": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_LEADER_TRADE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "FIXED_USD_PER_TRADE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_FOLLOWER_AVAILABLE"
+                        ]
+                      }
+                    ]
+                  },
+                  "buy_size_value": {
+                    "type": "number"
+                  },
+                  "buy_min_trade_size": {
+                    "type": "number"
+                  },
+                  "buy_max_trade_size": {
+                    "type": "number"
+                  },
+                  "buy_insufficient_usdc_action": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "BUY_MAX"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "SKIP"
+                        ]
+                      }
+                    ]
+                  },
+                  "buy_time_in_force": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "GTC"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "FOK"
+                        ]
+                      }
+                    ]
+                  },
+                  "buy_min_for_percent": {
+                    "type": "boolean"
+                  },
+                  "sell_enabled": {
+                    "type": "boolean"
+                  },
+                  "sell_order_type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "MARKET"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "LIMIT"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ALL"
+                        ]
+                      }
+                    ]
+                  },
+                  "sell_size_mode": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_LEADER_TRADE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "FIXED_USD_PER_TRADE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_FOLLOWER_AVAILABLE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "MAX"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PCT_OF_MAX"
+                        ]
+                      }
+                    ]
+                  },
+                  "sell_size_value": {
+                    "type": "number"
+                  },
+                  "sell_insufficient_shares_action": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "SELL_MAX"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "SKIP"
+                        ]
+                      }
+                    ]
+                  },
+                  "is_simulation": {
+                    "type": "boolean"
+                  },
+                  "copy_start_date": {
+                    "anyOf": [
+                      {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "copy_end_date": {
+                    "anyOf": [
+                      {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "take_profit_levels": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "trigger_bps": {
+                          "minimum": 1,
+                          "maximum": 1000000,
+                          "type": "integer"
+                        },
+                        "portion_bps": {
+                          "minimum": 1,
+                          "maximum": 10000,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "trigger_bps",
+                        "portion_bps"
+                      ]
+                    }
+                  },
+                  "stop_loss_levels": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "properties": {
+                        "trigger_bps": {
+                          "minimum": 1,
+                          "maximum": 1000000,
+                          "type": "integer"
+                        },
+                        "portion_bps": {
+                          "minimum": 1,
+                          "maximum": 10000,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "trigger_bps",
+                        "portion_bps"
+                      ]
+                    }
+                  },
+                  "close_at_price_cents": {
+                    "anyOf": [
+                      {
+                        "minimum": 1,
+                        "maximum": 9999,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "max_hold_seconds": {
+                    "anyOf": [
+                      {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "leader_address": {
+                      "type": "string"
+                    },
+                    "leader_username": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "market_ids_include": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "market_ids_exclude": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "tags_include": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "tags_exclude": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "buy_enabled": {
+                      "type": "boolean"
+                    },
+                    "buy_order_type": {
+                      "type": "string"
+                    },
+                    "buy_size_mode": {
+                      "type": "string"
+                    },
+                    "buy_size_value": {
+                      "type": "number"
+                    },
+                    "buy_min_trade_size": {
+                      "type": "number"
+                    },
+                    "buy_max_trade_size": {
+                      "type": "number"
+                    },
+                    "buy_insufficient_usdc_action": {
+                      "type": "string"
+                    },
+                    "buy_time_in_force": {
+                      "type": "string"
+                    },
+                    "buy_min_for_percent": {
+                      "type": "boolean"
+                    },
+                    "sell_enabled": {
+                      "type": "boolean"
+                    },
+                    "sell_order_type": {
+                      "type": "string"
+                    },
+                    "sell_size_mode": {
+                      "type": "string"
+                    },
+                    "sell_size_value": {
+                      "type": "number"
+                    },
+                    "sell_insufficient_shares_action": {
+                      "type": "string"
+                    },
+                    "is_simulation": {
+                      "type": "boolean"
+                    },
+                    "copy_start_date": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "copy_end_date": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "take_profit_levels": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "TAKE_PROFIT"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "STOP_LOSS"
+                                ]
+                              }
+                            ]
+                          },
+                          "trigger_bps": {
+                            "type": "integer"
+                          },
+                          "portion_bps": {
+                            "type": "integer"
+                          },
+                          "sort_order": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "trigger_bps",
+                          "portion_bps",
+                          "sort_order"
+                        ]
+                      }
+                    },
+                    "stop_loss_levels": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "TAKE_PROFIT"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "STOP_LOSS"
+                                ]
+                              }
+                            ]
+                          },
+                          "trigger_bps": {
+                            "type": "integer"
+                          },
+                          "portion_bps": {
+                            "type": "integer"
+                          },
+                          "sort_order": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "trigger_bps",
+                          "portion_bps",
+                          "sort_order"
+                        ]
+                      }
+                    },
+                    "close_at_price_cents": {
+                      "type": "integer"
+                    },
+                    "max_hold_seconds": {
+                      "type": "integer"
+                    },
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "leader_address",
+                    "status",
+                    "market_ids_include",
+                    "market_ids_exclude",
+                    "tags_include",
+                    "tags_exclude",
+                    "buy_enabled",
+                    "buy_order_type",
+                    "buy_size_mode",
+                    "buy_size_value",
+                    "buy_insufficient_usdc_action",
+                    "buy_time_in_force",
+                    "sell_enabled",
+                    "sell_order_type",
+                    "sell_size_mode",
+                    "sell_insufficient_shares_action",
+                    "is_simulation",
+                    "take_profit_levels",
+                    "stop_loss_levels",
+                    "created_at",
+                    "updated_at"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Cancel (soft-delete) a copytrade",
+        "tags": [
+          "trade.copytrade"
+        ],
+        "description": "Idempotency-Key optional on DELETE. History is preserved.",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/copytrade/{id}/status": {
+      "patch": {
+        "summary": "Pause / resume / disable a copytrade",
+        "tags": [
+          "trade.copytrade"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ACTIVE"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PAUSED"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "DISABLED"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/copytrade/{id}/simulation/reset": {
+      "post": {
+        "summary": "Reset a copytrade's simulation (clear paper fills)",
+        "tags": [
+          "trade.copytrade"
+        ],
+        "description": "Deletes this copytrade's paper (simulation) history so the leader can be re-tested from a clean slate. Live fills are never touched. Returns the number of paper fills cleared.",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "properties": {
+                    "deleted_count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "deleted_count"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/combo/quote": {
+      "post": {
+        "summary": "Request an RFQ quote for a multi-leg combo",
+        "tags": [
+          "trade.combos"
+        ],
+        "description": "Requests a maker price for a 2\u201310 leg parlay (RFQ). The returned `expires_at` is ~8.5s out \u2014 call /combo/accept with the returned `combo_order_id` + `quote_id` before it, or re-quote. Managed (deposit-wallet) users only. Idempotency-Key required.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "leg_position_ids": {
+                    "minItems": 2,
+                    "maxItems": 10,
+                    "description": "Ordered YES outcome token ids (ERC-1155 position ids) of 2\u201310 distinct markets to combine.",
+                    "type": "array",
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "notional_usd": {
+                    "minimum": 0.01,
+                    "description": "pUSD the user spends on the combo (BUY).",
+                    "type": "number"
+                  },
+                  "side": {
+                    "description": "Only BUY is supported right now.",
+                    "type": "string",
+                    "enum": [
+                      "BUY"
+                    ]
+                  }
+                },
+                "required": [
+                  "leg_position_ids",
+                  "notional_usd"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "combo_order_id": {
+                      "type": "string"
+                    },
+                    "quote_id": {
+                      "type": "string"
+                    },
+                    "rfq_id": {
+                      "type": "string"
+                    },
+                    "price_cents": {
+                      "description": "Blended price in cents per YES share.",
+                      "type": "number"
+                    },
+                    "maker_amount_usd": {
+                      "type": "number"
+                    },
+                    "taker_shares": {
+                      "type": "number"
+                    },
+                    "expires_at": {
+                      "description": "ISO-8601 instant the quote expires (~8.5s). Call /combo/accept before it; a stale accept returns 410 QUOTE_EXPIRED.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "combo_order_id",
+                    "quote_id",
+                    "rfq_id",
+                    "price_cents",
+                    "maker_amount_usd",
+                    "taker_shares",
+                    "expires_at"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/combo/accept": {
+      "post": {
+        "summary": "Accept a live combo quote and execute",
+        "tags": [
+          "trade.combos"
+        ],
+        "description": "Signs and executes the combo at the quoted price. Returns EXECUTED with the on-chain tx hash. A stale/expired quote returns 410 QUOTE_EXPIRED \u2014 re-quote, never blind-retry (the price may have moved). Idempotency-Key required.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "combo_order_id": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "quote_id": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "combo_order_id",
+                  "quote_id"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "combo_order_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "EXECUTED on success.",
+                      "type": "string"
+                    },
+                    "transaction_hash": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "combo_order_id",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/combo/redeem": {
+      "post": {
+        "summary": "Redeem a resolved-win combo to pUSD",
+        "tags": [
+          "trade.combos"
+        ],
+        "description": "Burns winning combo shares back to pUSD collateral (manual claim). Synchronous \u2014 returns the actual `payout_usd`. Only redeems combos resolved in the user's favor. Idempotency-Key required.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "description": "Supply combo_order_id (from the accept response) or combo_position_id (the YES position id from /combo/positions).",
+                "type": "object",
+                "properties": {
+                  "combo_order_id": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "combo_position_id": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "description": "Supply combo_order_id (from the accept response) or combo_position_id (the YES position id from /combo/positions)."
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "combo_order_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "REDEEMED on success.",
+                      "type": "string"
+                    },
+                    "payout_usd": {
+                      "description": "pUSD paid out for winning shares.",
+                      "type": "number"
+                    },
+                    "transaction_hash": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "combo_order_id",
+                    "status",
+                    "payout_usd"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/trade/combo/positions": {
+      "get": {
+        "summary": "List the user's combo positions",
+        "tags": [
+          "trade.combos"
+        ],
+        "description": "Returns the bound user's combo (parlay) positions with per-leg detail and status (OPEN | PARTIAL | RESOLVED_WIN | RESOLVED_LOSS).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "description": "OPEN | PARTIAL | RESOLVED_WIN | RESOLVED_LOSS"
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 500,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "offset",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    }
+  }
+}
