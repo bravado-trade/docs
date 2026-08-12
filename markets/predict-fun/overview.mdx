@@ -1,47 +1,76 @@
 ---
 title: "Predict.fun on Bravado: Coverage and Supported Features"
 sidebarTitle: "Overview"
-description: "Predict.fun is supported for a subset of Bravado products. Check which surfaces are live before building against it."
+description: "Predict.fun is a prediction market on BNB Chain, collateralised in USDT. Bravado supports it through the Trade API v2 by passing venue: predictfun."
 icon: "/logo/predict-fun.png"
 ---
 
-<Info>
-  **Partial support.** Predict.fun is not yet covered by every Bravado product. The sections below are deliberately left unfilled rather than assumed, confirm the details and this page will be completed to match the [Polymarket pages](/markets/polymarket/overview).
-</Info>
+Predict.fun is a prediction market running on BNB Chain. It uses the same conditional-token / central-limit-order-book design as Polymarket, so outcomes trade as tokens that settle at \$1 if the event happens and \$0 if it does not, and live prices read as implied probabilities. Its collateral is **USDT**.
 
-Predict.fun is a prediction market venue supported by Bravado for a subset of products. As with any prediction market, outcomes trade as tokens that settle at \$1 if the event happens and \$0 if it does not, so live prices read as implied probabilities.
+Bravado supports Predict.fun through the **Trade API v2**: send the same requests you already use, with `"venue": "predictfun"` added.
+
+## How to trade Predict.fun
+
+Every v2 Trade API request takes an optional `venue` field. Omit it and you get Polymarket (the default); set it to `predictfun` to route to Predict.fun.
+
+```jsonc
+POST /v2/trade/order
+{
+  "venue": "predictfun",
+  "symbol": "<outcome token id>",
+  "side": "buy",
+  "type": "LIMIT",
+  "price": "0.42",
+  "size": "5"
+}
+```
+
+The venue is available per partner. If your key is not entitled to it, the request is rejected with `VENUE_NOT_ENABLED` — contact Bravado to enable it.
 
 ## Product coverage
 
 | Bravado product | Status |
 | --- | --- |
-| [Trade API](/markets/predict-fun/trade-api) | *To be confirmed* |
-| [Copytrade API](/markets/predict-fun/copytrade-api) | *To be confirmed* |
-| [Data API](/markets/predict-fun/data-api) | *To be confirmed* |
-| Combos API | *To be confirmed* |
-
-<Warning>
-  Do not build against a surface listed as unconfirmed above. Treat only Polymarket as fully supported until these rows are filled in.
-</Warning>
+| [Trade API](/markets/predict-fun/trade-api) | Supported — LIMIT, MARKET, TWAP, plus positions, redeem, split, merge, withdraw |
+| [Copytrade API](/markets/predict-fun/copytrade-api) | Not available |
+| [Data API](/markets/predict-fun/data-api) | Not available |
+| Combos API | Not available |
 
 ## Venue details
 
-{/* TODO: Confirm and fill in. Left blank deliberately. These were not
-     documented anywhere in the repo and were not assumed. */}
-
 | Detail | Value |
 | --- | --- |
-| Chain | *To be confirmed* |
-| Settlement asset | *To be confirmed* |
-| Market structure | *To be confirmed* |
-| Resolution mechanism | *To be confirmed* |
-| Order book model | *To be confirmed* |
+| Chain | BNB Chain |
+| Settlement asset | USDT |
+| Market structure | Binary and multi-outcome (neg-risk); conditional tokens (ERC-1155) |
+| Order book model | Off-chain CLOB, on-chain settlement |
+| Price representation | Decimal probability, `0.01` tick |
 
 ## How it differs from Polymarket
 
-Once the table above is filled in, this section should call out anything that changes how you integrate: settlement asset, price representation, minimum order sizes, and resolution behaviour are the usual differences. See [what differs between venues](/markets/overview#what-differs-between-venues).
+Everything you send is the same shape; these are the venue rules to know before integrating:
+
+| | Polymarket | Predict.fun |
+| --- | --- | --- |
+| Collateral | pUSD (on Polygon) | USDT (on BNB Chain) |
+| Price tick | `0.001` | `0.01` |
+| Minimum order value | \$1 (market) / 5 shares (resting) | \$0.90 |
+| Trading fee | 0 | Market-set `feeRateBps` (commonly 200 = 2%), deducted **in shares** on buys |
+| Order ids | `0x` hashes | Numeric strings |
+| Time in force | GTC / IOC / FOK | GTC only (IOC/FOK not yet supported) |
+
+Balances and withdrawals are denominated in USDT; the `pusd` field of the balances response carries the venue's trading collateral (USDT here), for a uniform response shape across venues.
+
+## Supported Bravado products
+
+<CardGroup cols={2}>
+  <Card title="Trade API" icon="arrow-left-right" href="/markets/predict-fun/trade-api">
+    LIMIT, MARKET, and TWAP orders, plus positions, redeem, split, merge, and withdraw.
+  </Card>
+</CardGroup>
 
 ## Related
 
 - [Supported prediction markets](/markets/overview)
+- [Trade API on Predict.fun](/markets/predict-fun/trade-api)
 - [Polymarket overview](/markets/polymarket/overview), the fully supported reference implementation

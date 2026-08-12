@@ -1,36 +1,56 @@
 ---
 title: "Trade API on Predict.fun"
 sidebarTitle: "Trade API"
-description: "Order execution and position management on Predict.fun via Bravado. Support status is pending confirmation."
+description: "Order execution and position management on Predict.fun via the Bravado Trade API v2. Add venue: predictfun to route to Predict.fun."
 icon:
   name: "arrow-left-right"
   library: "lucide"
 ---
 
-<Warning>
-  **Support status unconfirmed.** Whether the Trade API is live on Predict.fun has not been confirmed, so nothing on this page should be treated as available yet. It was left unfilled rather than assumed.
-</Warning>
+The [Trade API](/products/trade-api) supports Predict.fun through the **v2 surface**. You use the same endpoints, credentials, HMAC signing, and idempotency contract as Polymarket — you add `"venue": "predictfun"` to the request body (or `?venue=predictfun` on `GET`/`DELETE` routes).
 
-Order execution and position management on Predict.fun. For how this product behaves in general, see the [Trade API product page](/products/trade-api).
+Omitting `venue` always means Polymarket, so existing integrations are unaffected.
 
-## Support status
+This page covers what is specific to Predict.fun. For the full behaviour of each order type, see the [Trade API product page](/products/trade-api); for endpoint-level detail, see the [Trade API reference](/api/trade/overview).
 
-| Question | Answer |
-| --- | --- |
-| Available on Predict.fun today | *To be confirmed* |
-| Feature parity with Polymarket | *To be confirmed* |
-| Known limitations | *To be confirmed* |
+## Entitlement
+
+Predict.fun is enabled per partner. A request with `venue: "predictfun"` from a key that is not entitled returns `VENUE_NOT_ENABLED` (403). Ask your Bravado contact to enable the venue for your key.
+
+## Supported order types
+
+| Type | Returns | Notes on Predict.fun |
+| --- | --- | --- |
+| `LIMIT` | `order_id` | Rests on the book (GTC). Subject to the \$0.90 minimum order value. |
+| `MARKET` | `order_id` | Fills against the touch with slippage tolerance. |
+| `TWAP` | `record_id` | Splits a parent order across a duration; each slice respects the \$0.90 minimum. |
+
+Order types not listed (`PEGGED`, `ICEBERG`, `STOP_LOSS`, `TAKE_PROFIT`, `TRAILING_STOP`) are not yet available on Predict.fun and return `VENUE_CAPABILITY_UNSUPPORTED`.
 
 ## Venue-specific behaviour
 
-{/* TODO: Fill in once support is confirmed. Mirror the structure of
-     markets/polymarket/trade-api.mdx, which documents the equivalent
-     Polymarket behaviour. */}
+- **`symbol`** is the on-chain outcome token id (a numeric string), not the market.
+- **`price`** is a decimal probability snapped to a **`0.01` tick**. `time_in_force` (IOC/FOK) and `expiration` (GTD) are not supported — orders rest GTC.
+- **Minimum order value is \$0.90.** A smaller order is rejected; a TWAP slice below it is bumped to the minimum.
+- **Fees** are set by the market (`feeRateBps`, commonly 200 = 2%) and charged **in shares** on buys — a 10-share fill credits roughly 9.8 shares.
+- **Order ids are numeric strings.** Cancel by that id, the same way as Polymarket's `0x` hashes.
+- Balances and withdrawals are **USDT on BNB Chain**.
 
-Anything that differs from the Polymarket implementation belongs here, field units, minimums, and any unsupported subset of the product.
+## Positions
+
+Predict.fun positions support **redeem, split, and merge**, plus **withdraw** to an external address. Winning shares become redeemable once the market resolves; redeeming a losing position is a valid no-op that returns a zero payout.
+
+Pass `"venue": "predictfun"` on the positions, redeem, split, merge, and withdraw routes. See [Positions](/products/trade-api#positions) for the full lifecycle.
+
+## Not yet supported
+
+- Copytrade and Combos (Polymarket only).
+- Live fill streams (poll positions/activity).
+- IOC/FOK time-in-force and GTD expiration.
 
 ## Related
 
 - [Trade API product overview](/products/trade-api)
+- [Trade API endpoint reference](/api/trade/overview)
 - [Predict.fun overview](/markets/predict-fun/overview)
 - [Same product on Polymarket](/markets/polymarket/trade-api)
