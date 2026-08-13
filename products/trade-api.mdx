@@ -81,7 +81,7 @@ Mismatched units are the single most common source of bugs when integrating the 
 | `TRAILING_STOP` | `record_id` | Dynamic stop that trails the high-water mark | Polymarket |
 
 <Info>
-  **Choosing a venue.** Add `"venue": "predictfun"` to route an order to Predict.fun; omit it (or send `"polymarket"`) for Polymarket. The venue must be enabled for your key. Order types not yet on a venue return `VENUE_CAPABILITY_UNSUPPORTED`.
+  **Choosing a venue.** Add `"venue": "predictfun"` to route an order to Predict.fun; omit it (or send `"polymarket"`) for Polymarket. The venue must be enabled for your key. Order types not yet on a venue return `VENUE_CAPABILITY_UNSUPPORTED`. You can also pin the venue in the path — `POST /v2/trade/predictfun/order` — see [venue selection](/markets/predict-fun/trade-api#two-ways-to-select-the-venue).
 </Info>
 
 ## Venue support

@@ -11,6 +11,27 @@ The [Trade API](/products/trade-api) supports Predict.fun through the **v2 surfa
 
 Omitting `venue` always means Polymarket, so existing integrations are unaffected.
 
+## Two ways to select the venue
+
+**Field-based (canonical).** Put `"venue": "predictfun"` in the body (or
+`?venue=predictfun` on GET/DELETE). Omitting it means Polymarket — the
+backward-compatible default.
+
+**Path-based aliases.** `/v2/trade/{venue}/...` mirrors the venue-aware routes
+with the venue pinned in the path — convenient when a gateway or client keys a
+base path per venue:
+
+```bash
+POST   /v2/trade/predictfun/order
+GET    /v2/trade/predictfun/positions
+DELETE /v2/trade/predictfun/orders/{id}
+```
+
+The path is authoritative (it overrides any `venue` in the body). Sign the
+exact path you call — HMAC uses it verbatim. An unknown venue segment returns
+`404`. Venue-neutral routes (users, combos, withdrawable balances) have no
+path alias. Both forms hit the same handlers and enforce the same entitlement.
+
 This page covers what is specific to Predict.fun. For the full behaviour of each order type, see the [Trade API product page](/products/trade-api); for endpoint-level detail, see the [Trade API reference](/api/trade/overview).
 
 ## Entitlement
