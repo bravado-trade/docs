@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
     "title": "Bravado Trade API",
     "version": "2.0",
@@ -25,7 +25,40 @@
     },
     "schemas": {}
   },
-  "tags": [],
+  "tags": [
+    {
+      "name": "trade.health",
+      "description": "Liveness and OpenAPI spec"
+    },
+    {
+      "name": "trade.read",
+      "description": "Account, balances, positions, open orders, activity, strategies"
+    },
+    {
+      "name": "trade.cancel",
+      "description": "Cancel single / batch / all, and managed-strategy cancel"
+    },
+    {
+      "name": "trade.users",
+      "description": "Provision integration users (white-label)"
+    },
+    {
+      "name": "trade.execute",
+      "description": "Order placement, batch (bid ladder), position redeem/split/merge"
+    },
+    {
+      "name": "trade.withdraw",
+      "description": "Withdraw collateral to an external address"
+    },
+    {
+      "name": "trade.copytrade",
+      "description": "trade.copytrade"
+    },
+    {
+      "name": "trade.combos",
+      "description": "Multi-leg RFQ parlays (quote / accept / redeem / positions)"
+    }
+  ],
   "paths": {
     "/v2/trade/healthz": {
       "get": {
@@ -62,7 +95,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_healthz"
       }
     },
     "/v2/trade/openapi.json": {
@@ -76,7 +110,8 @@
           "200": {
             "description": "Default Response"
           }
-        }
+        },
+        "operationId": "get_v2_trade_openapi.json"
       }
     },
     "/v2/trade/account": {
@@ -250,7 +285,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_account"
       }
     },
     "/v2/trade/positions": {
@@ -464,7 +500,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_positions"
       }
     },
     "/v2/trade/activity": {
@@ -857,7 +894,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_activity"
       }
     },
     "/v2/trade/balances": {
@@ -923,7 +961,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_balances"
       }
     },
     "/v2/trade/orders/open": {
@@ -1053,7 +1092,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_orders_open"
       }
     },
     "/v2/trade/orders/{order_id}": {
@@ -1143,7 +1183,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "delete_v2_trade_orders_order_id"
       }
     },
     "/v2/trade/orders/cancel-batch": {
@@ -1242,7 +1283,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_orders_cancel-batch"
       }
     },
     "/v2/trade/orders/cancel-all": {
@@ -1323,7 +1365,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_orders_cancel-all"
       }
     },
     "/v2/trade/users": {
@@ -1431,7 +1474,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_users"
       }
     },
     "/v2/trade/order": {
@@ -1886,7 +1930,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_order"
       }
     },
     "/v2/trade/order/batch": {
@@ -2069,7 +2114,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_order_batch"
       }
     },
     "/v2/trade/positions/redeem": {
@@ -2174,7 +2220,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_positions_redeem"
       }
     },
     "/v2/trade/positions/split": {
@@ -2269,7 +2316,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_positions_split"
       }
     },
     "/v2/trade/positions/merge": {
@@ -2364,7 +2412,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_positions_merge"
       }
     },
     "/v2/trade/withdraw": {
@@ -2460,7 +2509,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_withdraw"
       }
     },
     "/v2/trade/balances/withdrawable": {
@@ -2541,7 +2591,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_balances_withdrawable"
       }
     },
     "/v2/trade/strategies": {
@@ -2751,7 +2802,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_strategies"
       }
     },
     "/v2/trade/strategies/{id}": {
@@ -2798,7 +2850,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "delete_v2_trade_strategies_id"
       }
     },
     "/v2/trade/copytrade": {
@@ -3171,7 +3224,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_copytrade"
       },
       "get": {
         "summary": "List the bound user's active/paused copytrades",
@@ -3411,7 +3465,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_copytrade"
       }
     },
     "/v2/trade/copytrade/history": {
@@ -3550,7 +3605,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_copytrade_history"
       }
     },
     "/v2/trade/copytrade/pnl": {
@@ -3600,7 +3656,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_copytrade_pnl"
       }
     },
     "/v2/trade/copytrade/simulation": {
@@ -3707,7 +3764,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_v2_trade_copytrade_simulation"
       }
     },
     "/v2/trade/copytrade/{id}": {
@@ -4277,7 +4335,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "patch_v2_trade_copytrade_id"
       },
       "delete": {
         "summary": "Cancel (soft-delete) a copytrade",
@@ -4316,7 +4375,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "delete_v2_trade_copytrade_id"
       }
     },
     "/v2/trade/copytrade/{id}/status": {
@@ -4398,7 +4458,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "patch_v2_trade_copytrade_id_status"
       }
     },
     "/v2/trade/copytrade/{id}/simulation/reset": {
@@ -4439,7 +4500,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_copytrade_id_simulation_reset"
       }
     },
     "/v2/trade/combo/quote": {
@@ -4533,7 +4595,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_combo_quote"
       }
     },
     "/v2/trade/combo/accept": {
@@ -4595,7 +4658,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_combo_accept"
       }
     },
     "/v2/trade/combo/redeem": {
@@ -4659,7 +4723,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_v2_trade_combo_redeem"
       }
     },
     "/v2/trade/combo/positions": {
@@ -4703,7 +4768,8 @@
           "200": {
             "description": "Default Response"
           }
-        }
+        },
+        "operationId": "get_v2_trade_combo_positions"
       }
     }
   }

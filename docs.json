@@ -149,7 +149,7 @@
             "pages": [
               "api/trade/overview"
             ],
-            "openapi": "/api-reference/openapi/v2-trade.json"
+            "openapi": "api-reference/openapi/v2-trade.json"
           },
           {
             "group": "Combos API",
