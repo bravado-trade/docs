@@ -1,17 +1,51 @@
 ---
 title: "Data API on Predict.fun"
 sidebarTitle: "Data API"
-description: "Wallet PnL, leaderboards, and trade history on Predict.fun via Bravado. Support status is pending confirmation."
+description: "Wallet PnL, leaderboards, positions, and trade history on Predict.fun via Bravado, derived from on-chain BNB Chain settlement."
 icon:
   name: "chart-line"
   library: "lucide"
 ---
 
-<Info>
-  **Not available on Predict.fun.** The Data API is Polymarket-only today. Predict.fun is supported through the [Trade API](/markets/predict-fun/trade-api); the Data API is not part of that coverage.
-</Info>
+The [Data API](/products/data-api)'s core analytics surface is live on Predict.fun. Every figure is derived from on-chain BNB Chain settlement records replayed through the same share-level FIFO cost-basis engine as Polymarket, and reconciled against the venue's own API.
 
-Wallet PnL, leaderboards, and trade history is supported on Polymarket. For how this product behaves in general, see the [Data API product page](/products/data-api).
+Predict.fun endpoints live under the `/predict/` path segment:
+
+```bash
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/predict/traders/{address}?window=30d
+```
+
+<Note>
+  Your partner account needs the **`predictfun` venue enabled** (in addition to the `analytics.read` scope) — otherwise requests return `403 VENUE_NOT_ENABLED`. Venue access is managed per partner in the [portal](https://portal.bravadotrade.com/).
+</Note>
+
+Addresses are BNB Chain `0x…` addresses (Kernel smart accounts or EOAs), matched case-insensitively.
+
+## What you can query
+
+| Data | Endpoint |
+| --- | --- |
+| Performance summary | `GET /predict/traders/{address}` |
+| Cumulative PnL series | `GET /predict/traders/{address}/pnl` |
+| Positions (all / active / closed) | `GET /predict/traders/{address}/positions[/active\|/closed]` |
+| Trade log | `GET /predict/traders/{address}/trades` |
+| Category breakdown | `GET /predict/traders/{address}/categories` |
+| PnL leaderboard | `GET /predict/leaderboard` |
+| Volume leaderboard | `GET /predict/leaderboard/volume` |
+| Wallet activity | `GET /predict/trades?address=…` |
+
+Same shapes, parameters, and numeric conventions as the Polymarket routes.
+
+## Venue differences
+
+- **Realized PnL is already net of fees.** Predict.fun charges fees in the proceeds asset, so `?basis=net` and `?basis=gross` return the same number; fee fields are informational.
+- **Activity types** are limited to the on-chain lifecycle set: `TRADE`, `REDEEM`, `SPLIT`, `MERGE`, `CONVERSION`. Off-chain income and transfer types (rewards, rebates, deposits, withdrawals) don't exist on this venue.
+- **Categories** come from Predict.fun's own tag tree, not Polymarket's.
+- Field names keep the `_usdc` suffix for shape parity; amounts are in the venue's USD-stable collateral.
+
+## Not available on this venue
+
+Tax statements and the PMWAS accounting surface (`/statements`, `/metrics`, `/reconciliation`, `/tax-report`, `/event-graph`, `/entity`), `/combo-markets`, and `/usdc-balance` are Polymarket-only today. These return an explicit `404` with `{"error": "not available for this venue", …}` — never an empty success.
 
 ## Related
 

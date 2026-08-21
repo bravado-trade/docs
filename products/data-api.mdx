@@ -7,7 +7,38 @@ icon:
   library: "lucide"
 ---
 
-Bravado's Data API derives all metrics directly from on-chain Polygon data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any Polymarket wallet. You can query performance data for your own wallet or any public address, useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
+Bravado's Data API derives all metrics directly from on-chain settlement data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any wallet. You can query performance data for your own wallet or any public address, useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics`.
+
+## Authentication
+
+Sign Data API requests with your **partner API key**, using the same HMAC scheme as the Trade API. Send these headers on every call:
+
+| Header | Value |
+| --- | --- |
+| `X-BRAVADO-API-KEY` | Your public key |
+| `X-BRAVADO-TIMESTAMP` | Unix **milliseconds**, within ±30s of server time |
+| `X-BRAVADO-SIGNATURE` | Lowercase-hex HMAC-SHA256 of `timestamp\nMETHOD\ncanonical_path\nsha256_hex(body)`, keyed by your secret. The Data API is GET-only, so the body hash is always the empty-body constant `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`. |
+
+Your key needs the **`analytics.read`** scope (select the Data API product when creating the key in the [portal](https://portal.bravadotrade.com/)), and your partner account needs the request's **venue** enabled — see [Venues](#venues) below.
+
+Every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`; a `429` includes `Retry-After`.
+
+<Note>
+  **No credentials needed** for `GET /healthz` and the free tax-report surface: `/traders/{address}/tax-report`, `/traders/{address}/tax-report/8949`, and `/traders/{address}/event-graph` are public.
+</Note>
+
+<Warning>
+  **Deprecated:** `Authorization: Bearer <token>` with a Bravado-issued static token still works during the key-migration window and will be removed once all partners are migrated. New integrations must sign with partner keys.
+</Warning>
+
+## Venues
+
+Every Data API request belongs to exactly one venue, and your partner account must have that venue enabled (`403 VENUE_NOT_ENABLED` otherwise):
+
+| Venue | Paths | Notes |
+| --- | --- | --- |
+| **Polymarket** (default) | everything under `/trader-analytics/` | Full surface, including tax statements. See [Data API on Polymarket](/markets/polymarket/data-api). |
+| **Predict.fun** | `/trader-analytics/predict/*` | Core analytics (leaderboards, profiles, PnL, positions, trades, categories); realized PnL is already net of fees on this venue. See [Data API on Predict.fun](/markets/predict-fun/data-api). |
 
 <Warning>
   All numeric fields in Data API responses, including PnL, volume, and prices, are returned as **JSON strings**. Always parse them as `BigDecimal` (or your language's equivalent arbitrary-precision type). Parsing as a float risks silent rounding errors on large values.
@@ -81,7 +112,7 @@ All analytics endpoints accept a `?window=` query parameter that controls the ro
 **What the window does not affect:** Fee totals, streak metadata, and drawdown statistics are always computed all-time regardless of the `window` value. This is by design, these metrics are meaningless when truncated to a short window.
 
 ```bash
-GET https://bravado-api-k7kaq.ondigitalocean.app/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b?window=30d
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b?window=30d
 ```
 
 <Note>
@@ -97,14 +128,14 @@ Bravado maintains two live leaderboards ranked by the `window` you specify:
     Returns traders ranked by realized PnL over the selected window.
 
     ```bash
-    GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard?window=24h
+    GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard?window=24h
     ```
   </Tab>
   <Tab title="Volume leaderboard">
     Returns traders ranked by USDC trading volume over the selected window. CTF infrastructure transactions are excluded.
 
     ```bash
-    GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume?window=7d
+    GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard/volume?window=7d
     ```
   </Tab>
 </Tabs>
@@ -114,7 +145,7 @@ Bravado maintains two live leaderboards ranked by the `window` you specify:
 The trader endpoints return comprehensive performance data for a single wallet across all markets.
 
 ```bash
-GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}?window=30d
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}?window=30d
 ```
 
 The response includes:
@@ -182,5 +213,5 @@ Bravado generates formal accounting documents for tax reporting and financial re
 </Accordion>
 
 ```bash
-GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/tax-report?window=365d
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/tax-report?year=2025
 ```

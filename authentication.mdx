@@ -113,6 +113,11 @@ Every Bravado API key is issued with one or more scopes. A request to an endpoin
 | `trade.withdraw` | Withdraw pUSD from the trading wallet to an external address, **not included in `trade.execute`** |
 | `trade.combos` | Access multi-leg RFQ parlays: quote, accept, and redeem combo positions, and read combo positions |
 | `trade.users` | Provision and manage partner sub-users (white-label flow) |
+| `analytics.read` | Read the [Data API](/products/data-api) (`/trader-analytics/*`): leaderboards, trader profiles, PnL series, positions, trade history |
+
+<Note>
+  **Data API requests are HMAC-signed**, not Bearer-authenticated: send `X-BRAVADO-API-KEY`, `X-BRAVADO-TIMESTAMP`, and `X-BRAVADO-SIGNATURE` as described in [Data API authentication](/products/data-api#authentication). Each request's venue (Polymarket, or Predict.fun under `/predict/*`) must also be enabled on your partner account. Bravado-issued static bearer tokens for the Data API are deprecated and only work during the migration window.
+</Note>
 
 Scopes are additive, a key can hold any combination. Configure your key's scopes when creating it in the [portal](https://portal.bravadotrade.com/), or edit an existing key's scopes there at any time.
 

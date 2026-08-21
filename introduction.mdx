@@ -64,35 +64,32 @@ Create and manage your API keys in the [Bravado Portal](https://portal.bravadotr
 | --- | --- | --- |
 | **Trade API v2** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade` | Order execution, positions, balances, user provisioning |
 | **Copytrade API** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade` | Mirror fills from top traders with configurable sizing |
-| **Data API** | `https://bravado-api-k7kaq.ondigitalocean.app` | Leaderboards, wallet PnL, trade logs, tax statements |
+| **Data API** | `https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics` | Leaderboards, wallet PnL, trade logs, tax statements |
 
 ## Your first request
 
-The Data API is public read-only, run this with zero setup. Replace `demo` with your own key from the [portal](https://portal.bravadotrade.com/).
+The Data API's tax-report surface is public — run this with zero setup, no key required. (The rest of the Data API is signed with your partner key from the [portal](https://portal.bravadotrade.com/); see [Data API authentication](/products/data-api#authentication).)
 
 <CodeGroup>
 
 ```bash cURL
-curl "https://bravado-api-k7kaq.ondigitalocean.app/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/pnl" \
-  -H "Authorization: Bearer demo"
+curl "https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report"
 ```
 
 ```typescript TypeScript
 const res = await fetch(
-  "https://bravado-api-k7kaq.ondigitalocean.app/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/pnl",
-  { headers: { Authorization: "Bearer demo" } },
+  "https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report",
 );
 
-const pnl = await res.json();
-console.log(pnl);
+const report = await res.json();
+console.log(report);
 ```
 
 ```python Python
 import requests
 
 res = requests.get(
-    "https://bravado-api-k7kaq.ondigitalocean.app/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/pnl",
-    headers={"Authorization": "Bearer demo"},
+    "https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report",
 )
 print(res.json())
 ```
