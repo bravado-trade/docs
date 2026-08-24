@@ -1,14 +1,14 @@
 ---
 title: "GET /leaderboard: PnL Leaderboard"
 sidebarTitle: "/leaderboard"
-api: "GET /leaderboard"
+api: "GET /trader-analytics/leaderboard"
 description: "Returns traders ranked by realized PnL for the requested rolling window, computed under PMWAS."
 ---
 
 Returns traders on Polymarket ranked by realized PnL for the requested window. All PnL values are computed under [PMWAS](/products/data-api). For volume-ranked results, use [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume).
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard
 ```
 
 ### Query Parameters
@@ -94,7 +94,7 @@ See the [Error reference](/reference/errors).
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard \
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard \
   -H "Authorization: Bearer <token>" \
   -d window=30d \
   -d limit=20

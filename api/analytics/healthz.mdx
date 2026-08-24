@@ -1,14 +1,14 @@
 ---
 title: "GET /healthz: Data API Liveness Probe"
 sidebarTitle: "/healthz"
-api: "GET /healthz"
+api: "GET /trader-analytics/healthz"
 description: "Unauthenticated liveness probe for the Bravado Data API."
 ---
 
 Returns `200` when the Data API is healthy. No authentication required.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/healthz
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/healthz
 ```
 
 ### Response
@@ -26,7 +26,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/healthz
 <CodeGroup>
 
 ```bash cURL
-curl https://bravado-api-k7kaq.ondigitalocean.app/healthz
+curl https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/healthz
 ```
 
 ```json Response

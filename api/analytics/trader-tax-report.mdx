@@ -1,14 +1,14 @@
 ---
 title: "GET /traders/{address}/tax-report: Per-Year Tax Summary"
 sidebarTitle: "/traders/{address}/tax-report"
-api: "GET /traders/{address}/tax-report"
+api: "GET /trader-analytics/traders/{address}/tax-report"
 description: "Per-calendar-year tax summary with short-term and long-term capital gains and income breakdown."
 ---
 
 Returns a per-calendar-year tax summary with short-term and long-term capital gains, income by kind, and capital flow totals.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/tax-report
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/tax-report
 ```
 
 ### Path Parameters
@@ -68,7 +68,7 @@ An array of per-year summary objects (or a single object when `year` is specifie
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../tax-report \
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../tax-report \
   -H "Authorization: Bearer <token>" \
   -d year=2024
 ```

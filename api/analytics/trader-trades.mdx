@@ -1,14 +1,14 @@
 ---
 title: "GET /traders/{address}/trades: Trade Log"
 sidebarTitle: "/traders/{address}/trades"
-api: "GET /traders/{address}/trades"
+api: "GET /trader-analytics/traders/{address}/trades"
 description: "Paginated log of all trade events for a wallet in reverse chronological order."
 ---
 
 Returns a paginated log of all trade events for the wallet in reverse chronological order.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/trades
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/trades
 ```
 
 ### Path Parameters
@@ -86,13 +86,13 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/trades
 <CodeGroup>
 
 ```bash First page
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../trades \
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../trades \
   -H "Authorization: Bearer <token>" \
   -d limit=100
 ```
 
 ```bash Next page
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../trades \
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../trades \
   -H "Authorization: Bearer <token>" \
   -d limit=100 \
   -d cursor_ts=1736800000 \

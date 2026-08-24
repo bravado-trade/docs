@@ -1,14 +1,14 @@
 ---
 title: "GET /traders/{address}/statements: Full PMWAS Statement"
 sidebarTitle: "/traders/{address}/statements"
-api: "GET /traders/{address}/statements"
+api: "GET /trader-analytics/traders/{address}/statements"
 description: "Complete §20 PMWAS statement containing all eight reports (R1–R8) for a wallet."
 ---
 
 Returns the complete §20 wallet statement containing all eight reports (R1–R8).
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/statements
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/statements
 ```
 
 ### Report Overview
@@ -95,7 +95,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/statements
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../statements \
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../statements \
   -H "Authorization: Bearer <token>" \
   -d r1_limit=100 \
   -d basis=net

@@ -1,14 +1,14 @@
 ---
 title: "GET /leaderboard/volume: Polymarket Volume Leaderboard"
 sidebarTitle: "/leaderboard/volume"
-api: "GET /leaderboard/volume"
+api: "GET /trader-analytics/leaderboard/volume"
 description: "Returns traders ranked by USDC trading volume for the requested rolling window."
 ---
 
 Returns traders ranked by USDC trading volume for the requested window.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard/volume
 ```
 
 ### Query Parameters
@@ -56,7 +56,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/leaderboard/volume \
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard/volume \
   -H "Authorization: Bearer <token>" \
   -d window=30d
 ```

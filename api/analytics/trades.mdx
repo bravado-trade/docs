@@ -1,14 +1,14 @@
 ---
 title: "GET /trades: Trade Log by Query Parameter"
 sidebarTitle: "/trades"
-api: "GET /trades"
+api: "GET /trader-analytics/trades"
 description: "Trade log for a wallet supplied as a query parameter. Alternative to /traders/{address}/trades."
 ---
 
 Returns the same trade log as [`/traders/{address}/trades`](/api/analytics/trader-trades), but the wallet address is passed as a query parameter instead of a path segment. Response shape is identical.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trades
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/trades
 ```
 
 ### Query Parameters
@@ -22,7 +22,7 @@ Same shape as [/traders/](/api/analytics/trader-trades#response){address}[/trade
 ### Example
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trades \
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/trades \
   -H "Authorization: Bearer <token>" \
   -d address=0xabc... \
   -d limit=100

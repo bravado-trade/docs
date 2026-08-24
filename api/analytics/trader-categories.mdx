@@ -1,14 +1,14 @@
 ---
 title: "GET /traders/{address}/categories: Per-Category Breakdown"
 sidebarTitle: "/traders/{address}/categories"
-api: "GET /traders/{address}/categories"
+api: "GET /trader-analytics/traders/{address}/categories"
 description: "Per-category PnL and volume breakdown for the wallet."
 ---
 
 Returns per-category PnL and volume breakdown for the wallet.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/categories
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/categories
 ```
 
 ### Path Parameters
@@ -28,7 +28,7 @@ An array of category breakdown objects.
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../categories \
+curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../categories \
   -H "Authorization: Bearer <token>" \
   -d window=90d
 ```

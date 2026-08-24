@@ -1,14 +1,14 @@
 ---
 title: "GET /traders/{address}/reconciliation: R8 Certificate"
 sidebarTitle: "/traders/{address}/reconciliation"
-api: "GET /traders/{address}/reconciliation"
+api: "GET /trader-analytics/traders/{address}/reconciliation"
 description: "R8 reconciliation certificate verifying internal consistency of the wallet's statement."
 ---
 
 Returns the R8 reconciliation certificate, which verifies the internal consistency of the wallet's statement. Useful for institutional audit workflows.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/reconciliation
+GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/reconciliation
 ```
 
 ### Path Parameters
@@ -74,7 +74,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/traders/{address}/reconciliatio
 <CodeGroup>
 
 ```bash cURL
-curl https://bravado-api-k7kaq.ondigitalocean.app/traders/0xabc.../reconciliation \
+curl https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../reconciliation \
   -H "Authorization: Bearer <token>"
 ```
 
