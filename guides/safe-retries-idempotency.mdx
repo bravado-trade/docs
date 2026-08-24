@@ -49,7 +49,7 @@ Retry, and you might end up with two positions. Do not retry, and you might have
 
 ```bash
 export BRAVADO_API_KEY="your-bearer-token"
-export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+export BASE="https://partner-api.bravadotrade.com"
 ```
 
 ## The mechanism
@@ -73,7 +73,7 @@ The key is bound to the original request. Reusing it with a **different** payloa
 ```python Python
 import os, time, uuid, random, requests
 
-BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+BASE = "https://partner-api.bravadotrade.com"
 KEY  = os.environ["BRAVADO_API_KEY"]
 
 
@@ -107,7 +107,7 @@ def place_order(payload, attempts=4):
 ```
 
 ```typescript TypeScript
-const BASE = "https://bravado-api-k7kaq.ondigitalocean.app";
+const BASE = "https://partner-api.bravadotrade.com";
 
 export async function placeOrder(payload: object, attempts = 4) {
   const key = crypto.randomUUID();       // ONCE, outside the loop

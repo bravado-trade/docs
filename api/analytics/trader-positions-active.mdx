@@ -8,7 +8,7 @@ description: "The wallet's currently open positions."
 Returns only the wallet's currently open positions. Response shape matches [/positions](/api/analytics/trader-positions).
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/positions/active
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/positions/active
 ```
 
 ### Path Parameters
@@ -20,6 +20,6 @@ Array of position objects. See [/positions field reference](/api/analytics/trade
 ### Example
 
 ```bash cURL
-curl https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../positions/active \
+curl https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../positions/active \
   -H "Authorization: Bearer <token>"
 ```

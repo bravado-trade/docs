@@ -117,7 +117,7 @@ For endpoint-level detail, field types, and response shapes, see the [API refere
 
 Stated once here rather than repeated in every guide:
 
-- **Base URLs.** Trade, Copytrade, and Combos live under `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade`. The Data API is at the root of the same host.
+- **Base URLs.** Trade, Copytrade, and Combos live under `https://partner-api.bravadotrade.com/v2/trade`. The Data API is at the root of the same host.
 - **Auth.** A Bearer token in the `Authorization` header on every request.
 - **Numbers are strings.** Prices, sizes, and PnL are JSON strings to preserve precision. Parse with a decimal type, never a float.
 - **Prices are probabilities.** `"0.62"` means 62 cents per share, valid range `0.001` to `0.999`.

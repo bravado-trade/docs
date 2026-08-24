@@ -8,7 +8,7 @@ description: "Cumulative PnL time series for a wallet, suitable for plotting an 
 Returns a cumulative PnL time series for the wallet, suitable for plotting an equity curve.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/pnl
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 ```
 
 ### Path Parameters
@@ -48,7 +48,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{addre
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../pnl \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../pnl \
   -H "Authorization: Bearer <token>" \
   -d window=30d \
   -d pnl_type=overall

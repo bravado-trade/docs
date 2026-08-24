@@ -57,7 +57,7 @@ This guide pulls dispositions that account for all three, reconciles them, and e
 
 ```bash
 export BRAVADO_API_KEY="your-bearer-token"
-export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+export BASE="https://partner-api.bravadotrade.com"
 ```
 
 ## Start with the summary
@@ -92,7 +92,7 @@ Disposition sets run long, and a truncated pull is worse than no pull because it
 import os, requests
 from decimal import Decimal
 
-BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+BASE = "https://partner-api.bravadotrade.com"
 H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
 
 

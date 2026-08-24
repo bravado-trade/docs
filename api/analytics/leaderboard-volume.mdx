@@ -8,7 +8,7 @@ description: "Returns traders ranked by USDC trading volume for the requested ro
 Returns traders ranked by USDC trading volume for the requested window.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard/volume
+GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume
 ```
 
 ### Query Parameters
@@ -56,7 +56,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard/vo
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard/volume \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume \
   -H "Authorization: Bearer <token>" \
   -d window=30d
 ```

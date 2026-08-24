@@ -49,7 +49,7 @@ Once that model is clear, a whole class of bugs stops happening: orders that loo
 
 ```bash
 export BRAVADO_API_KEY="your-bearer-token"
-export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+export BASE="https://partner-api.bravadotrade.com"
 ```
 
 ## Why there are two systems
@@ -76,7 +76,7 @@ That distinction explains everything else:
 ```python
 import os, requests
 
-BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+BASE = "https://partner-api.bravadotrade.com"
 H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
 
 

@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Bravado's Data API derives all metrics directly from on-chain settlement data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any wallet. You can query performance data for your own wallet or any public address, useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics`.
+Bravado's Data API derives all metrics directly from on-chain settlement data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any wallet. You can query performance data for your own wallet or any public address, useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://partner-api.bravadotrade.com/trader-analytics`.
 
 ## Authentication
 
@@ -112,7 +112,7 @@ All analytics endpoints accept a `?window=` query parameter that controls the ro
 **What the window does not affect:** Fee totals, streak metadata, and drawdown statistics are always computed all-time regardless of the `window` value. This is by design, these metrics are meaningless when truncated to a short window.
 
 ```bash
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b?window=30d
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b?window=30d
 ```
 
 <Note>
@@ -128,14 +128,14 @@ Bravado maintains two live leaderboards ranked by the `window` you specify:
     Returns traders ranked by realized PnL over the selected window.
 
     ```bash
-    GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard?window=24h
+    GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard?window=24h
     ```
   </Tab>
   <Tab title="Volume leaderboard">
     Returns traders ranked by USDC trading volume over the selected window. CTF infrastructure transactions are excluded.
 
     ```bash
-    GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard/volume?window=7d
+    GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume?window=7d
     ```
   </Tab>
 </Tabs>
@@ -145,7 +145,7 @@ Bravado maintains two live leaderboards ranked by the `window` you specify:
 The trader endpoints return comprehensive performance data for a single wallet across all markets.
 
 ```bash
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}?window=30d
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}?window=30d
 ```
 
 The response includes:
@@ -213,5 +213,5 @@ Bravado generates formal accounting documents for tax reporting and financial re
 </Accordion>
 
 ```bash
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/tax-report?year=2025
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/tax-report?year=2025
 ```

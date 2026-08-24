@@ -8,7 +8,7 @@ description: "Per-calendar-year tax summary with short-term and long-term capita
 Returns a per-calendar-year tax summary with short-term and long-term capital gains, income by kind, and capital flow totals.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/tax-report
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/tax-report
 ```
 
 ### Path Parameters
@@ -68,7 +68,7 @@ An array of per-year summary objects (or a single object when `year` is specifie
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../tax-report \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../tax-report \
   -H "Authorization: Bearer <token>" \
   -d year=2024
 ```

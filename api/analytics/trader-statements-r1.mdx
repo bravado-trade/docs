@@ -8,7 +8,7 @@ description: "Paginated R1 Form-8949-style disposition rows for heavy wallets."
 Standalone paginated endpoint for R1 Form-8949-style disposition rows. Use this for heavy wallets where the full [`/statements`](/api/analytics/trader-statements) response is too large.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/statements/r1
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/statements/r1
 ```
 
 ### Path Parameters
@@ -44,7 +44,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{addre
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../statements/r1 \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../statements/r1 \
   -H "Authorization: Bearer <token>" \
   -d limit=50 \
   -d offset=0

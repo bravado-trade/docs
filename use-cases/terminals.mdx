@@ -44,19 +44,19 @@ A minimal terminal screen needs four calls on load:
 
 ```bash
 # 1. who am I, and what can this key do
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account \
+curl https://partner-api.bravadotrade.com/v2/trade/account \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 
 # 2. spendable collateral
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/balances \
+curl https://partner-api.bravadotrade.com/v2/trade/balances \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 
 # 3. current positions with cost basis
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions \
+curl https://partner-api.bravadotrade.com/v2/trade/positions \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 
 # 4. resting orders to render on the book
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/orders/open \
+curl https://partner-api.bravadotrade.com/v2/trade/orders/open \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 

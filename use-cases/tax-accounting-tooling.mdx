@@ -32,7 +32,7 @@ Generate a year-end statement CSV for a client wallet:
 ```python
 import os, requests, csv
 
-API = "https://bravado-api-k7kaq.ondigitalocean.app"
+API = "https://partner-api.bravadotrade.com"
 H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
 
 def fetch_r1(addr, year):

@@ -8,7 +8,7 @@ description: "Wallet performance summary: PnL, volume, position counts, streaks,
 Returns the performance summary for a single wallet, including PnL, volume, position counts, streak data, and identity fields.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}
 ```
 
 ### Path Parameters
@@ -62,7 +62,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{addre
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc123def456abc123def456abc123def456abc1 \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc123def456abc123def456abc123def456abc1 \
   -H "Authorization: Bearer <token>" \
   -d window=30d \
   -d basis=net \

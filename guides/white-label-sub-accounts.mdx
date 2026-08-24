@@ -50,7 +50,7 @@ This guide covers provisioning them safely, including the one place where a dete
 
 ```bash
 export BRAVADO_MASTER_KEY="your-master-bearer-token"
-export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+export BASE="https://partner-api.bravadotrade.com"
 ```
 
 ## Confirm the master key
@@ -104,7 +104,7 @@ Keying on your own user id makes that impossible:
 ```python
 import os, requests
 
-BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+BASE = "https://partner-api.bravadotrade.com"
 MASTER = {"Authorization": f"Bearer {os.environ['BRAVADO_MASTER_KEY']}"}
 
 

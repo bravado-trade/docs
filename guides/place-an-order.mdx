@@ -55,7 +55,7 @@ This guide places a real order, then walks all eight types, then covers where ea
 
 ```bash
 export BRAVADO_API_KEY="your-bearer-token"
-export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+export BASE="https://partner-api.bravadotrade.com"
 ```
 
 ## Check your account first
@@ -140,7 +140,7 @@ curl -X POST $BASE/v2/trade/order \
 ```python Python
 import os, uuid, requests
 
-BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+BASE = "https://partner-api.bravadotrade.com"
 
 res = requests.post(
     f"{BASE}/v2/trade/order",
@@ -161,7 +161,7 @@ print(order["order_id"], order["status"], order["average_price"])
 ```
 
 ```typescript TypeScript
-const BASE = "https://bravado-api-k7kaq.ondigitalocean.app";
+const BASE = "https://partner-api.bravadotrade.com";
 
 const res = await fetch(`${BASE}/v2/trade/order`, {
   method: "POST",

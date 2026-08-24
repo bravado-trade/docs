@@ -62,9 +62,9 @@ Create and manage your API keys in the [Bravado Portal](https://portal.bravadotr
 
 | API | Base URL | What it does |
 | --- | --- | --- |
-| **Trade API v2** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade` | Order execution, positions, balances, user provisioning |
-| **Copytrade API** | `https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/copytrade` | Mirror fills from top traders with configurable sizing |
-| **Data API** | `https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics` | Leaderboards, wallet PnL, trade logs, tax statements |
+| **Trade API v2** | `https://partner-api.bravadotrade.com/v2/trade` | Order execution, positions, balances, user provisioning |
+| **Copytrade API** | `https://partner-api.bravadotrade.com/v2/trade/copytrade` | Mirror fills from top traders with configurable sizing |
+| **Data API** | `https://partner-api.bravadotrade.com/trader-analytics` | Leaderboards, wallet PnL, trade logs, tax statements |
 
 ## Your first request
 
@@ -73,12 +73,12 @@ The Data API's tax-report surface is public — run this with zero setup, no key
 <CodeGroup>
 
 ```bash cURL
-curl "https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report"
+curl "https://partner-api.bravadotrade.com/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report"
 ```
 
 ```typescript TypeScript
 const res = await fetch(
-  "https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report",
+  "https://partner-api.bravadotrade.com/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report",
 );
 
 const report = await res.json();
@@ -89,7 +89,7 @@ console.log(report);
 import requests
 
 res = requests.get(
-    "https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report",
+    "https://partner-api.bravadotrade.com/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report",
 )
 print(res.json())
 ```

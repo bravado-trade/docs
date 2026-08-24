@@ -8,7 +8,7 @@ description: "Paginated log of all trade events for a wallet in reverse chronolo
 Returns a paginated log of all trade events for the wallet in reverse chronological order.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/trades
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trades
 ```
 
 ### Path Parameters
@@ -86,13 +86,13 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{addre
 <CodeGroup>
 
 ```bash First page
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../trades \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../trades \
   -H "Authorization: Bearer <token>" \
   -d limit=100
 ```
 
 ```bash Next page
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../trades \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../trades \
   -H "Authorization: Bearer <token>" \
   -d limit=100 \
   -d cursor_ts=1736800000 \

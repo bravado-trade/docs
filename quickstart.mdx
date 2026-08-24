@@ -34,7 +34,7 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     Call `GET /v2/trade/account` to confirm your token is valid and inspect what your key is bound to.
 
     ```bash
-    curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account \
+    curl https://partner-api.bravadotrade.com/v2/trade/account \
       -H "Authorization: Bearer $BRAVADO_API_KEY"
     ```
 
@@ -60,7 +60,7 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     Before placing an order, verify you have collateral available. Call `GET /v2/trade/balances` to see your current funds.
 
     ```bash
-    curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/balances \
+    curl https://partner-api.bravadotrade.com/v2/trade/balances \
       -H "Authorization: Bearer $BRAVADO_API_KEY"
     ```
 
@@ -91,7 +91,7 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     <CodeGroup>
 
     ```bash cURL
-    curl -X POST https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order \
+    curl -X POST https://partner-api.bravadotrade.com/v2/trade/order \
       -H "Authorization: Bearer $BRAVADO_API_KEY" \
       -H "Content-Type: application/json" \
       -H "Idempotency-Key: e4b9c1a2-38df-4f77-a3c5-012bd9e8f231" \
@@ -107,7 +107,7 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     import requests
     import uuid
     
-    url = "https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order"
+    url = "https://partner-api.bravadotrade.com/v2/trade/order"
     
     headers = {
         "Authorization": f"Bearer {BRAVADO_API_KEY}",
@@ -131,7 +131,7 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     import crypto from "crypto";
     
     const response = await fetch(
-      "https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/order",
+      "https://partner-api.bravadotrade.com/v2/trade/order",
       {
         method: "POST",
         headers: {
@@ -190,7 +190,7 @@ This guide walks you through the minimum steps to go from a fresh API key to a l
     Confirm the order appears in your open positions by calling `GET /v2/trade/positions`.
 
     ```bash
-    curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/positions \
+    curl https://partner-api.bravadotrade.com/v2/trade/positions \
       -H "Authorization: Bearer $BRAVADO_API_KEY"
     ```
 

@@ -8,7 +8,7 @@ description: "Aggregates R5/R6/R7 metrics across all controlled wallets register
 Returns a multi-wallet entity rollup for a beneficial owner, aggregating R5, R6, and R7 metrics across all controlled wallets registered under the owner identifier.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/entity/{owner}
+GET https://partner-api.bravadotrade.com/trader-analytics/entity/{owner}
 ```
 
 ### Path Parameters
@@ -28,7 +28,7 @@ Returns `503` with `{"available": false}` when data is not yet available for any
 <CodeGroup>
 
 ```bash cURL
-curl https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/entity/owner_01HXYZ \
+curl https://partner-api.bravadotrade.com/trader-analytics/entity/owner_01HXYZ \
   -H "Authorization: Bearer <token>"
 ```
 

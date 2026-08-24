@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-The Bravado Data API surfaces trader performance data derived entirely from on-chain Polygon settlement records. Every PnL figure, position valuation, and fee total is calculated by a share-level FIFO cost-basis engine that replays each wallet's full transaction history, no off-chain estimates or manual adjustments. The base URL for all endpoints is `https://bravado-api-k7kaq.ondigitalocean.app`.
+The Bravado Data API surfaces trader performance data derived entirely from on-chain Polygon settlement records. Every PnL figure, position valuation, and fee total is calculated by a share-level FIFO cost-basis engine that replays each wallet's full transaction history, no off-chain estimates or manual adjustments. The base URL for all endpoints is `https://partner-api.bravadotrade.com`.
 
 ## Authentication
 
@@ -111,7 +111,7 @@ Common status codes:
 You can verify API availability without authentication using the health endpoint.
 
 ```bash
-curl https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/healthz
+curl https://partner-api.bravadotrade.com/trader-analytics/healthz
 ```
 
 ```json

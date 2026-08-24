@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://api.bravadotrade.com",
+      "url": "https://partner-api.bravadotrade.com",
       "description": "Production"
     }
   ],

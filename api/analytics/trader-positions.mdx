@@ -8,7 +8,7 @@ description: "Open and closed positions for the wallet, paginated."
 Returns open and closed positions for the wallet. Use [/positions/active](/api/analytics/trader-positions-active) or [/positions/closed](/api/analytics/trader-positions-closed) to fetch each subset directly.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/positions
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/positions
 ```
 
 ### Path Parameters
@@ -28,7 +28,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{addre
 ### Example
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../positions \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../positions \
   -H "Authorization: Bearer <token>" \
   -d limit=50
 ```

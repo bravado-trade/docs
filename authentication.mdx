@@ -36,7 +36,7 @@ Here's how that looks in practice across common environments:
 <CodeGroup>
 
 ```bash cURL
-curl https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account \
+curl https://partner-api.bravadotrade.com/v2/trade/account \
   -H "Authorization: Bearer $BRAVADO_API_KEY"
 ```
 
@@ -50,7 +50,7 @@ headers = {
 }
 
 response = requests.get(
-    "https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account",
+    "https://partner-api.bravadotrade.com/v2/trade/account",
     headers=headers,
 )
 print(response.json())
@@ -58,7 +58,7 @@ print(response.json())
 
 ```javascript JavaScript
 const response = await fetch(
-  "https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account",
+  "https://partner-api.bravadotrade.com/v2/trade/account",
   {
     headers: {
       Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
@@ -82,7 +82,7 @@ import (
 
 func main() {
 	req, _ := http.NewRequest("GET",
-		"https://bravado-api-k7kaq.ondigitalocean.app/v2/trade/account",
+		"https://partner-api.bravadotrade.com/v2/trade/account",
 		nil,
 	)
 	req.Header.Set("Authorization", "Bearer "+os.Getenv("BRAVADO_API_KEY"))

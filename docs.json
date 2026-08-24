@@ -13,7 +13,7 @@
   },
   "api": {
     "mdx": {
-      "server": "https://bravado-api-k7kaq.ondigitalocean.app"
+      "server": "https://partner-api.bravadotrade.com"
     }
   },
   "favicon": "/favicon.png",

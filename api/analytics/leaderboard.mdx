@@ -8,7 +8,7 @@ description: "Returns traders ranked by realized PnL for the requested rolling w
 Returns traders on Polymarket ranked by realized PnL for the requested window. All PnL values are computed under [PMWAS](/products/data-api). For volume-ranked results, use [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume).
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard
+GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard
 ```
 
 ### Query Parameters
@@ -94,7 +94,7 @@ See the [Error reference](/reference/errors).
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/leaderboard \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/leaderboard \
   -H "Authorization: Bearer <token>" \
   -d window=30d \
   -d limit=20

@@ -39,7 +39,7 @@ An LLM tool-calling function that lets an agent evaluate a market and place a sc
 ```python
 import os, uuid, requests
 
-API = "https://bravado-api-k7kaq.ondigitalocean.app"
+API = "https://partner-api.bravadotrade.com"
 H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}", "Content-Type": "application/json"}
 
 def place_scaled_order(symbol: str, side: str, confidence: float, max_notional_usd: float):

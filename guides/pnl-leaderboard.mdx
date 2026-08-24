@@ -49,7 +49,7 @@ The parts worth getting right are subtler: which ranking you show, which fields 
 
 ```bash
 export BRAVADO_API_KEY="your-bearer-token"
-export BASE="https://bravado-api-k7kaq.ondigitalocean.app"
+export BASE="https://partner-api.bravadotrade.com"
 ```
 
 ## Two rankings
@@ -89,7 +89,7 @@ What it never changes is **cost basis**. That is always reconstructed from the w
 import os, requests
 from decimal import Decimal
 
-BASE = "https://bravado-api-k7kaq.ondigitalocean.app"
+BASE = "https://partner-api.bravadotrade.com"
 H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
 
 

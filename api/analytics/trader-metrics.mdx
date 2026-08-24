@@ -8,7 +8,7 @@ description: "Low-latency R5/R6/R7 performance and fee metrics without the full 
 Returns R5, R6, and R7 report metrics without assembling the full R1 disposition set. This is the lowest-latency way to retrieve performance and fee data for a wallet.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/metrics
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/metrics
 ```
 
 ### Path Parameters
@@ -26,7 +26,7 @@ GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{addre
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../metrics \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../metrics \
   -H "Authorization: Bearer <token>" \
   -d basis=net
 ```

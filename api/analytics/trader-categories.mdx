@@ -8,7 +8,7 @@ description: "Per-category PnL and volume breakdown for the wallet."
 Returns per-category PnL and volume breakdown for the wallet.
 
 ```text
-GET https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/{address}/categories
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/categories
 ```
 
 ### Path Parameters
@@ -28,7 +28,7 @@ An array of category breakdown objects.
 <CodeGroup>
 
 ```bash cURL
-curl -G https://bravado-api-k7kaq.ondigitalocean.app/trader-analytics/traders/0xabc.../categories \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../categories \
   -H "Authorization: Bearer <token>" \
   -d window=90d
 ```
