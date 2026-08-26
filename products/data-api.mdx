@@ -16,7 +16,7 @@ Sign Data API requests with your **partner API key**, using the same HMAC scheme
 | Header | Value |
 | --- | --- |
 | `X-BRAVADO-API-KEY` | Your public key |
-| `X-BRAVADO-TIMESTAMP` | Unix **milliseconds**, within ±30s of server time |
+| `X-BRAVADO-TIMESTAMP` | Unix **milliseconds**, within ±5 minutes of server time |
 | `X-BRAVADO-SIGNATURE` | Lowercase-hex HMAC-SHA256 of `timestamp\nMETHOD\ncanonical_path\nsha256_hex(body)`, keyed by your secret. The Data API is GET-only, so the body hash is always the empty-body constant `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`. |
 
 Your key needs the **`analytics.read`** scope (select the Data API product when creating the key in the [portal](https://portal.bravadotrade.com/)), and your partner account needs the request's **venue** enabled — see [Venues](#venues) below.
