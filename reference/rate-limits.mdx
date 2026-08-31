@@ -113,6 +113,21 @@ Content-Type: application/json
 Idempotency keys protect against double-submission during network retries. They do not bypass rate limits, a deduplicated replay still counts as a request if the original already succeeded.
 </Note>
 
+## MCP server limits
+
+The [MCP server](/products/mcp-server) is limited **per connection** (your partner account plus the specific OAuth client), not per IP. AI clients reach Bravado through shared egress addresses, so a per-IP limit would pool unrelated customers into one bucket and let the busiest of them throttle everyone else.
+
+Two limits apply:
+
+| Limit | Applies to | On exceeding |
+| --- | --- | --- |
+| Request rate | every MCP call | `429` with `Retry-After` |
+| Query budget (bytes scanned per hour) | `run_sql` only | the call is refused with a message naming the budget |
+
+The query budget exists because request counts do not describe cost. A single query can read tens of gigabytes to return ten rows, and only a budget denominated in bytes scanned can bound that. The purpose-built tools are unaffected by it, so an agent that hits the budget can keep working through them.
+
+Every `run_sql` result reports how many bytes it actually read, so an agent can pace itself rather than discovering the limit by hitting it.
+
 ## Best practices
 
 - **Batch cancellations**, use `DELETE /v2/trade/orders` (cancel-all) instead of looping individual cancel requests. A single call consumes one rate-limit slot regardless of how many open orders you have.

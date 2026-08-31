@@ -7,7 +7,11 @@ icon:
   library: "lucide"
 ---
 
-Bravado authenticates every request using **API key Bearer tokens**. You include your token in the `Authorization` header of each HTTP request. There are no cookies, no session flows, and no OAuth redirects: just a static token your server sends with every call. The only public endpoint that does not require authentication is `GET /healthz`.
+Bravado authenticates every request using **API key Bearer tokens**. You include your token in the `Authorization` header of each HTTP request. There are no cookies and no session flows: just a static token your server sends with every call. The only public endpoint that does not require authentication is `GET /healthz`.
+
+<Note>
+  **The MCP server is the one exception.** It uses OAuth 2.1 rather than a static key, because an AI client cannot hold a long-lived partner secret safely and cannot compute an HMAC signature. See [MCP server authorization](#mcp-server-authorization) below.
+</Note>
 
 ## Getting your API key
 
@@ -130,6 +134,26 @@ Bravado supports two key archetypes that serve different purposes in a partner i
 **Per-user keys** are bound to a specific provisioned user wallet. All trade activity executed with a per-user key is attributed to that wallet. These keys typically hold `trade.read`, `trade.execute`, and `trade.cancel` scopes, but not `trade.users`.
 
 Use your master key to provision users and generate their keys. Use per-user keys to execute trades on their behalf.
+
+## MCP server authorization
+
+The [MCP server](/products/mcp-server) does not take an API key. It uses **OAuth 2.1** with PKCE, and access is granted by a human approving a consent screen rather than by pasting a secret into a client.
+
+Why it differs from the rest of the API:
+
+- An MCP client runs on someone's laptop or in a chat product. Handing it a partner master key would put a credential that can act for your whole organisation somewhere you cannot rotate or audit.
+- Data API requests are HMAC-signed. An MCP client has no way to compute that signature, and giving it the secret to do so would defeat the point of signing.
+
+The flow, from the client's point of view:
+
+1. It reads `https://mcp.bravadotrade.com/.well-known/oauth-protected-resource` to find the authorization server.
+2. It registers itself (RFC 7591 Dynamic Client Registration). Registering grants nothing on its own.
+3. It sends you to [portal.bravadotrade.com](https://portal.bravadotrade.com/) to sign in and approve.
+4. It receives a short-lived access token plus a rotating refresh token.
+
+Tokens are scoped to `analytics.read` and bound to the partner your portal account is linked to. They are audience-bound to the MCP server, so a token issued for it cannot be replayed against any other Bravado surface.
+
+Revoke a connection from **Settings → Connected applications** in the portal at any time. Revocation takes effect immediately for the refresh token; an access token already issued is stateless and expires within five minutes.
 
 ## Authentication errors
 

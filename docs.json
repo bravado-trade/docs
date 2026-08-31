@@ -63,6 +63,13 @@
             "group": "Products Overview",
             "pages": [
               {
+                "group": "MCP Server",
+                "icon": "plug",
+                "pages": [
+                  "products/mcp-server"
+                ]
+              },
+              {
                 "group": "Data API",
                 "icon": "chart-line",
                 "pages": [

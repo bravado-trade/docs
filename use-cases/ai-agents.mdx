@@ -16,9 +16,8 @@ Autonomous agents (LLM-driven or otherwise) that trade prediction markets need t
 - **Semantic endpoints.** Every action an agent might want (place order, get positions, look up a market, compute PnL) is a single REST call with typed request and response.
 - **Idempotency.** Every mutating call requires an `Idempotency-Key` header. Agents that retry on failure cannot double-execute. See [Idempotency](/reference/idempotency).
 - **Machine-readable docs.** `llms.txt` and `llms-full.txt` are published so any code-generation agent can consume the full API surface without scraping.
-- **Optional MCP server.** For agent frameworks that support the Model Context Protocol, Bravado exposes a hosted MCP endpoint.
+- **Hosted MCP server.** For agent frameworks that speak the Model Context Protocol, Bravado hosts a read-only analytics server at `https://mcp.bravadotrade.com/`, authorized with OAuth 2.1. See the [MCP server reference](/products/mcp-server).
 
-{/* TODO: Confirm the MCP server URL and auth method, then link it in the Build with AI page. */}
 
 ## APIs used
 
