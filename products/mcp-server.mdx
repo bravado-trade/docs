@@ -20,7 +20,7 @@ Bravado exposes a hosted **Model Context Protocol (MCP)** server so agent framew
 | **URL** | `https://mcp.bravadotrade.com/` |
 | **Transport** | Streamable HTTP (stateless) |
 | **Auth** | OAuth 2.1 with PKCE and Dynamic Client Registration |
-| **Scope** | `analytics.read` |
+| **Scopes** | `mcp.read`, `mcp.query` |
 
 ### Claude.ai and Claude Desktop
 
@@ -54,7 +54,18 @@ Access is granted by a human, not by a key you paste.
   The application name on the consent screen is **self-declared by the application** and is not verified by Bravado. Only approve a connection you started yourself.
 </Warning>
 
-Your portal account must be linked to a Bravado partner, and that partner needs the **Data API** product enabled. The venue you query (Polymarket, or Predict.fun) must also be enabled on the account — see [Venues](/products/data-api#venues).
+Your portal account must be linked to a Bravado partner, and that partner needs the **MCP Server** product enabled. The venue you query (Polymarket, or Predict.fun) must also be enabled on the account — see [Venues](/products/data-api#venues).
+
+<Note>
+  **MCP is a separate product from the [Data API](/products/data-api).** Holding one does not grant the other. They serve the same analytics, but an agent integration is a different purchase from a REST integration, and `run_sql` runs queries whose cost is measured in data scanned rather than requests made. Ask your Bravado contact to enable **MCP Server** on your account.
+</Note>
+
+Two scopes are granted together by that product:
+
+| Scope | What it allows |
+| --- | --- |
+| `mcp.read` | The curated tools — leaderboards, trader profiles, PnL, positions, activity, categories, reconciliation |
+| `mcp.query` | `run_sql`, the guarded read-only SQL surface |
 
 Revoke a connection at any time from **Settings → Connected applications** in the [portal](https://portal.bravadotrade.com/settings). The screen lists every application you have authorized, when it was connected, and when it last used its access.
 
@@ -96,6 +107,8 @@ MCP requests are limited per connection rather than per IP, so one integration c
 
 - a **request rate**, tied to your account tier
 - a **query budget** for `run_sql`, denominated in bytes scanned per hour
+
+Usage is metered per connection and per scope, so `mcp.read` and `mcp.query` are counted separately — a request count and the data actually scanned. That is what a `run_sql` result's reported byte figure corresponds to.
 
 Exceeding either returns a clear error naming which limit was hit and when it refills. The purpose-built tools are unaffected by the query budget.
 

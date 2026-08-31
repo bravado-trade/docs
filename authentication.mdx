@@ -118,6 +118,8 @@ Every Bravado API key is issued with one or more scopes. A request to an endpoin
 | `trade.combos` | Access multi-leg RFQ parlays: quote, accept, and redeem combo positions, and read combo positions |
 | `trade.users` | Provision and manage partner sub-users (white-label flow) |
 | `analytics.read` | Read the [Data API](/products/data-api) (`/trader-analytics/*`): leaderboards, trader profiles, PnL series, positions, trade history |
+| `mcp.read` | Use the [MCP server](/products/mcp-server)'s curated analytics tools. Granted by the **MCP Server** product, which is separate from the Data API |
+| `mcp.query` | Run read-only SQL through the MCP server's `run_sql` tool |
 
 <Note>
   **Data API requests are HMAC-signed**, not Bearer-authenticated: send `X-BRAVADO-API-KEY`, `X-BRAVADO-TIMESTAMP`, and `X-BRAVADO-SIGNATURE` as described in [Data API authentication](/products/data-api#authentication). Each request's venue (Polymarket, or Predict.fun under `/predict/*`) must also be enabled on your partner account. Bravado-issued static bearer tokens for the Data API are deprecated and only work during the migration window.
@@ -151,7 +153,7 @@ The flow, from the client's point of view:
 3. It sends you to [portal.bravadotrade.com](https://portal.bravadotrade.com/) to sign in and approve.
 4. It receives a short-lived access token plus a rotating refresh token.
 
-Tokens are scoped to `analytics.read` and bound to the partner your portal account is linked to. They are audience-bound to the MCP server, so a token issued for it cannot be replayed against any other Bravado surface.
+Tokens are scoped to `mcp.read` and `mcp.query` — the **MCP Server** product, which is separate from the Data API — and bound to the partner your portal account is linked to. They are audience-bound to the MCP server, so a token issued for it cannot be replayed against any other Bravado surface.
 
 Revoke a connection from **Settings → Connected applications** in the portal at any time. Revocation takes effect immediately for the refresh token; an access token already issued is stateless and expires within five minutes.
 
