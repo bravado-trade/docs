@@ -1,0 +1,115 @@
+---
+title: "MCP Server: Connect Bravado to Claude and Other AI Agents"
+sidebarTitle: "Overview"
+description: "Bravado's hosted Model Context Protocol server gives AI agents read-only, OAuth-authorized access to prediction-market analytics with no REST wrapper to write."
+icon:
+  name: "plug"
+  library: "lucide"
+---
+
+Bravado exposes a hosted **Model Context Protocol (MCP)** server so agent frameworks can call Bravado tools directly. Point an MCP-aware client at it, sign in once with your Bravado Portal account, and the agent can read leaderboards, trader profiles, PnL series, positions and the warehouse behind them.
+
+<Note>
+  The MCP server is **read-only, permanently**. It cannot place, cancel or modify an order, and it cannot move funds. To trade programmatically, use the [Trade API](/products/trade-api).
+</Note>
+
+## Connection
+
+| | |
+| --- | --- |
+| **URL** | `https://mcp.bravadotrade.com/` |
+| **Transport** | Streamable HTTP (stateless) |
+| **Auth** | OAuth 2.1 with PKCE and Dynamic Client Registration |
+| **Scope** | `analytics.read` |
+
+### Claude.ai and Claude Desktop
+
+Add it as a custom connector using the URL above. The client registers itself, then opens the Bravado Portal so you can sign in and approve the connection. Nothing is shared until you approve.
+
+### Claude Code
+
+```bash
+claude mcp add --transport http bravado https://mcp.bravadotrade.com/
+```
+
+The first tool call opens a browser for the same approval step.
+
+### Any other MCP client
+
+The server publishes standard discovery documents, so a compliant client needs only the URL:
+
+- `https://mcp.bravadotrade.com/.well-known/oauth-protected-resource` — names the authorization server
+- `https://portal.bravadotrade.com/.well-known/oauth-authorization-server` — the endpoints, PKCE methods and grant types
+
+## Authorization
+
+Access is granted by a human, not by a key you paste.
+
+1. Your client sends you to the [Bravado Portal](https://portal.bravadotrade.com/).
+2. You sign in with your partner account (password plus your second factor).
+3. You approve a consent screen naming the application, your partner account and the permissions requested.
+4. The client receives a token scoped to that partner.
+
+<Warning>
+  The application name on the consent screen is **self-declared by the application** and is not verified by Bravado. Only approve a connection you started yourself.
+</Warning>
+
+Your portal account must be linked to a Bravado partner, and that partner needs the **Data API** product enabled. The venue you query (Polymarket, or Predict.fun) must also be enabled on the account — see [Venues](/products/data-api#venues).
+
+Revoke a connection at any time from **Settings → Connected applications** in the [portal](https://portal.bravadotrade.com/settings). The screen lists every application you have authorized, when it was connected, and when it last used its access.
+
+Revocation cuts the connection's refresh token immediately. An access token it was already issued is stateless and keeps working for up to **five minutes**, so if you believe an application is compromised, disconnect it and tell the Bravado team.
+
+## Tools
+
+| Tool | What it returns |
+| --- | --- |
+| `get_leaderboard` | Traders ranked by realized PnL or volume over a window |
+| `get_trader_profile` | Full performance profile for any public address |
+| `get_trader_pnl_series` | PnL over time (realized, unrealized or total) |
+| `get_trader_positions` | Open or closed positions, marked to the latest CLOB mid |
+| `get_trader_trades` | Chronological activity, filterable by type |
+| `get_trader_categories` | PnL and volume broken down by market category |
+| `get_reconciliation_certificate` | Proof a wallet's statement is internally consistent |
+| `run_sql` | Read-only SQL against curated warehouse views |
+
+Every tool takes an optional `venue` (`polymarket` by default) and, where applicable, the standard [`window`](/products/data-api#the-window-parameter) values.
+
+### `run_sql`
+
+An escape hatch for analysis the purpose-built tools do not cover. It reads a set of curated views that already apply Bravado's accuracy rules — operator filtering, version deduplication, and the display conventions. Base tables are not reachable, so a query cannot accidentally bypass them.
+
+Queries carry hard limits on rows, execution time and bytes scanned, and every result reports what it actually read. Prefer a purpose-built tool where one fits: those numbers are reconciled, `run_sql` results are raw.
+
+## Reading the numbers
+
+The MCP server returns the same figures as the [Data API](/products/data-api), computed by the same engine, so a number an agent reports agrees with your dashboards.
+
+Two conventions matter enough that the server publishes them as readable resources the agent can load once:
+
+- **Numerics are JSON strings.** Parse them as arbitrary-precision decimals. Parsing as a float reintroduces exactly the rounding error the FIFO engine exists to avoid. See [Numeric conventions](/reference/numeric-conventions).
+- **Unknown is never zero.** A value the source cannot determine is returned as explicitly unknown, with its provenance. Rendering it as `0` states something false.
+
+## Rate limits
+
+MCP requests are limited per connection rather than per IP, so one integration cannot consume another's budget. Two limits apply:
+
+- a **request rate**, tied to your account tier
+- a **query budget** for `run_sql`, denominated in bytes scanned per hour
+
+Exceeding either returns a clear error naming which limit was hit and when it refills. The purpose-built tools are unaffected by the query budget.
+
+## Safety
+
+The surface is read-only by construction; there is no write tool to disable. When wiring an agent to Bravado more broadly:
+
+1. Keep trading on the [Trade API](/products/trade-api), where [idempotency keys](/reference/idempotency) and notional caps apply.
+2. Approve MCP connections only for applications you recognise.
+3. Review active connections in the portal periodically.
+
+## Related
+
+- [Build with AI](/build-with-ai)
+- [AI agents use case](/use-cases/ai-agents)
+- [Data API](/products/data-api)
+- [Authentication](/authentication)
