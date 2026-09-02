@@ -17,7 +17,7 @@ Bravado exposes a hosted **Model Context Protocol (MCP)** server so agent framew
 
 | | |
 | --- | --- |
-| **URL** | `https://mcp.bravadotrade.com/` |
+| **URL** | `https://mcp.bravadotrade.com/mcp` |
 | **Transport** | Streamable HTTP (stateless) |
 | **Auth** | OAuth 2.1 with PKCE and Dynamic Client Registration |
 | **Scopes** | `mcp.read`, `mcp.query` |
@@ -29,7 +29,7 @@ Add it as a custom connector using the URL above. The client registers itself, t
 ### Claude Code
 
 ```bash
-claude mcp add --transport http bravado https://mcp.bravadotrade.com/
+claude mcp add --transport http bravado https://mcp.bravadotrade.com/mcp
 ```
 
 The first tool call opens a browser for the same approval step.
