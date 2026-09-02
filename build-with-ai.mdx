@@ -46,14 +46,14 @@ Bravado hosts a **Model Context Protocol (MCP)** server so agent frameworks that
 
 | | |
 | --- | --- |
-| **URL** | `https://mcp.bravadotrade.com/` |
+| **URL** | `https://mcp.bravadotrade.com/mcp` |
 | **Transport** | Streamable HTTP (stateless) |
 | **Auth** | OAuth 2.1 with PKCE and Dynamic Client Registration |
 
 For **Claude.ai** or **Claude Desktop**, add it as a custom connector using that URL. For **Claude Code**:
 
 ```bash
-claude mcp add --transport http bravado https://mcp.bravadotrade.com/
+claude mcp add --transport http bravado https://mcp.bravadotrade.com/mcp
 ```
 
 You sign in through the [Bravado Portal](https://portal.bravadotrade.com/) and approve the connection; no key is pasted into the client.
