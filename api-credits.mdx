@@ -1,0 +1,32 @@
+---
+title: "API Credits"
+sidebarTitle: "API Credits"
+description: "Usage on Bravado's pricing plans is measured in API Credits. Credit cost varies by product and transport."
+icon:
+  name: "coins"
+  library: "lucide"
+---
+
+Usage on our pricing plans is measured in **API Credits**. Credit cost varies by product and transport. The **Trade API** and **Copytrade API** do not consume API credits.
+
+## Credit cost by product
+
+| Product | Transport | API credits |
+| --- | --- | --- |
+| Data API | HTTP | 1 credit / request |
+| Data API | WSS | 1 credit / response |
+| MCP Server | HTTP | 10 credits / request |
+| Trade API | HTTP | No API credits |
+| Copytrade API | HTTP | No API credits |
+| UMA | HTTP | 1 credit / request |
+| UMA | WSS | 1 credit / response |
+
+<Note>
+  **MCP requests carry a 10× multiplier.** Every call to the [MCP Server](/products/mcp-server) costs **10 API credits**, ten times a Data API request, reflecting the heavier analytics each MCP tool runs. The `run_sql` query budget is metered separately, by bytes scanned; see [MCP rate limits](/products/mcp-server#rate-limits).
+</Note>
+
+## Related
+
+- [MCP Server](/products/mcp-server)
+- [Rate limits](/reference/rate-limits)
+- [Authentication](/authentication)
