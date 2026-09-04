@@ -108,6 +108,10 @@ MCP requests are limited per connection rather than per IP, so one integration c
 - a **request rate**, tied to your account tier
 - a **query budget** for `run_sql`, denominated in bytes scanned per hour
 
+<Note>
+  **MCP requests carry a 10× multiplier.** Every MCP call counts as **10** against your request-rate budget, weighting each request for the heavier analytics it runs. A single tool call is therefore the equivalent of ten REST requests, so size your agent's polling and batch loops accordingly.
+</Note>
+
 Usage is metered per connection and per scope, so `mcp.read` and `mcp.query` are counted separately — a request count and the data actually scanned. That is what a `run_sql` result's reported byte figure corresponds to.
 
 Exceeding either returns a clear error naming which limit was hit and when it refills. The purpose-built tools are unaffected by the query budget.
