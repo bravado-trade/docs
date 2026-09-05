@@ -1,0 +1,151 @@
+---
+title: "Live Trades WebSocket"
+sidebarTitle: "Live Trades"
+description: "Subscribe to a realtime stream of fills across the most active prediction markets over a single Bravado WebSocket. Each trade arrives enriched with the trader's name and wallet address."
+icon:
+  name: "list"
+  library: "lucide"
+---
+
+Connect to `wss://partner-api.bravadotrade.com/trade-feed/ws` to receive a realtime stream of trades across the most active markets. On connect you get a snapshot of recent history, then a frame for every new fill. The feed is **public**, no API key or signature is required, and it is one-way: the server pushes to you, and any message you send is ignored.
+
+<Info>
+  Coverage today is Polymarket. The feed tracks the most active markets rather than every market, so it is a firehose of where activity is happening, not a per-market subscription. To follow a specific market's book, use the [Order Books](/api/market-data/order-book) feed.
+</Info>
+
+## Connect
+
+<CodeGroup>
+
+```javascript JavaScript
+const ws = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
+
+ws.onmessage = (event) => {
+  const frame = JSON.parse(event.data);
+  if (frame.type === "snapshot") {
+    console.log(`Recent history: ${frame.trades.length} trades`);
+    for (const trade of frame.trades) render(trade);
+  } else if (frame.type === "trade") {
+    render(frame.trade);
+  }
+};
+
+function render(t) {
+  console.log(`${t.side} ${t.size} ${t.outcome} @ ${t.price} — ${t.traderName}`);
+}
+```
+
+```python Python
+import json
+import websockets  # pip install websockets
+import asyncio
+
+URL = "wss://partner-api.bravadotrade.com/trade-feed/ws"
+
+async def main():
+    async for ws in websockets.connect(URL, ping_interval=None):
+        try:
+            async for message in ws:
+                frame = json.loads(message)
+                if frame["type"] == "snapshot":
+                    print(f"Recent history: {len(frame['trades'])} trades")
+                elif frame["type"] == "trade":
+                    t = frame["trade"]
+                    print(f"{t['side']} {t['size']} {t['outcome']} @ {t['price']} — {t['traderName']}")
+        except websockets.ConnectionClosed:
+            continue  # reconnect
+
+asyncio.run(main())
+```
+
+</CodeGroup>
+
+## Frames
+
+Every message is a JSON object with a `type` field.
+
+### `snapshot`
+
+Sent once, immediately on connect, so the feed does not start empty. It carries roughly the last 30 seconds of trades (up to 200) as an array, newest activity included.
+
+```json
+{
+  "type": "snapshot",
+  "trades": [ /* array of trade objects, see below */ ]
+}
+```
+
+### `trade`
+
+Sent for every new fill after the snapshot.
+
+```json
+{
+  "type": "trade",
+  "trade": {
+    "id": "33339798372916037220786136133406478491116150628220441951753426683441228279665-1788624812-223432",
+    "eventTitle": "Counter-Strike: Spirit vs Team Falcons - Map 2 Winner",
+    "marketQuestion": "Counter-Strike: Spirit vs Team Falcons - Map 2 Winner",
+    "outcome": "Spirit",
+    "side": "SELL",
+    "price": 0.999,
+    "priceCents": 100,
+    "size": 5.37,
+    "amount": 5.36463,
+    "timestamp": 1788624830000,
+    "assetId": "61368774849738226433217302604163725833749767729515136801666479828182608187817",
+    "conditionId": "0xf86b33b82a0e0b44d2c30c3264e2ed9f95ebfc4d98275d124f69c77d3fa68bb7",
+    "eventSlug": "cs2-ts7-fal2-2026-09-05",
+    "eventImage": "https://polymarket-upload.s3.us-east-2.amazonaws.com/counter-strike-image.png",
+    "trader": "0xd93461E85B794F0a2fA3a1E9390681db1dF8ab75",
+    "traderName": "Goodluck88888888",
+    "traderImage": "https://polymarket-upload.s3.us-east-2.amazonaws.com/profile-image.png",
+    "transactionHash": "0xdfdd21ca739637b2135de5914e72ee93e9b5ef2b2f443e978b96df75839f0ea2"
+  }
+}
+```
+
+The trade object in a `trade` frame and every element of the `snapshot` array share the same shape:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | string | Stable identifier for the fill, safe to dedupe on. |
+| `eventTitle` | string | Human-readable event title. May be empty if not yet resolved server-side. |
+| `marketQuestion` | string | The market question. |
+| `outcome` | string | The outcome traded, for example `"Yes"`, `"No"`, or a named outcome. |
+| `side` | string | `"BUY"` or `"SELL"`. |
+| `price` | number | Fill price as a decimal probability between 0 and 1. |
+| `priceCents` | number | `price` rounded to whole cents, convenience field. |
+| `size` | number | Number of outcome tokens filled. |
+| `amount` | number | Notional value of the fill, `price × size`. |
+| `timestamp` | number | Fill time in Unix **milliseconds**. |
+| `assetId` | string | Outcome token ID. Use this to subscribe on the [Order Books](/api/market-data/order-book) feed. |
+| `conditionId` | string | Market condition ID. May be empty. |
+| `eventSlug` | string | URL slug for the event. Optional. |
+| `eventImage` | string | Event image URL. Optional. |
+| `trader` | string | The trader's wallet address. |
+| `traderName` | string | Display name or pseudonym for the wallet. |
+| `traderImage` | string | Profile image URL. Optional. |
+| `transactionHash` | string | Polygon transaction hash for the fill. Optional. |
+
+<Tip>
+  `assetId` links the two feeds. Watch the trade stream to discover which outcome tokens are active right now, then pass those IDs to the [Order Books](/api/market-data/order-book) feed to see depth for them. And `trader` links Market Data to [Trader Data](/products/data-api): take a wallet you see filling and pull its PnL, positions, and history.
+</Tip>
+
+## Keep-alive and reconnect
+
+The server keeps the connection healthy with its own pings; you do not need to send heartbeats, and any frame you send is ignored. If the socket drops, reconnect and you will receive a fresh `snapshot`. Dedupe against trades already on screen using `id`.
+
+## Health
+
+```bash
+curl https://partner-api.bravadotrade.com/trade-feed/status
+```
+
+Returns whether the upstream source is connected, total trades emitted, recent-buffer size, and connected-client count.
+
+## Related
+
+- [Order Books WebSocket](/api/market-data/order-book), live depth for a specific asset.
+- [Market Data overview](/products/market-data).
+- [Trader Data API](/products/data-api), enrich the wallets you see trading.

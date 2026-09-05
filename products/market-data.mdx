@@ -1,0 +1,79 @@
+---
+title: "Market Data: Realtime Feeds, Trades, and Order Books"
+sidebarTitle: "Overview"
+description: "Stream live prediction-market data over Bravado WebSockets: enriched trades across the most active markets and live order books for any outcome token. One connection, no venue integration to maintain."
+icon:
+  name: "activity"
+  library: "lucide"
+---
+
+Bravado's Market Data layer streams realtime prediction-market data over WebSockets, so you consume live trades and order books through Bravado infrastructure instead of connecting to each venue's socket yourself. Two feeds are available today, both served from `wss://partner-api.bravadotrade.com`:
+
+<CardGroup cols={2}>
+  <Card title="Live Trades" icon="list" href="/api/market-data/trade-feed">
+    A realtime stream of fills across the most active markets, each already enriched server-side with the trader's name and wallet address.
+  </Card>
+
+  <Card title="Order Books" icon="layers" href="/api/market-data/order-book">
+    Live order-book snapshots and incremental updates for any outcome token, plus last-trade price and best bid/ask, multiplexed over one socket.
+  </Card>
+</CardGroup>
+
+<Info>
+  **Coverage today is Polymarket.** Both feeds currently source from Polymarket, the largest prediction market by volume. The wire format is designed to extend to additional venues as coverage grows, see [Supported Prediction Markets](/markets/overview).
+</Info>
+
+## Why stream through Bravado
+
+The venue's own socket is public, so this is not about access. It is about not rebuilding the same plumbing every prediction-market application needs.
+
+| | Direct venue WebSocket | Bravado Market Data |
+| --- | --- | --- |
+| Connections | One socket per market or asset | One socket, many assets multiplexed server-side |
+| Trade enrichment | Fetch trader profiles client-side | Name and wallet address already on every trade frame |
+| Cold start | Feed begins empty, you wait for the next event | Recent-history snapshot delivered on connect |
+| Fan-out | Every client opens its own upstream | Upstream shared and ref-counted across all subscribers |
+| Surface | Separate integration per venue | Same interface across supported venues |
+
+## What you can build
+
+- **Live tickers and tapes.** Render a running feed of fills across the market, no polling.
+- **Depth and price displays.** Drive an order-book widget or a best bid/ask readout straight from the socket.
+- **Signal and discovery.** Watch flow across the most active markets and react to it in realtime.
+- **Enriched activity.** Every trade arrives with the trader's wallet, so you can cross-reference [Trader Data](/products/data-api) (PnL, positions, history) for the wallets you see trading.
+
+## Feeds
+
+| Feed | Endpoint | Auth | Direction |
+| --- | --- | --- | --- |
+| [Live Trades](/api/market-data/trade-feed) | `wss://partner-api.bravadotrade.com/trade-feed/ws` | Public | Server → client |
+| [Order Books](/api/market-data/order-book) | `wss://partner-api.bravadotrade.com/orderbook-feed/ws` | Public | Bidirectional (subscribe/unsubscribe) |
+
+<Note>
+  The market-data streams are **public today**, no API key or signature is required to connect. This matches the access tier of the underlying venue's public market feed. Authentication and per-partner metering may be introduced later, so build your client to read a token from configuration even if it does not send one yet.
+</Note>
+
+## Health and diagnostics
+
+Each feed exposes a plain HTTP status endpoint you can poll from a health check or dashboard:
+
+<CodeGroup>
+
+```bash Trade feed
+curl https://partner-api.bravadotrade.com/trade-feed/status
+```
+
+```bash Order book feed
+curl https://partner-api.bravadotrade.com/orderbook-feed/status
+```
+
+</CodeGroup>
+
+The trade-feed status reports whether the upstream source is connected, how many trades it has emitted, the size of the recent buffer, and the current connected-client count.
+
+## Related
+
+- [Quickstart](/quickstart), connect and receive live data in under five minutes.
+- [Trader Data API](/products/data-api), enrich the wallets you see trading with PnL, positions, and history.
+- [Trade API](/products/trade-api), act on what you see by placing orders.
+- [Supported Prediction Markets](/markets/overview), venue coverage.

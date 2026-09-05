@@ -1,27 +1,27 @@
 ---
-title: "Infrastructure layer for Prediction Markets"
+title: "The Data Infrastructure Layer for Prediction Markets"
 sidebarTitle: "Introduction"
-description: "Bravado provides REST APIs for order execution, copy-trading, and analytics across prediction markets. Build trading bots, dashboards, and social trading features."
+description: "Bravado is the data infrastructure layer for prediction markets. Access realtime market data, trader intelligence, resolution data, and execution across prediction-market venues through one API."
 icon:
   name: "book-open"
   library: "lucide"
 ---
 
-Bravado is a single API surface across prediction market venues, so you integrate once instead of per-venue. [Polymarket](/markets/polymarket/overview) is supported across every product; see [supported prediction markets](/markets/overview) for coverage by venue.
+Bravado is the data infrastructure layer for prediction markets. Stream realtime market data, pull trader intelligence, track resolution, and execute, all through one API surface, so you integrate with Bravado once instead of maintaining a separate integration per venue. [Polymarket](/markets/polymarket/overview) is supported across every product; see [supported prediction markets](/markets/overview) for coverage by venue.
 
-Create and manage your API keys in the [Bravado Portal](https://portal.bravadotrade.com/).
+Create and manage your API keys in the [Bravado Portal](https://portal.bravadotrade.com/). The realtime market-data streams are public and need no key to start.
 
 <CardGroup cols={2}>
   <Card title="Quick Start" icon="zap" href="/quickstart">
-    Make your first API call and place a market order in under 5 minutes.
+    Connect to Bravado and receive live prediction-market data in under five minutes.
+  </Card>
+
+  <Card title="Market Data" icon="activity" href="/products/market-data">
+    Realtime trades and order books over WebSockets.
   </Card>
 
   <Card title="Authentication" icon="key" href="/authentication">
-    Set up Bearer token auth and understand API key scopes.
-  </Card>
-
-  <Card title="API Reference" icon="code" href="/api/trade/overview">
-    Full endpoint reference for Trade, Copytrade, and Data APIs.
+    Set up API-key auth for the REST APIs and understand scopes.
   </Card>
 
   <Card title="Build with AI" icon="sparkles" href="/build-with-ai">
@@ -29,90 +29,145 @@ Create and manage your API keys in the [Bravado Portal](https://portal.bravadotr
   </Card>
 </CardGroup>
 
+## Product categories
+
+Bravado is organized around what kind of data you need, with execution available alongside it.
+
+### Market Data
+
+Realtime prediction-market data over WebSockets, and the primary infrastructure product. Stream live trades across the most active markets and live order books for any outcome token through Bravado infrastructure, already normalized and enriched, instead of connecting to each venue's socket yourself.
+
+- Live trade feed, enriched server-side with trader name and wallet
+- Live order books: snapshots, incremental updates, best bid/ask, last-trade price
+- One multiplexed connection instead of one socket per market
+
+See [Market Data](/products/market-data). Coverage today is Polymarket, with the interface designed to extend across venues.
+
+### Trader Data API
+
+Enriched participant intelligence derived from on-chain settlement: who is trading, how they perform, and what they hold. This is distinct from realtime market data, it is about **traders**, not the tape.
+
+- Wallet positions, PnL, and cost basis
+- Trade history and wallet activity
+- Leaderboards, win rate, and trader analytics
+
+See the [Trader Data API](/products/data-api).
+
+### Execution
+
+The [Trade API](/products/trade-api) covers the full order lifecycle across supported venues: standard order execution, eight order types including TWAP, ICEBERG, and bracket orders, and position management. Execution is a first-class capability you use **alongside** Bravado's data infrastructure, when you want data and trading behind one integration.
+
+### Automation
+
+The [Copytrade API](/products/copytrade-api) mirrors any wallet's fills with configurable sizing and risk controls, a specialized execution-automation product built on top of the Trade API.
+
+### Resolution
+
+The [UMA API](/products/uma-api) exposes how Polymarket markets settle through UMA's Optimistic Oracle: proposals, disputes, and final outcomes, so you can tell a concluded event from a redeemable position.
+
+### Historical Data
+
+We are building toward historical market-data infrastructure, historical trades and market-state history, so customers do not have to record every stream themselves. Historical **trader** data is available today through the [Trader Data API](/products/data-api), which reconstructs a wallet's full economic history from its first trade.
+
 ## Why Bravado
 
-<CardGroup cols={3}>
-  <Card title="Eight order types" icon="arrow-left-right" href="/products/trade-api">
-    LIMIT, MARKET, TWAP, ICEBERG, PEGGED, STOP_LOSS, TAKE_PROFIT, and TRAILING_STOP for algorithmic strategies on thin books.
+<CardGroup cols={2}>
+  <Card title="Realtime market data" icon="activity" href="/products/market-data">
+    Prediction-market order books, trades, and market updates streamed over Bravado infrastructure.
   </Card>
 
-  <Card title="Copy-trading built in" icon="users" href="/api/copytrade/overview">
-    Mirror any wallet's fills with proportional, fixed, or capped sizing. No native equivalent on Polymarket.
+  <Card title="One integration" icon="plug" href="/markets/overview">
+    A consistent Bravado interface instead of a separate integration for every prediction-market venue.
   </Card>
 
-  <Card title="Tax-grade analytics" icon="chart-line" href="/products/data-api">
-    Wallet-level PnL under the Prediction Market Wallet Accounting Standard (PMWAS), with tax statements for realized gains.
+  <Card title="Enriched data" icon="layers" href="/products/data-api">
+    Raw market data combined with trader intelligence, PnL, positions, and resolution data.
+  </Card>
+
+  <Card title="Execution built in" icon="arrow-left-right" href="/products/trade-api">
+    Execute through Bravado when you want data and trading infrastructure together, with eight order types.
+  </Card>
+
+  <Card title="Specialized APIs" icon="combine" href="/products/copytrade-api">
+    Copytrade, UMA resolution, advanced orders, and other prediction-market-specific functionality.
+  </Card>
+
+  <Card title="Historical trader history" icon="clock" href="/products/data-api">
+    Full wallet history from the first trade, with FIFO cost basis, no need to record it yourself.
   </Card>
 </CardGroup>
-
-## Bravado vs. Polymarket's native APIs
-
-| Capability | Polymarket native | Bravado |
-| --- | --- | --- |
-| Order types | LIMIT, MARKET | LIMIT, MARKET, TWAP, ICEBERG, PEGGED, STOP\_LOSS, TAKE\_PROFIT, TRAILING\_STOP |
-| Execution latency | Baseline | Lower, with server-side execution of advanced order types |
-| Data accuracy | Baseline | PMWAS-standardized PnL and full fill reconciliation |
-| Copy-trading | Not available | First-class Copytrade API with configurable sizing modes |
-| Historical PnL | Recent activity | Full wallet history from first trade, with cost-basis tracking |
-| Tax reporting | Not available | Tax statements per wallet, US-format |
-| Sub-accounts | Not available | Master-key flow for white-label integrations |
-| Idempotency | Not enforced | Required `Idempotency-Key` on every mutating request |
 
 ## API surfaces
 
 | API | Base URL | What it does |
 | --- | --- | --- |
+| **Market Data** | `wss://partner-api.bravadotrade.com/trade-feed/ws`, `/orderbook-feed/ws` | Realtime trades and order books over WebSockets |
+| **Trader Data API** | `https://partner-api.bravadotrade.com/trader-analytics` | Leaderboards, wallet PnL, trade logs, tax statements |
 | **Trade API v2** | `https://partner-api.bravadotrade.com/v2/trade` | Order execution, positions, balances, user provisioning |
 | **Copytrade API** | `https://partner-api.bravadotrade.com/v2/trade/copytrade` | Mirror fills from top traders with configurable sizing |
-| **Data API** | `https://partner-api.bravadotrade.com/trader-analytics` | Leaderboards, wallet PnL, trade logs, tax statements |
 
-## Your first request
+## Your first stream
 
-The Data API's tax-report surface is public — run this with zero setup, no key required. (The rest of the Data API is signed with your partner key from the [portal](https://portal.bravadotrade.com/); see [Data API authentication](/products/data-api#authentication).)
+The market-data feeds are public, no key required. Connect and watch live fills across the most active markets:
 
 <CodeGroup>
 
-```bash cURL
-curl "https://partner-api.bravadotrade.com/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report"
-```
+```javascript JavaScript
+const ws = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
 
-```typescript TypeScript
-const res = await fetch(
-  "https://partner-api.bravadotrade.com/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report",
-);
-
-const report = await res.json();
-console.log(report);
+ws.onmessage = (event) => {
+  const frame = JSON.parse(event.data);
+  if (frame.type === "trade") {
+    const t = frame.trade;
+    console.log(`${t.side} ${t.size} ${t.outcome} @ ${t.price} — ${t.traderName}`);
+  }
+};
 ```
 
 ```python Python
-import requests
+import asyncio, json, websockets  # pip install websockets
 
-res = requests.get(
-    "https://partner-api.bravadotrade.com/trader-analytics/traders/0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b/tax-report",
-)
-print(res.json())
+async def main():
+    url = "wss://partner-api.bravadotrade.com/trade-feed/ws"
+    async with websockets.connect(url, ping_interval=None) as ws:
+        async for message in ws:
+            frame = json.loads(message)
+            if frame.get("type") == "trade":
+                t = frame["trade"]
+                print(f"{t['side']} {t['size']} {t['outcome']} @ {t['price']} — {t['traderName']}")
+
+asyncio.run(main())
 ```
 
 </CodeGroup>
 
+See the [Quickstart](/quickstart) for the full five-minute walkthrough, including order books and REST enrichment.
+
 ## Use cases
 
 <CardGroup cols={3}>
-  <Card title="Trading Bots" icon="bot" href="/use-cases/algorithmic-trading-bots">
-    Automate strategies with TWAP, iceberg, pegged, and bracket orders.
+  <Card title="Terminals" icon="monitor" href="/use-cases/terminals">
+    Live tapes, depth, and order entry in one surface.
   </Card>
 
-  <Card title="Copy Trading" icon="users-round" href="/use-cases/copy-trading">
-    Mirror top traders automatically with configurable sizing.
+  <Card title="Trading Bots" icon="bot" href="/use-cases/algorithmic-trading-bots">
+    React to realtime flow with TWAP, iceberg, and bracket orders.
   </Card>
 
   <Card title="Portfolio Dashboards" icon="chart-pie" href="/use-cases/portfolio-dashboards">
     Surface leaderboards, PnL charts, and wallet profiles.
   </Card>
 
-  <Card title="Terminals" icon="monitor" href="/use-cases/terminals">
-    Full trading front ends: order entry, portfolio, and discovery in one surface.
+  <Card title="Quant Research" icon="flask-conical" href="/use-cases/quant-research">
+    Capture and analyze market and trader data.
+  </Card>
+
+  <Card title="Copy Trading" icon="users-round" href="/use-cases/copy-trading">
+    Mirror top traders automatically with configurable sizing.
+  </Card>
+
+  <Card title="AI Agents" icon="sparkles" href="/use-cases/ai-agents">
+    Give agents live data and execution through the MCP server.
   </Card>
 </CardGroup>
 
@@ -124,11 +179,11 @@ print(res.json())
   </Card>
 
   <Card title="Python SDK" icon="code" href="/sdk/python">
-    Pythonic wrapper for all three Bravado APIs.
+    Pythonic wrapper for the Bravado REST APIs.
   </Card>
 
-  <Card title="Concepts" icon="layers" href="/products/trade-api">
-    Understand order types, positions, analytics, and copy-trading.
+  <Card title="Concepts" icon="layers" href="/products/market-data">
+    Understand market data, trader data, order types, and resolution.
   </Card>
 
   <Card title="Error Reference" icon="triangle-alert" href="/reference/errors">
