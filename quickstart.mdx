@@ -1,230 +1,176 @@
 ---
-title: "Get Started with Bravado in 5 Minutes"
+title: "Get Live Market Data in 5 Minutes"
 sidebarTitle: "Quick Start"
-description: "Make your first Bravado API call: verify your credentials, check your balances, and place a market order in under 5 minutes."
+description: "Connect to Bravado and receive live prediction-market data in under five minutes: stream trades, subscribe to an order book, and enrich what you see through REST."
 icon:
   name: "zap"
   library: "lucide"
 ---
 
-This guide walks you through the minimum steps to go from a fresh API key to a live Polymarket order. You'll verify your credentials, inspect your balances, place a market order, and confirm it shows up in your positions, all via the Bravado Trade API v2.
+The fastest way to see what Bravado does is to watch live prediction-market data flow. In this guide you connect to Bravado's WebSocket, receive realtime trades across the most active markets, subscribe to an order book, and then enrich what you see through REST. No trade required, and the market-data streams are **public**, so you can start with zero setup.
 
 <Note>
-  All requests to Bravado require a Bearer token in the `Authorization` header. Read the [Authentication](/authentication) page for a full breakdown of API keys, scopes, and error handling.
+  **Came here to place a trade?** Jump straight to the [Execute a Trade](/quickstart-trade) quickstart. You can always come back for the data layer.
 </Note>
 
 <Steps>
-  <Step title="Get your API key">
-    Sign in to the [Bravado Portal](https://portal.bravadotrade.com/) and create a new API key. The portal shows the **Bearer token** in full once, at creation time, so copy it into your secrets manager immediately.
-
-    Each token carries a set of **scopes** that control which endpoints you can call. A typical key includes:
-
-    - `trade.read`, read balances, positions, and orders
-    - `trade.execute`, place and manage orders
-    - `trade.cancel`, cancel open orders and strategies
-
-    Store your token securely, treat it like a password. Never commit it to source control or expose it in client-side code.
-
-    ```bash
-    # Set it as an environment variable for the examples below
-    export BRAVADO_API_KEY="your-bearer-token-here"
-    ```
-  </Step>
-  <Step title="Verify your credentials">
-    Call `GET /v2/trade/account` to confirm your token is valid and inspect what your key is bound to.
-
-    ```bash
-    curl https://partner-api.bravadotrade.com/v2/trade/account \
-      -H "Authorization: Bearer $BRAVADO_API_KEY"
-    ```
-
-    A successful response looks like this:
-
-    ```json
-    {
-      "partner": "acme-trading",
-      "binding": "user",
-      "wallet": "0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
-      "api_key": {
-        "id": "ak_01hx9z2q3r4s5t6u7v8w9x0y",
-        "scopes": ["trade.read", "trade.execute", "trade.cancel"],
-        "created_at": "2024-11-01T09:00:00Z"
-      },
-      "onboarding_status": "complete"
-    }
-    ```
-
-    If you see `"onboarding_status": "pending"`, your wallet hasn't been fully provisioned yet, reach out to the Bravado team before proceeding.
-  </Step>
-  <Step title="Check your balance">
-    Before placing an order, verify you have collateral available. Call `GET /v2/trade/balances` to see your current funds.
-
-    ```bash
-    curl https://partner-api.bravadotrade.com/v2/trade/balances \
-      -H "Authorization: Bearer $BRAVADO_API_KEY"
-    ```
-
-    Example response:
-
-    ```json
-    {
-      "pusd": "47.820000",
-      "usdc_e": "5.000000",
-      "total_collateral_equivalent": "52.820000",
-      "wallet": "0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"
-    }
-    ```
-
-    - `pusd`, pUSD held in your Polymarket trading wallet, ready to use immediately.
-    - `usdc_e`, Bridged USDC.e on Polygon, not yet deposited.
-    - `total_collateral_equivalent`, Sum of all collateral expressed in USD equivalent.
-
-    All values are strings. Parse them as `BigDecimal` before doing arithmetic.
-  </Step>
-  <Step title="Place a market order">
-    Now place a market buy order. You need the **token ID** of the outcome you want to trade. This is the Polymarket ERC-1155 token ID for a specific outcome (YES or NO) on a specific market.
-
-    <Tip>
-      Include an `Idempotency-Key` header on every mutating request. If the request times out or your network drops, you can safely retry with the same key, Bravado will return the original response instead of creating a duplicate order. Use a UUID v4 generated fresh for each intended order.
-    </Tip>
+  <Step title="Connect to the trade feed">
+    Bravado's live trade feed is at `wss://partner-api.bravadotrade.com/trade-feed/ws`. It needs no API key. On connect you receive a `snapshot` of recent trades, then a `trade` frame for every new fill.
 
     <CodeGroup>
 
-    ```bash cURL
-    curl -X POST https://partner-api.bravadotrade.com/v2/trade/order \
-      -H "Authorization: Bearer $BRAVADO_API_KEY" \
-      -H "Content-Type: application/json" \
-      -H "Idempotency-Key: e4b9c1a2-38df-4f77-a3c5-012bd9e8f231" \
-      -d '{
-        "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
-        "side": "buy",
-        "type": "MARKET",
-        "quote_amount": "10"
-      }'
+    ```javascript JavaScript
+    const ws = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
+
+    ws.onopen = () => console.log("connected");
+
+    ws.onmessage = (event) => {
+      const frame = JSON.parse(event.data);
+      if (frame.type === "snapshot") {
+        console.log(`snapshot: ${frame.trades.length} recent trades`);
+      } else if (frame.type === "trade") {
+        const t = frame.trade;
+        console.log(`${t.side} ${t.size} ${t.outcome} @ ${t.price} — ${t.traderName}`);
+      }
+    };
     ```
 
     ```python Python
-    import requests
-    import uuid
-    
-    url = "https://partner-api.bravadotrade.com/v2/trade/order"
-    
-    headers = {
-        "Authorization": f"Bearer {BRAVADO_API_KEY}",
-        "Content-Type": "application/json",
-        "Idempotency-Key": str(uuid.uuid4()),
-    }
-    
-    payload = {
-        "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
-        "side": "buy",
-        "type": "MARKET",
-        "quote_amount": "10",
-    }
-    
-    response = requests.post(url, json=payload, headers=headers)
-    order = response.json()
-    print(order)
-    ```
+    import asyncio, json, websockets  # pip install websockets
 
-    ```javascript JavaScript
-    import crypto from "crypto";
-    
-    const response = await fetch(
-      "https://partner-api.bravadotrade.com/v2/trade/order",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
-          "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
-        },
-        body: JSON.stringify({
-          symbol:
-            "71321045679252212594626385532706912750332728571942532289631379312455583992646",
-          side: "buy",
-          type: "MARKET",
-          quote_amount: "10",
-        }),
-      }
-    );
-    
-    const order = await response.json();
-    console.log(order);
+    async def main():
+        url = "wss://partner-api.bravadotrade.com/trade-feed/ws"
+        async with websockets.connect(url, ping_interval=None) as ws:
+            async for message in ws:
+                frame = json.loads(message)
+                if frame["type"] == "snapshot":
+                    print(f"snapshot: {len(frame['trades'])} recent trades")
+                elif frame["type"] == "trade":
+                    t = frame["trade"]
+                    print(f"{t['side']} {t['size']} {t['outcome']} @ {t['price']} — {t['traderName']}")
+
+    asyncio.run(main())
     ```
 
     </CodeGroup>
 
-    **Request fields:**
+    You should immediately see fills scrolling past. Each `trade` frame is already enriched server-side with the trader's name and wallet, no extra lookups needed. See the [Live Trades reference](/api/market-data/trade-feed) for the full frame shape.
+  </Step>
 
-    | Field | Type | Description |
-    | --- | --- | --- |
-    | `symbol` | string | The Polymarket outcome token ID to trade |
-    | `side` | string | `"buy"` or `"sell"` |
-    | `type` | string | Order type, `"MARKET"` here |
-    | `quote_amount` | string | Amount of collateral (USD) to spend |
+  <Step title="Grab an asset ID to watch">
+    Every trade frame carries an `assetId`, the outcome token ID that just traded. That is exactly what you need to subscribe to an order book. Pull one off the feed:
 
-    Example response:
-
-    ```json
-    {
-      "order_id": "ord_01hxab2c3d4e5f6g7h8i9j0k",
-      "status": "filled",
-      "side": "buy",
-      "type": "MARKET",
-      "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
-      "quote_amount": "10",
-      "filled_size": "16.129032",
-      "matched_amount": "10.000000",
-      "average_price": "0.62",
-      "created_at": "2024-11-15T14:32:05Z",
-      "updated_at": "2024-11-15T14:32:05Z"
-    }
+    ```javascript JavaScript
+    let assetId;
+    ws.onmessage = (event) => {
+      const frame = JSON.parse(event.data);
+      const trade = frame.type === "trade" ? frame.trade : frame.trades?.[0];
+      if (trade && !assetId) {
+        assetId = trade.assetId;
+        console.log("watching asset", assetId);
+      }
+    };
     ```
 
-    - `filled_size`, number of outcome tokens you received.
-    - `matched_amount`, collateral actually spent (equals `quote_amount` for a fully filled market order).
-    - `average_price`, effective fill price per token, here `$0.62`.
+    The same `assetId` links Market Data to the rest of Bravado: pass it to the order-book feed below, or to the [Trade API](/products/trade-api) as a `symbol` when you want to place an order.
   </Step>
-  <Step title="Check your positions">
-    Confirm the order appears in your open positions by calling `GET /v2/trade/positions`.
+
+  <Step title="Subscribe to an order book">
+    Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=<TOKEN_ID>`. You receive a `book` snapshot (as a JSON array), then incremental `price_change` and `last_trade_price` updates.
+
+    <CodeGroup>
+
+    ```javascript JavaScript
+    const assetId = "30216744678008528463608643201923934636445750175747926295346908540738127891986";
+    const book = new WebSocket(
+      `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=${assetId}`
+    );
+
+    book.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      const events = Array.isArray(msg) ? msg : [msg];
+      for (const e of events) {
+        if (e.event_type === "book") {
+          console.log(`book: best bid ${e.bids.at(-1)?.price}, best ask ${e.asks[0]?.price}`);
+        } else if (e.event_type === "price_change") {
+          console.log("price_change", e.price_changes.length, "levels");
+        } else if (e.event_type === "last_trade_price") {
+          console.log("last trade", e.price);
+        }
+      }
+    };
+    ```
+
+    ```python Python
+    import asyncio, json, websockets
+
+    ASSET = "30216744678008528463608643201923934636445750175747926295346908540738127891986"
+
+    async def main():
+        url = f"wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId={ASSET}"
+        async with websockets.connect(url, ping_interval=None) as ws:
+            async for message in ws:
+                msg = json.loads(message)
+                events = msg if isinstance(msg, list) else [msg]
+                for e in events:
+                    if e.get("event_type") == "book":
+                        print("book:", len(e["bids"]), "bids", len(e["asks"]), "asks")
+                    elif e.get("event_type") == "price_change":
+                        print("price_change:", len(e["price_changes"]), "levels")
+
+    asyncio.run(main())
+    ```
+
+    </CodeGroup>
+
+    To watch many markets at once, subscribe with `?assetIds=id1,id2,id3` and add or drop assets live with `{"type":"sub","assetIds":[...]}` frames. See the [Order Books reference](/api/market-data/order-book).
+  </Step>
+
+  <Step title="Enrich through REST">
+    Realtime frames tell you what is happening; the REST APIs tell you more about the who and the market. Two common follow-ups:
+
+    Look up a wallet you saw trading, its PnL, positions, and history come from the [Trader Data API](/products/data-api). The tax-report surface is public, so you can try it with no key:
 
     ```bash
-    curl https://partner-api.bravadotrade.com/v2/trade/positions \
-      -H "Authorization: Bearer $BRAVADO_API_KEY"
+    curl "https://partner-api.bravadotrade.com/trader-analytics/traders/0x9783F45CE35F794BE38cA47dD0816A5C241383B9/tax-report"
     ```
 
-    Example response:
+    Check feed health from a dashboard or monitor:
 
-    ```json
-    {
-      "positions": [
-        {
-          "symbol": "71321045679252212594626385532706912750332728571942532289631379312455583992646",
-          "market_id": "0xabc123def456abc123def456abc123def456abc123def456abc123def456abc12345",
-          "outcome": "YES",
-          "size": "16.129032",
-          "average_entry_price": "0.62",
-          "current_price": "0.63",
-          "unrealized_pnl": "0.161290",
-          "collateral_value": "10.161290",
-          "side": "long"
-        }
-      ],
-      "total_unrealized_pnl": "0.161290",
-      "total_collateral_value": "10.161290"
-    }
+    ```bash
+    curl https://partner-api.bravadotrade.com/trade-feed/status
     ```
 
-    Your position shows `16.129032` YES tokens at an average entry price of `$0.62`. The `unrealized_pnl` reflects the mark-to-market gain since your fill.
+    Most Trader Data and all Trade API endpoints require an API key. Create one in the [Bravado Portal](https://portal.bravadotrade.com/) and see [Authentication](/authentication).
   </Step>
 </Steps>
 
 ## Next steps
 
-You've placed your first Polymarket order through Bravado. From here you can:
+You are receiving live market data. Pick your path from here.
 
-- Explore advanced order types like TWAP, ICEBERG, and TRAILING\_STOP in the [Place an Order guide](/products/trade-api).
-- Mirror a top trader automatically with the [Copytrade API](/products/copytrade-api).
-- Pull wallet-level PnL and build a leaderboard with the [Data API](/products/data-api).
-- Provision sub-users for a white-label integration using the [User Provisioning guide](/api/trade/account).
+<CardGroup cols={2}>
+  <Card title="Stream more market data" icon="activity" href="/products/market-data">
+    Full trade-feed and order-book references, multi-asset subscriptions, and frame shapes.
+  </Card>
+
+  <Card title="Analyze traders" icon="chart-line" href="/products/data-api">
+    Turn a wallet from the feed into PnL, positions, cost basis, and leaderboards.
+  </Card>
+
+  <Card title="Execute trades" icon="arrow-left-right" href="/quickstart-trade">
+    Authenticate, check balances, and place an order with the Trade API.
+  </Card>
+
+  <Card title="Build copytrading" icon="users" href="/products/copytrade-api">
+    Mirror a leader wallet's fills automatically with configurable sizing.
+  </Card>
+
+  <Card title="Track market resolution" icon="gavel" href="/products/uma-api">
+    Follow how markets settle through UMA's Optimistic Oracle.
+  </Card>
+
+  <Card title="Build with AI" icon="sparkles" href="/build-with-ai">
+    Point coding agents and MCP clients at Bravado.
+  </Card>
+</CardGroup>

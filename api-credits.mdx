@@ -7,14 +7,15 @@ icon:
   library: "lucide"
 ---
 
-Usage on our pricing plans is measured in **API Credits**. Credit cost varies by product and transport. The **Trade API** and **Copytrade API** do not consume API credits.
+Usage on our pricing plans is measured in **API Credits**. Credit cost varies by product and transport. The **Market Data** WebSocket streams are currently public and do not consume API credits, and the **Trade API** and **Copytrade API** do not consume API credits.
 
 ## Credit cost by product
 
 | Product | Transport | API credits |
 | --- | --- | --- |
-| Data API | HTTP | 1 credit / request |
-| Data API | WSS | 1 credit / response |
+| Market Data | WSS | Public, no API credits today |
+| Trader Data API | HTTP | 1 credit / request |
+| Trader Data API | WSS | 1 credit / response |
 | MCP Server | HTTP | 10 credits / request |
 | Trade API | HTTP | No API credits |
 | Copytrade API | HTTP | No API credits |
