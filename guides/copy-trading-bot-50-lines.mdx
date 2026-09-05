@@ -106,13 +106,15 @@ def write(method, path, body=None):
 
 ## Discover candidates
 
-Start with traders ranked by realized PnL over a rolling window:
+Start with traders ranked by realized PnL over a rolling window. The Data API ranks in the database on the served column (`sort=realized_pnl` is the default for windowed boards), so the first page really is the top of the board, and `min_trades` drops thin records before they reach you:
 
 ```python
 def candidates(window="30d", limit=25):
-    board = read("/leaderboard", window=window, limit=limit)
-    return [t["address"] for t in board["traders"]]
+    board = read("/trader-analytics/leaderboard", window=window, limit=limit, min_trades=50)
+    return [t["trader"] for t in board["results"]]
 ```
+
+Addresses come back as bare 40-hex strings; every `/trader-analytics` route accepts them with or without the `0x` prefix. The response also carries `total` and `has_more` if you want to page deeper, and `sort=`/`order=` if you want a different ranking (for example `sort=win_rate` on `window=all`).
 
 This is the easy part, and also the part that misleads people. A 30-day PnL ranking answers "who made the most money", which is not the same question as "who is worth copying".
 
@@ -124,7 +126,7 @@ Three checks, each rejecting a different kind of bad candidate.
 
 ```python
 def has_track_record(addr, min_trades=50):
-    m = read(f"/traders/{addr}/metrics")
+    m = read(f"/trader-analytics/traders/{addr}/metrics")
     return int(m["trade_count"]) >= min_trades
 ```
 
@@ -134,7 +136,7 @@ A wallet with eight trades and a large positive PnL made one good call. Copying 
 
 ```python
 def wins_consistently(addr, min_win_rate=0.55):
-    m = read(f"/traders/{addr}/metrics")
+    m = read(f"/trader-analytics/traders/{addr}/metrics")
     return Decimal(m["win_rate"]) >= Decimal(str(min_win_rate))
 ```
 
@@ -144,7 +146,7 @@ A trader who wins 20% of the time but wins enormously can be genuinely skilled. 
 
 ```python
 def best_category(addr):
-    cats = read(f"/traders/{addr}/categories")
+    cats = read(f"/trader-analytics/traders/{addr}/categories")
     best = max(cats["categories"], key=lambda c: Decimal(c["realized_pnl"]))
     return best["category"]
 ```

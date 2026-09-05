@@ -125,11 +125,20 @@ Bravado maintains two live leaderboards ranked by the `window` you specify:
 
 <Tabs>
   <Tab title="PnL leaderboard">
-    Returns traders ranked by realized PnL over the selected window.
+    Returns traders ranked over the selected window. The ranking runs in the database over the complete candidate set on the served column, with a deterministic tie-break, so pages never overlap. Default ranking is `total_pnl` for `window=all` and `realized_pnl` (what was realized inside the window) for windowed boards.
 
     ```bash
     GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard?window=24h
     ```
+
+    | Parameter | Description |
+    | --- | --- |
+    | `sort` | Ranking column: `total_pnl`, `realized_pnl`, `unrealized_pnl`, `volume_usdc`, `trades`, `active_positions`, `open_position_value`; `window=all` only: `win_rate`, `wins`, `losses`, `total_positions`. |
+    | `order` | `desc` (default) or `asc` — `sort=realized_pnl&order=asc` lists the worst performers first. |
+    | `is_mm_bot` | `true` keeps only wallets flagged `is_mm_bot`, `false` drops them (same gate as the row flag). |
+    | `limit` / `offset` | Page size (max 500) and offset. |
+
+    The response carries `total` (size of the candidate set after `min_trades` and the bot filter; `null` only if it could not be counted), `has_more` (`offset + rows < total`), and echoes the resolved `sort` and `order`.
   </Tab>
   <Tab title="Volume leaderboard">
     Returns traders ranked by USDC trading volume over the selected window. CTF infrastructure transactions are excluded.
