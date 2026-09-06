@@ -9,23 +9,25 @@ icon:
 
 ## The problem
 
-Autonomous agents (LLM-driven or otherwise) that trade prediction markets need three things at once: a clean market data feed, a safe execution surface with strong idempotency guarantees, and a way to reason about wallet state without ambiguity. Wiring an agent to Polymarket's raw contracts requires custom code to smooth all three.
+Autonomous agents (LLM-driven or otherwise) that trade prediction markets need several things at once: a realtime market-data feed, a way to reason about traders and wallet state without ambiguity, a safe execution surface with strong idempotency guarantees, and awareness of how markets settle. Wiring an agent to a venue's raw contracts requires custom code to smooth all of that.
 
-## What Bravado provides
+## The Bravado AI stack
 
-- **Semantic endpoints.** Every action an agent might want (place order, get positions, look up a market, compute PnL) is a single REST call with typed request and response.
-- **Idempotency.** Every mutating call requires an `Idempotency-Key` header. Agents that retry on failure cannot double-execute. See [Idempotency](/reference/idempotency).
-- **Machine-readable docs.** `llms.txt` and `llms-full.txt` are published so any code-generation agent can consume the full API surface without scraping.
-- **Hosted MCP server.** For agent frameworks that speak the Model Context Protocol, Bravado hosts a read-only analytics server at `https://mcp.bravadotrade.com/mcp`, authorized with OAuth 2.1. See the [MCP server reference](/products/mcp-server).
+Bravado is prediction-market infrastructure, and an agent reaches different parts of it through the right interface for each job. For an architecture-level walkthrough, see [Build with AI](/build-with-ai).
 
-
-## APIs used
-
-| API | What the agent uses it for |
+| Interface | What the agent uses it for |
 | --- | --- |
-| [Trade API](/products/trade-api) | Placing and cancelling orders, reading positions and balances, so the agent can act on a decision |
-| [Data API](/products/data-api) | Wallet history, PnL, and leaderboards that give the agent grounded context before it trades |
-| [UMA API](/products/uma-api) | Resolution state, so an agent does not treat a concluded event as a settled, redeemable position |
+| [Market Data / WebSockets](/products/market-data) | **Realtime market state**: live order books, trades, and prices streamed over WebSockets, so an agent reacts to the market instead of polling |
+| [MCP Server](/products/mcp-server) | **Agent-native intelligence**: read-only, OAuth-authorized tools for leaderboards, trader profiles, PnL, positions, and read-only SQL, with no REST wrapper to write |
+| [Trader Data API](/products/data-api) | **Programmatic analytics** over REST: wallet history, PnL, cost basis, and leaderboards for grounded context |
+| [Trade API](/products/trade-api) | **Execution**: placing and cancelling orders, reading positions and balances. This is the only surface that acts |
+| [UMA API](/products/uma-api) | **Resolution context**: settlement state, so an agent does not treat a concluded event as a redeemable position |
+
+<Note>
+  **Realtime agents lead with Market Data**, MCP and the Trader Data API supply intelligence, and **execution happens only through the Trade API**, never through MCP, which is read-only. Keep those boundaries in your architecture.
+</Note>
+
+Bravado also publishes machine-readable docs (`llms.txt`, `llms-full.txt`) and a **read-only** hosted MCP server at `https://mcp.bravadotrade.com/mcp`, authorized with OAuth 2.1. Every mutating Trade API call requires an `Idempotency-Key`, so agents that retry on failure cannot double-execute. See [Idempotency](/reference/idempotency).
 
 <Note>
   The UMA API endpoint reference is still being written. Until it lands, resolution state has to be inferred from position data. See [UMA API](/products/uma-api).
@@ -79,5 +81,7 @@ Register these as tools with the agent framework (LangChain, OpenAI function-cal
 ## Related
 
 - [Build with AI](/build-with-ai)
+- [Market Data](/products/market-data)
+- [MCP Server](/products/mcp-server)
 - [Idempotency](/reference/idempotency)
 - [Trade API reference](/api/trade/overview)

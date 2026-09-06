@@ -28,9 +28,9 @@
               "introduction",
               "quickstart",
               "quickstart-trade",
+              "build-with-ai",
               "authentication",
-              "api-credits",
-              "build-with-ai"
+              "api-credits"
             ]
           },
           {
@@ -145,15 +145,9 @@
             ]
           },
           {
-            "group": "Tools",
+            "group": "MCP Server",
             "pages": [
-              {
-                "group": "MCP Server",
-                "icon": "plug",
-                "pages": [
-                  "products/mcp-server"
-                ]
-              }
+              "products/mcp-server"
             ]
           },
           {

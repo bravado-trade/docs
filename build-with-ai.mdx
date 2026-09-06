@@ -1,75 +1,166 @@
 ---
 title: "Build with AI"
 sidebarTitle: "Build with AI"
-description: "Point your coding agents at the Bravado docs, use llms.txt, and integrate the Bravado MCP server for AI-native development."
+description: "Architecture guide for AI-native prediction-market applications: which Bravado product to use for agents, research systems, trading bots, and copilots."
 icon:
   name: "sparkles"
   library: "lucide"
 ---
 
-Bravado is built to be consumed by AI-native tooling. This page shows how to point a coding assistant, an autonomous agent, or an MCP-aware client at the Bravado docs and API.
+Build prediction-market agents, research systems, trading bots, and AI-native applications with Bravado. Bravado is prediction-market infrastructure, and an AI application reaches different parts of it through different interfaces: an MCP server for agent-native data access, WebSockets for realtime market state, REST APIs for programmatic analytics and execution, and machine-readable docs for your coding assistant.
 
-## Machine-readable docs
+This page is the map. It explains which product to reach for, in what situation, and how they fit together. For the deep reference on any one product, follow its link.
 
-Every page on this site is available as raw Markdown:
+## Which interface do I use?
 
-- Append `.md` to any docs URL to get the raw source. For example, `https://bravado.mintlify.app/quickstart.md`.
-- `https://bravado.mintlify.app/llms.txt` lists every page for LLM crawlers.
-- `https://bravado.mintlify.app/llms-full.txt` concatenates the entire docs site in one file, suitable for pasting into a long-context model.
-
-Point Claude, Cursor, or any other assistant at either URL when you want it to have full context on Bravado without scraping.
-
-## Copy any page as Markdown or open in an assistant
-
-Every page has a **Copy** button in the contextual menu. Options include:
-
-- **Copy page as Markdown** for pasting into a prompt.
-- **View as Markdown** to see the raw source in a new tab.
-- **Open in ChatGPT** to load the page into ChatGPT.
-- **Open in Claude** to load the page into Claude.
-
-## Pointing a coding agent at Bravado
-
-For **Cursor**, **Windsurf**, or **Claude Code**, add the docs to the workspace context:
-
-```text
-https://bravado.mintlify.app/llms-full.txt
-```
-
-The agent will then have the entire API surface, all concepts, and all guides in its context window when generating Bravado code.
-
-For **ChatGPT** or **Claude web**, use the "Open in ChatGPT" / "Open in Claude" button on any specific page you need the model to reason about.
-
-## MCP server
-
-Bravado hosts a **Model Context Protocol (MCP)** server so agent frameworks that speak MCP (Claude.ai, Claude Desktop, Claude Code, custom agent runtimes) can call Bravado tools directly without a REST wrapper.
-
-| | |
+| I want my AI to... | Use |
 | --- | --- |
-| **URL** | `https://mcp.bravadotrade.com/mcp` |
-| **Transport** | Streamable HTTP (stateless) |
-| **Auth** | OAuth 2.1 with PKCE and Dynamic Client Registration |
+| Query trader intelligence directly from an agent | [MCP Server](/products/mcp-server) |
+| Consume realtime market data (order books, trades, prices) | [Market Data / WebSockets](/products/market-data) |
+| Query positions, PnL, wallets, or historical trader data over REST | [Trader Data API](/products/data-api) |
+| Execute trades | [Trade API](/products/trade-api) |
+| Understand market resolution and settlement | [UMA API](/products/uma-api) |
+| Understand the Bravado docs while coding | [llms.txt / llms-full.txt](#build-faster-with-ai-coding-tools) |
 
-For **Claude.ai** or **Claude Desktop**, add it as a custom connector using that URL. For **Claude Code**:
+<Note>
+  **Research and execution are separate surfaces.** Agents *read* intelligence through the MCP Server and the Trader Data API, and *act* only through the Trade API. The MCP Server is read-only and never places a trade or moves funds. Keep that boundary in your architecture and you keep it in your risk model.
+</Note>
+
+## Give your agent direct access to prediction-market intelligence
+
+Bravado hosts a **Model Context Protocol (MCP)** server, so an MCP-compatible agent (Claude.ai, Claude Desktop, Claude Code, or a custom runtime) can query Bravado's trader intelligence directly, with no REST wrapper to write and no tools to hand-define. You connect once with OAuth and the agent gets a curated toolset.
+
+Supported today:
+
+- `get_leaderboard`, traders ranked by realized PnL or volume
+- `get_trader_profile`, a full performance profile for any public address
+- `get_trader_pnl_series`, PnL over time
+- `get_trader_positions` and `get_trader_trades`, holdings and activity
+- `get_trader_categories`, PnL and volume by market category
+- `get_reconciliation_certificate`, a consistency proof for a wallet's statement
+- `run_sql`, read-only SQL against curated warehouse views
+
+<Warning>
+  **The MCP Server is read-only, permanently.** It cannot place, cancel, or modify an order, and it cannot move funds. It is for querying data and analytics. When an agent needs to act, it uses the [Trade API](/products/trade-api), described below.
+</Warning>
+
+Connect a client in one line:
 
 ```bash
 claude mcp add --transport http bravado https://mcp.bravadotrade.com/mcp
 ```
 
-You sign in through the [Bravado Portal](https://portal.bravadotrade.com/) and approve the connection; no key is pasted into the client.
+See the [MCP Server reference](/products/mcp-server) for the full tool list, OAuth authorization flow, scopes, and rate limits.
 
-The server is **read-only** and exposes analytics tools only:
+## Give your agent realtime market context
 
-- `get_leaderboard`, `get_trader_profile`, `get_trader_pnl_series`
-- `get_trader_positions`, `get_trader_trades`, `get_trader_categories`
-- `get_reconciliation_certificate`
-- `run_sql` for read-only queries against curated warehouse views
+When an agent or application needs to know what the market is doing *right now*, stream it from Bravado's [Market Data](/products/market-data) WebSockets rather than polling REST. Two public feeds are available:
+
+- **Live trades**, `wss://partner-api.bravadotrade.com/trade-feed/ws`, a stream of every fill across all markets, each enriched with the trader's name and wallet. See the [Live Trades reference](/api/market-data/trade-feed).
+- **Order books**, `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=<id>`, live book snapshots, incremental price updates, and best bid/ask for any outcome token. See the [Order Books reference](/api/market-data/order-book).
+
+The two feeds link together by `assetId`: watch the trade stream to see where activity is, then subscribe to the order book for those tokens. The `trader` on each trade also links to [Trader Data](/products/data-api), so an agent can pull a wallet's PnL and history the moment it sees it trade.
 
 <Note>
-  Trading is deliberately **not** on the MCP surface. Order placement, cancellation and copytrade subscriptions stay on the [Trade API](/products/trade-api) and [Copytrade API](/products/copytrade-api), where idempotency keys and notional caps apply. An agent that needs to trade should call those directly, with the safety patterns below.
+  Market Data is realtime infrastructure. The MCP Server is **not** a substitute for it: MCP answers point-in-time analytical questions, WebSockets deliver a live feed. Agents that trade or track markets in realtime need the WebSocket feeds.
 </Note>
 
-See the [MCP server reference](/products/mcp-server) for the full tool list, limits and authorization details.
+## Query trader analytics over REST
+
+When an application needs programmatic access to trader analytics, on its own schedule rather than through an agent's tool loop, use the [Trader Data API](/products/data-api). It is the same engine behind the MCP Server, exposed as signed REST:
+
+- wallet positions, PnL, and cost basis
+- trade history and wallet activity
+- leaderboards, win rate, and trader performance
+
+This works for AI systems and ordinary applications alike. Reach for it when you want a normal HTTP integration, a backfill job, or a dashboard, rather than an agent-native tool surface.
+
+## Let your application act
+
+If an AI-powered application needs to trade, it executes through the [Trade API](/products/trade-api), never through MCP. The Trade API covers the full order lifecycle: place and manage orders, eight order types including TWAP and bracket orders, positions, and balances. Every mutating call takes an `Idempotency-Key`, so an agent that retries on failure cannot double-execute. See [Idempotency](/reference/idempotency).
+
+The clean separation to hold in your head:
+
+```text
+MCP Server / Trader Data API  →  research and context
+Market Data (WebSockets)      →  realtime market state
+Trade API                     →  execution
+UMA API                       →  resolution context
+```
+
+## Understand resolution and settlement
+
+An agent evaluating market lifecycle or settlement risk needs to tell a *concluded* event from a *settled, redeemable* position. The [UMA API](/products/uma-api) exposes how Polymarket markets resolve through UMA's Optimistic Oracle: proposals, disputes, and final outcomes. Use it so an agent does not book PnL on a position that cannot yet be redeemed.
+
+<Note>
+  The UMA API endpoint reference is still being written. Until it lands, resolution state has to be inferred from position data. See [UMA API](/products/uma-api).
+</Note>
+
+## Architecture examples
+
+How the products compose for common AI applications.
+
+### Research agent
+
+Reads intelligence, takes no action. All read-only.
+
+```text
+MCP Server
+   ↓
+Trader PnL · Positions · Leaderboard · Trade history
+   ↓
+LLM / Agent
+```
+
+### Trading agent
+
+Reacts to realtime market state, then executes through the Trade API.
+
+```text
+Market Data / WSS
+        ↓
+Realtime market state
+        ↓
+Agent strategy
+        ↓
+Trade API
+        ↓
+Execution
+
+Trader Data API  →  historical context
+UMA API          →  resolution context
+```
+
+### Prediction-market copilot
+
+Combines live markets, intelligence, resolution, and optional execution.
+
+```text
+MCP        →  trader intelligence
+WSS        →  realtime markets
+UMA API    →  resolution
+Trade API  →  optional execution
+```
+
+## Build faster with AI coding tools
+
+Give Claude Code, Cursor, Windsurf, or any coding assistant the full Bravado docs as context so it writes correct integration code.
+
+Every page on this site is available as machine-readable Markdown:
+
+- Append `.md` to any docs URL to get the raw source, for example `https://docs.bravadotrade.com/quickstart.md`.
+- `https://docs.bravadotrade.com/llms.txt` lists every page for LLM crawlers.
+- `https://docs.bravadotrade.com/llms-full.txt` concatenates the entire docs site into one file, suitable for pasting into a long-context model.
+
+For **Cursor**, **Windsurf**, or **Claude Code**, add the docs to the workspace context:
+
+```text
+https://docs.bravadotrade.com/llms-full.txt
+```
+
+The assistant then has the full API surface, concepts, and guides in context when generating Bravado code.
+
+Every page also has a **Copy** button in the contextual menu: *Copy page as Markdown*, *View as Markdown*, *Open in ChatGPT*, and *Open in Claude*. Use those when you want a model to reason about one specific page.
 
 ## Safety patterns for autonomous agents
 
@@ -84,6 +175,9 @@ See the [AI agents use case](/use-cases/ai-agents) for a worked example.
 
 ## Related
 
+- [MCP Server](/products/mcp-server)
+- [Market Data](/products/market-data)
+- [Trader Data API](/products/data-api)
+- [Trade API](/products/trade-api)
+- [UMA API](/products/uma-api)
 - [AI agents use case](/use-cases/ai-agents)
-- [Idempotency](/reference/idempotency)
-- [Authentication](/authentication)
