@@ -1,109 +1,270 @@
 ---
 title: "Authenticate Requests to the Bravado API"
 sidebarTitle: "Authentication"
-description: "Bravado uses Bearer token authentication. Learn how to pass your API key, understand API key scopes, and handle authentication errors correctly."
+description: "Bravado signs every API request with HMAC-SHA256. Learn how to build the canonical payload, send the three signing headers, understand API key scopes, and handle authentication errors correctly."
 icon:
   name: "key"
   library: "lucide"
 ---
 
-Bravado authenticates every request using **API key Bearer tokens**. You include your token in the `Authorization` header of each HTTP request. There are no cookies and no session flows: just a static token your server sends with every call. The only public endpoint that does not require authentication is `GET /healthz`.
+Bravado authenticates every request with an **HMAC-SHA256 signature**. You send three headers: your API key, a millisecond timestamp, and a signature computed over the request with your API secret. There are no cookies and no session flows, and the secret itself never travels over the wire. The only public endpoint that does not require authentication is `GET /healthz`.
+
+This is the same scheme on both HTTP surfaces: the Trade API on `partner-api.bravadotrade.com` and the Trader Data API on `api.bravadotrade.com`. One client signs for both.
 
 <Note>
-  **The MCP server is the one exception.** It uses OAuth 2.1 rather than a static key, because an AI client cannot hold a long-lived partner secret safely and cannot compute an HMAC signature. See [MCP server authorization](#mcp-server-authorization) below.
+  **The MCP server is the one exception.** It uses OAuth 2.1 rather than a signed request, because an AI client cannot hold a long-lived partner secret safely and cannot compute an HMAC signature. See [MCP server authorization](#mcp-server-authorization) below.
 </Note>
+
+<Warning>
+  **Do not build on static bearer tokens.** A small number of Data API integrations still send `Authorization: Bearer`, and those specific tokens keep working through the migration window only. A key you create today is not one of them. On the Trade API the bearer fallback is a disabled pilot flag, so in production `Authorization: Bearer` is answered with `MISSING_AUTH_HEADERS` on every route.
+</Warning>
 
 ## Getting your API key
 
-Create and manage your API keys in the [Bravado Portal](https://portal.bravadotrade.com/).
+Create and manage your API keys in the [Bravado console](https://console.bravadotrade.com/keys).
 
-1. Sign in at [portal.bravadotrade.com](https://portal.bravadotrade.com/).
-2. Create a new API key and select the **scopes** it should hold (see [API key scopes](#api-key-scopes) below).
-3. Copy the Bearer token from the portal. This is the only time it will be shown in full.
+1. Sign in at [console.bravadotrade.com](https://console.bravadotrade.com/) and verify your email address.
+2. Create a key. Its scopes follow the products enabled on your plan (see [API key scopes](#api-key-scopes) below).
+3. Copy **both** values. The **key** identifies you and is sent as a header on every request. The **secret** signs those requests and is shown once, at creation, and never again.
+
+Your plan sets how many keys you can keep active at once. The console shows the count beside your active keys.
 
 <Warning>
   The `trade.withdraw` scope, which allows withdrawing pUSD to an external address, is **not included** in a standard partner key and must be explicitly requested and granted. Even a key with all other trade scopes cannot initiate withdrawals without it.
 </Warning>
 
-Store your token securely. Never embed it in client-side JavaScript, commit it to a public repository, or log it to an unprotected output stream. Treat it with the same care as a private key.
+Store the secret securely. Never embed it in client-side JavaScript, commit it to a public repository, or log it to an unprotected output stream. Treat it with the same care as a private key, because that is what it is. If it leaks, revoke the key in the console: the signature scheme protects the secret in transit, not after disclosure.
 
 ## Making authenticated requests
 
-Add your token to the `Authorization` header using the `Bearer` scheme:
+Every request carries three headers:
 
 ```text
-Authorization: Bearer <your-token>
+X-BRAVADO-API-KEY: <your key>
+X-BRAVADO-TIMESTAMP: <milliseconds since the epoch>
+X-BRAVADO-SIGNATURE: <hex HMAC-SHA256 of the payload below>
 ```
 
-Here's how that looks in practice across common environments:
+### The payload you sign
+
+Four lines, joined by a single newline (`\n`), in this order:
+
+```text
+<timestamp>
+<HTTP METHOD, uppercase>
+<canonical path>
+<SHA-256 hex of the request body>
+```
+
+Sign it with HMAC-SHA256 keyed by your API **secret**, and send the result as lowercase hex.
+
+For a GET there is no body, so the fourth line is the SHA-256 of the empty string, which is always:
+
+```text
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+```
+
+### The canonical path
+
+The third line is not the raw URL. Build it like this:
+
+1. Take the path, percent-decoded once.
+2. Strip a trailing slash, unless the path is just `/`.
+3. Drop query parameters whose value is null or absent.
+4. Sort the remaining parameters by key.
+5. Percent-encode each key and value to **RFC 3986**, then join as `k=v&k=v`.
+
+So `GET /v2/trade/orders/open/?token_id=123&venue=polymarket` signs as `/v2/trade/orders/open?token_id=123&venue=polymarket`.
+
+<Warning>
+  Two encoding details cause almost every `INVALID_SIGNATURE`.
+
+  **RFC 3986 is not `encodeURIComponent`.** JavaScript leaves `! ' ( ) *` unencoded; RFC 3986 does not. Encode them yourself.
+
+  **This is not form encoding.** A space is `%20`, never `+`.
+
+  Both produce a request that looks correct and is rejected with no indication of which character was wrong.
+</Warning>
+
+### Examples
+
+Each of these signs `GET /v2/trade/account`. Point them at `https://api.bravadotrade.com` and the same code signs the Trader Data API.
 
 <CodeGroup>
 
 ```bash cURL
-curl https://partner-api.bravadotrade.com/v2/trade/account \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST="https://partner-api.bravadotrade.com"
+CANONICAL_PATH="/v2/trade/account"          # no query, so already canonical
+TS="$(( $(date +%s) * 1000 ))"
+
+BODY_SHA="$(printf '' | openssl dgst -sha256 -hex | awk '{print $2}')"
+PAYLOAD="$(printf '%s\n%s\n%s\n%s' "$TS" "GET" "$CANONICAL_PATH" "$BODY_SHA")"
+SIG="$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$BRAVADO_API_SECRET" -hex | awk '{print $2}')"
+
+curl -s "$HOST$CANONICAL_PATH" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: $TS" \
+  -H "X-BRAVADO-SIGNATURE: $SIG"
 ```
 
 ```python Python
-import requests
+import hashlib
+import hmac
 import os
+import time
+import urllib.parse
 
-headers = {
-    "Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}",
-    "Content-Type": "application/json",
-}
+import requests
 
-response = requests.get(
-    "https://partner-api.bravadotrade.com/v2/trade/account",
-    headers=headers,
-)
+HOST = "https://partner-api.bravadotrade.com"
+KEY = os.environ["BRAVADO_API_KEY"]
+SECRET = os.environ["BRAVADO_API_SECRET"]
+
+
+def canonical_path(pathname: str, query: dict | None = None) -> str:
+    path = urllib.parse.unquote(pathname)
+    if len(path) > 1 and path.endswith("/"):
+        path = path[:-1]
+    items = sorted((k, str(v)) for k, v in (query or {}).items() if v is not None)
+    if not items:
+        return path
+    qs = "&".join(
+        f"{urllib.parse.quote(k, safe='')}={urllib.parse.quote(v, safe='')}"
+        for k, v in items
+    )
+    return f"{path}?{qs}"
+
+
+def signed_headers(method: str, cpath: str, body: str = "") -> dict:
+    ts = str(int(time.time() * 1000))
+    payload = "\n".join([ts, method, cpath, hashlib.sha256(body.encode()).hexdigest()])
+    signature = hmac.new(SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return {
+        "X-BRAVADO-API-KEY": KEY,
+        "X-BRAVADO-TIMESTAMP": ts,
+        "X-BRAVADO-SIGNATURE": signature,
+    }
+
+
+cpath = canonical_path("/v2/trade/account")
+response = requests.get(HOST + cpath, headers=signed_headers("GET", cpath))
 print(response.json())
 ```
 
 ```javascript JavaScript
-const response = await fetch(
-  "https://partner-api.bravadotrade.com/v2/trade/account",
-  {
-    headers: {
-      Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-  }
-);
+import { createHmac, createHash } from "node:crypto";
 
-const account = await response.json();
-console.log(account);
+const HOST = "https://partner-api.bravadotrade.com";
+const KEY = process.env.BRAVADO_API_KEY;
+const SECRET = process.env.BRAVADO_API_SECRET;
+
+/** RFC 3986: encodeURIComponent leaves ! ' ( ) * raw, and a space is %20, never +. */
+const enc = (v) =>
+  encodeURIComponent(v).replace(
+    /[!'()*]/g,
+    (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase(),
+  );
+
+function canonicalPath(pathname, query = {}) {
+  let path = decodeURIComponent(pathname);
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  const entries = Object.entries(query)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => [k, String(v)])
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  if (entries.length === 0) return path;
+  return path + "?" + entries.map(([k, v]) => enc(k) + "=" + enc(v)).join("&");
+}
+
+async function call(method, pathname, { query = {}, body } = {}) {
+  const bodyStr = body === undefined ? "" : JSON.stringify(body);
+  const ts = String(Date.now());
+  const cpath = canonicalPath(pathname, query);
+  const payload = [
+    ts,
+    method,
+    cpath,
+    createHash("sha256").update(bodyStr).digest("hex"),
+  ].join("\n");
+
+  const headers = {
+    "X-BRAVADO-API-KEY": KEY,
+    "X-BRAVADO-TIMESTAMP": ts,
+    "X-BRAVADO-SIGNATURE": createHmac("sha256", SECRET).update(payload).digest("hex"),
+  };
+  if (bodyStr) headers["Content-Type"] = "application/json";
+  if (method !== "GET") headers["Idempotency-Key"] = crypto.randomUUID();
+
+  const res = await fetch(HOST + cpath, { method, headers, body: bodyStr || undefined });
+  return res.json();
+}
+
+console.log(await call("GET", "/v2/trade/account"));
 ```
 
 ```go Go
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 
-func main() {
-	req, _ := http.NewRequest("GET",
-		"https://partner-api.bravadotrade.com/v2/trade/account",
-		nil,
+func signedHeaders(secret, method, canonicalPath, body string) map[string]string {
+	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	bodySum := sha256.Sum256([]byte(body))
+	payload := strings.Join(
+		[]string{ts, method, canonicalPath, hex.EncodeToString(bodySum[:])},
+		"\n",
 	)
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("BRAVADO_API_KEY"))
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(payload))
+	return map[string]string{
+		"X-BRAVADO-API-KEY":   os.Getenv("BRAVADO_API_KEY"),
+		"X-BRAVADO-TIMESTAMP": ts,
+		"X-BRAVADO-SIGNATURE": hex.EncodeToString(mac.Sum(nil)),
+	}
+}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+func main() {
+	const host, canonicalPath = "https://partner-api.bravadotrade.com", "/v2/trade/account"
+
+	req, _ := http.NewRequest("GET", host+canonicalPath, nil)
+	for k, v := range signedHeaders(os.Getenv("BRAVADO_API_SECRET"), "GET", canonicalPath, "") {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		panic(err)
 	}
 	defer resp.Body.Close()
-	fmt.Println(resp.Status)
+
+	out, _ := io.ReadAll(resp.Body)
+	fmt.Println(string(out))
 }
 ```
 
 </CodeGroup>
 
-Read your token from an environment variable or a secrets manager. Never hardcode it inline.
+Read your key and secret from environment variables or a secrets manager. Never hardcode them inline.
+
+### Clock skew
+
+Your timestamp must be within **five minutes** of ours, in either direction. Outside that window the request is refused with `STALE_TIMESTAMP`, whatever the signature says, so that a captured request cannot be replayed indefinitely.
+
+Send milliseconds, not seconds. A seconds-precision timestamp is roughly 56 years in the past and fails this check rather than the signature check, which is at least a clear error.
 
 ## API key scopes
 
@@ -122,10 +283,10 @@ Every Bravado API key is issued with one or more scopes. A request to an endpoin
 | `mcp.query` | Run read-only SQL through the MCP server's `run_sql` tool |
 
 <Note>
-  **Data API requests are HMAC-signed**, not Bearer-authenticated: send `X-BRAVADO-API-KEY`, `X-BRAVADO-TIMESTAMP`, and `X-BRAVADO-SIGNATURE` as described in [Data API authentication](/products/data-api#authentication). Each request's venue (Polymarket, or Predict.fun under `/predict/*`) must also be enabled on your partner account. Bravado-issued static bearer tokens for the Data API are deprecated and only work during the migration window.
+  Scopes are not the only gate on the Data API. Each request's venue (Polymarket, or Predict.fun under `/predict/*`) must also be enabled on your partner account,, and your plan's credit allowance applies on top of both. See [API credits](/api-credits).
 </Note>
 
-Scopes are additive, a key can hold any combination. Configure your key's scopes when creating it in the [portal](https://portal.bravadotrade.com/), or edit an existing key's scopes there at any time.
+Scopes are additive, a key can hold any combination. A key's scopes follow the products enabled on your account, so a scope you cannot see is one your plan does not include; the [console](https://console.bravadotrade.com/keys) shows which products are on.
 
 ## Master keys vs. user keys
 
@@ -159,33 +320,41 @@ Revoke a connection from **Settings → Connected applications** in the portal a
 
 ## Authentication errors
 
-Bravado returns standard HTTP status codes for authentication failures. Your client should handle these explicitly.
+Every refusal carries a machine-readable `code`. Match on that, never on the message: the messages are written for humans and are not part of the contract.
+
+```json
+{
+  "error": "Unknown API key",
+  "code": "INVALID_KEY",
+  "request_id": "15e6b86e-a4c4-410f-a7b0-2e35fa29e9af"
+}
+```
+
+Quote `request_id` when you contact support. It is also returned in the `X-Request-Id` header, including on requests that succeed.
 
 ### 401 Unauthorized
 
-Returned when the `Authorization` header is missing, malformed, or contains an invalid or expired token.
+| Code | What went wrong |
+| --- | --- |
+| `MISSING_AUTH_HEADERS` | One of the three signing headers is absent. This is also what you get for `Authorization: Bearer` |
+| `INVALID_KEY` | The key is not one we issued, or it has been revoked and needs rotating |
+| `KEY_DISABLED` | The key exists but is expired or no longer active |
+| `STALE_TIMESTAMP` | Your timestamp is not a whole number of milliseconds, or is more than five minutes from ours |
+| `INVALID_SIGNATURE` | The headers are well formed and the key is real, but the signature does not match the payload we rebuilt |
 
-```json
-{
-  "error": "unauthorized",
-  "message": "Missing or invalid Bearer token."
-}
-```
+`INVALID_SIGNATURE` almost always means the canonical path differs from what you signed. Check the trailing slash, the parameter ordering, and the two encoding rules above before suspecting the key.
 
-Check that you're including the `Authorization: Bearer <token>` header and that the token value is correct and hasn't been rotated.
+Repeated failures from one IP are rate limited with `RATE_LIMITED`, so a client retrying a bad signature in a loop locks itself out. Fix the signature rather than retrying.
 
 ### 403 Forbidden
 
-Returned when your token is valid but lacks the scope required by the endpoint you called.
+| Code | What went wrong |
+| --- | --- |
+| `INSUFFICIENT_SCOPE` | The key is valid but does not hold the scope the endpoint requires |
+| `PARTNER_SUSPENDED` | The account itself is not active |
+| `IP_NOT_ALLOWED` | The key has an IP allowlist and this request did not come from it |
 
-```json
-{
-  "error": "forbidden",
-  "message": "Token does not have the required scope: trade.withdraw"
-}
-```
-
-Review your key's scopes by calling `GET /v2/trade/account` and inspecting the `api_key.scopes` array. If you need a scope added, contact the Bravado team.
+Review your key's scopes by calling `GET /v2/trade/account` and inspecting the `api_key.scopes` array, or open the [console](https://console.bravadotrade.com/keys). A scope that is missing because your plan does not include the product is a billing question, not a support one: see [Billing](https://console.bravadotrade.com/billing).
 
 ## Idempotency keys
 
