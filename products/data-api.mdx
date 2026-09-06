@@ -1,13 +1,17 @@
 ---
-title: "Data API: Trader Analytics and Performance Metrics"
+title: "Trader Data API: Trader Analytics and Performance Metrics"
 sidebarTitle: "Overview"
-description: "The Bravado Data API provides on-chain PnL metrics, leaderboards, trade history, and tax statements for any Polymarket wallet address."
+description: "The Bravado Trader Data API provides on-chain PnL metrics, leaderboards, trade history, and tax statements for any Polymarket wallet address."
 icon:
   name: "chart-line"
   library: "lucide"
 ---
 
-Bravado's Data API derives all metrics directly from on-chain settlement data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any wallet. You can query performance data for your own wallet or any public address, useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://partner-api.bravadotrade.com/trader-analytics`.
+<Info>
+  The **Trader Data API** is about *traders*: wallets, PnL, positions, history, and leaderboards derived from on-chain settlement. For realtime *market* data, live trades and order books, see [Market Data](/products/market-data). Requests here use the base path `/trader-analytics` and are sometimes referred to as the "Data API" in older material.
+</Info>
+
+Bravado's Trader Data API derives all metrics directly from on-chain settlement data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any wallet. You can query performance data for your own wallet or any public address, useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://partner-api.bravadotrade.com/trader-analytics`.
 
 ## Authentication
 

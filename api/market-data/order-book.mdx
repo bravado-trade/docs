@@ -1,0 +1,196 @@
+---
+title: "Order Books WebSocket"
+sidebarTitle: "Order Books"
+description: "Stream live order-book snapshots and incremental price updates for any outcome token over a single Bravado WebSocket. Subscribe to one asset or many, and add or drop assets in-band."
+icon:
+  name: "layers"
+  library: "lucide"
+---
+
+Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws` to receive a live order book for one or more outcome tokens. On connect you get a book snapshot, then incremental updates as the book changes, plus last-trade price and best bid/ask events. The feed is **public**, no API key or signature is required. Bravado multiplexes upstream: every client watching the same asset shares one upstream connection.
+
+<Info>
+  You need an **outcome token ID** (`assetId`) to subscribe. Discover active ones from the [Live Trades](/api/market-data/trade-feed) feed, every trade frame carries the `assetId` that just traded.
+</Info>
+
+## Connect
+
+Pass the asset in the query string. Two modes share the same endpoint.
+
+### Single asset
+
+```
+wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=<TOKEN_ID>
+```
+
+```javascript JavaScript
+const assetId = "30216744678008528463608643201923934636445750175747926295346908540738127891986";
+const ws = new WebSocket(
+  `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=${assetId}`
+);
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  // Book snapshots arrive as an array; incremental events as objects.
+  const events = Array.isArray(msg) ? msg : [msg];
+  for (const e of events) {
+    if (e.event_type === "book") {
+      console.log("book", e.asset_id, "bids", e.bids.length, "asks", e.asks.length);
+    } else if (e.event_type === "price_change") {
+      console.log("price_change", e.price_changes);
+    } else if (e.event_type === "last_trade_price") {
+      console.log("last trade", e.price);
+    }
+  }
+};
+```
+
+### Multiple assets
+
+Pass a comma-separated list, and add or remove assets live with in-band JSON frames over the same socket. One connection can hold up to **120** assets.
+
+```
+wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetIds=<ID_1>,<ID_2>,<ID_3>
+```
+
+```javascript JavaScript
+const ws = new WebSocket(
+  "wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetIds=" +
+    [id1, id2].join(",")
+);
+
+ws.onopen = () => {
+  // Add more assets after connecting
+  ws.send(JSON.stringify({ type: "sub", assetIds: [id3, id4] }));
+  // Drop an asset you no longer need
+  ws.send(JSON.stringify({ type: "unsub", assetIds: [id1] }));
+};
+```
+
+There is no per-asset envelope: a multi-asset client routes updates by `asset_id`. **Where that field lives depends on the frame.** On `book`, `last_trade_price` and `tick_size_change` it is at the top level. On `price_change` — the great majority of traffic — the top level carries `event_type`, `market`, `price_changes` and `timestamp`, and the `asset_id` sits inside **each entry of `price_changes[]`**; one frame can therefore carry entries for more than one asset.
+
+<Warning>
+  A connection with no `assetId` or `assetIds` is closed immediately with code `1008`. Always subscribe to at least one asset in the query string.
+</Warning>
+
+## Frames
+
+Order-book frames are forwarded from the venue verbatim and are identified by an `event_type` field. Incremental events arrive as JSON objects.
+
+The initial `book` snapshot arrives **either as a JSON array containing one book object, or as a bare object**, and you must handle both. The array form is what we see in practice; the bare object can reach you as the replay of a cached book. Normalise with `Array.isArray(msg) ? msg : [msg]`, as the samples above do.
+
+There is a **third shape**, and it is the one that breaks parsers: an asset with no book can answer with `[[]]` — an array containing one **empty array**, no object at all. It is neither a book nor a bare object, and it does **not** produce a `no_book` frame: it is a message from the venue, so it cancels the timer described below. After normalising, skip anything that is not an object:
+
+```javascript
+const events = Array.isArray(msg) ? msg : [msg];
+for (const e of events) {
+  if (!e || typeof e !== "object" || Array.isArray(e)) {
+    console.log("empty frame — no order book for this asset");
+    continue;
+  }
+  // …switch on e.event_type
+}
+```
+
+### `book`
+
+A full snapshot of the order book, sent on subscribe and re-sent to late joiners.
+
+```json
+[
+  {
+    "market": "0x6a13f9d74dbe05baa45e08881f81683074b2b75ea152ba3b3e796579bf59a95a",
+    "asset_id": "30216744678008528463608643201923934636445750175747926295346908540738127891986",
+    "timestamp": "1788624850089",
+    "hash": "30211bfa363d14074e028ee55f920d6c6926e884",
+    "bids": [
+      { "price": "0.01", "size": "20.67" },
+      { "price": "0.04", "size": "10.58" },
+      { "price": "0.45", "size": "5" }
+    ],
+    "asks": [
+      { "price": "0.7", "size": "3" }
+    ],
+    "tick_size": "0.01",
+    "event_type": "book",
+    "last_trade_price": "0.300"
+  }
+]
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `market` | string | Market condition ID. |
+| `asset_id` | string | Outcome token ID this book is for. |
+| `timestamp` | string | Book time, Unix milliseconds as a string. |
+| `hash` | string | Book state hash. |
+| `bids` | array | Resting buy levels, each `{ price, size }` as decimal strings. |
+| `asks` | array | Resting sell levels, each `{ price, size }` as decimal strings. |
+| `tick_size` | string | Minimum price increment for the market. **Rarely present** — it appeared on 1 of 95 `book` frames in a live capture, so treat it as optional and fall back to the market's tick size from the REST API. |
+| `last_trade_price` | string | Price of the most recent fill. **Rarely present on a `book` frame** (1 of 95 live); it is normally its own frame, see below. |
+
+### `price_change`
+
+Incremental level updates. Apply each entry in `price_changes` to your local book by `asset_id` and `side`.
+
+```json
+{
+  "market": "0x71102d577a5fdf3d41f0c5e222556abf2136f31fa8d6d819208ff32d7e70245a",
+  "event_type": "price_change",
+  "timestamp": "1788624830892",
+  "price_changes": [
+    {
+      "asset_id": "42771083626729616140740750185805328320025359514169045521821657649382058704446",
+      "price": "0.03",
+      "size": "1091.38",
+      "side": "BUY",
+      "hash": "9216036694538d860afec45c1034f575c7057d83",
+      "best_bid": "0.04",
+      "best_ask": "0.05"
+    }
+  ]
+}
+```
+
+A `size` of `"0"` means the level was removed. `best_bid` and `best_ask` give you the top of book without recomputing it.
+
+### `last_trade_price`
+
+A lightweight update for a running price display: carries an `asset_id` at the top level and the price of the latest fill.
+
+There is **no `best_bid_ask` frame**. The top of book is delivered as the `best_bid` and `best_ask` **fields inside each `price_changes[]` entry** of a `price_change` frame — see above.
+
+### `tick_size_change`
+
+Emitted when the venue changes a market's minimum price increment. Carries an `asset_id` at the top level. Rare, but a client that switches on `event_type` should not treat it as unknown.
+
+### `no_book`
+
+Emitted by Bravado when **no message at all** arrives from the venue for a subscribed asset within **8 seconds** of opening the upstream connection, so your UI can render an empty state instead of hanging:
+
+```json
+{ "event_type": "no_book", "asset_id": "<TOKEN_ID>" }
+```
+
+This is the one frame Bravado originates rather than forwarding from the venue.
+
+<Warning>
+  It measures **silence, not the absence of a book.** The timer is cancelled by the first upstream message of any kind — including an empty frame that carries no book, and including a frame Bravado then discards. An asset that receives chatter but never a book therefore produces **no** `no_book`, and a client waiting for one waits forever. Do not use it as "this market has no book"; use it as "nothing came back". The timer is re-armed only when the upstream connection is re-opened.
+</Warning>
+
+## Limits
+
+- **120 assets** per connection. Additional `sub` requests past the cap are ignored.
+- Upstreams are shared and ref-counted, so subscribing to a popular asset does not open a new upstream connection.
+
+## Health
+
+```bash
+curl https://partner-api.bravadotrade.com/orderbook-feed/status
+```
+
+## Related
+
+- [Live Trades WebSocket](/api/market-data/trade-feed), discover active `assetId`s to subscribe to here.
+- [Market Data overview](/products/market-data).
+- [Trade API](/products/trade-api), place orders against the book you are watching.
