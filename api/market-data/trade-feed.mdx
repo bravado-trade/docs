@@ -1,16 +1,16 @@
 ---
 title: "Live Trades WebSocket"
 sidebarTitle: "Live Trades"
-description: "Subscribe to a realtime stream of fills across the most active prediction markets over a single Bravado WebSocket. Each trade arrives enriched with the trader's name and wallet address."
+description: "Subscribe to a realtime stream of every fill across all Polymarket prediction markets over a single Bravado WebSocket. Each trade arrives enriched with the trader's name and wallet address."
 icon:
   name: "list"
   library: "lucide"
 ---
 
-Connect to `wss://partner-api.bravadotrade.com/trade-feed/ws` to receive a realtime stream of trades across the most active markets. On connect you get a snapshot of recent history, then a frame for every new fill. The feed is **public**, no API key or signature is required, and it is one-way: the server pushes to you, and any message you send is ignored.
+Connect to `wss://partner-api.bravadotrade.com/trade-feed/ws` to receive a realtime stream of **every trade across all markets** — roughly 70 per second. On connect you get a snapshot of recent history, then a frame for every new fill. The feed is **public**, no API key or signature is required, and it is one-way: the server pushes to you, and any message you send is ignored.
 
 <Info>
-  Coverage today is Polymarket. The feed tracks the most active markets rather than every market, so it is a firehose of where activity is happening, not a per-market subscription. To follow a specific market's book, use the [Order Books](/api/market-data/order-book) feed.
+  Coverage today is Polymarket. The feed carries **every trade on every market**, not a selection of the active ones — around **70 messages per second** in normal conditions. Size your buffers and your UI for the whole hose, and filter client-side for the markets you care about. To follow a specific market's book instead, use the [Order Books](/api/market-data/order-book) feed.
 </Info>
 
 ## Connect
@@ -66,7 +66,9 @@ Every message is a JSON object with a `type` field.
 
 ### `snapshot`
 
-Sent once, immediately on connect, so the feed does not start empty. It carries roughly the last 30 seconds of trades (up to 200) as an array, newest activity included.
+Sent once, immediately on connect, so the feed does not start empty. It carries the **last 200 trades** as an array, newest first.
+
+The buffer is a fixed-count ring, not a time window: at around 70 trades per second, 200 trades is under three seconds of history, and it shrinks further when the market is busier.
 
 ```json
 {
@@ -109,9 +111,9 @@ The trade object in a `trade` frame and every element of the `snapshot` array sh
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | string | Stable identifier for the fill, safe to dedupe on. |
+| `id` | string | Per-connection identifier for the frame. **Not stable across restarts or instances** — do not dedupe on it, see below. |
 | `eventTitle` | string | Human-readable event title. May be empty if not yet resolved server-side. |
-| `marketQuestion` | string | The market question. |
+| `marketQuestion` | string | The market question. May be empty, on the same rows where `eventTitle` is. |
 | `outcome` | string | The outcome traded, for example `"Yes"`, `"No"`, or a named outcome. |
 | `side` | string | `"BUY"` or `"SELL"`. |
 | `price` | number | Fill price as a decimal probability between 0 and 1. |
@@ -124,9 +126,9 @@ The trade object in a `trade` frame and every element of the `snapshot` array sh
 | `eventSlug` | string | URL slug for the event. Optional. |
 | `eventImage` | string | Event image URL. Optional. |
 | `trader` | string | The trader's wallet address. |
-| `traderName` | string | Display name or pseudonym for the wallet. |
+| `traderName` | string | Display name or pseudonym for the wallet. May be empty when the trader has no profile name. |
 | `traderImage` | string | Profile image URL. Optional. |
-| `transactionHash` | string | Polygon transaction hash for the fill. Optional. |
+| `transactionHash` | string | Polygon transaction hash for the fill. **The semantic key: dedupe on this.** Optional in the schema, but present on every trade we have observed. |
 
 <Tip>
   `assetId` links the two feeds. Watch the trade stream to discover which outcome tokens are active right now, then pass those IDs to the [Order Books](/api/market-data/order-book) feed to see depth for them. And `trader` links Market Data to [Trader Data](/products/data-api): take a wallet you see filling and pull its PnL, positions, and history.
@@ -134,7 +136,9 @@ The trade object in a `trade` frame and every element of the `snapshot` array sh
 
 ## Keep-alive and reconnect
 
-The server keeps the connection healthy with its own pings; you do not need to send heartbeats, and any frame you send is ignored. If the socket drops, reconnect and you will receive a fresh `snapshot`. Dedupe against trades already on screen using `id`.
+The server keeps the connection healthy with its own pings; you do not need to send heartbeats, and any frame you send is ignored. If the socket drops, reconnect and you will receive a fresh `snapshot`.
+
+Dedupe against trades already on screen using **`transactionHash`**, not `id`. `id` is built from a counter that lives in the serving process: it restarts from zero when the process does, and two instances give the same fill different ids. `transactionHash` identifies the fill itself.
 
 ## Health
 

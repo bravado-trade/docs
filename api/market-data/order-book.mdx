@@ -67,7 +67,7 @@ ws.onopen = () => {
 };
 ```
 
-Every frame carries its own `asset_id`, so a multi-asset client routes updates by that field, there is no per-asset envelope.
+There is no per-asset envelope: a multi-asset client routes updates by `asset_id`. **Where that field lives depends on the frame.** On `book`, `last_trade_price` and `tick_size_change` it is at the top level. On `price_change` — the great majority of traffic — the top level carries `event_type`, `market`, `price_changes` and `timestamp`, and the `asset_id` sits inside **each entry of `price_changes[]`**; one frame can therefore carry entries for more than one asset.
 
 <Warning>
   A connection with no `assetId` or `assetIds` is closed immediately with code `1008`. Always subscribe to at least one asset in the query string.
@@ -75,7 +75,9 @@ Every frame carries its own `asset_id`, so a multi-asset client routes updates b
 
 ## Frames
 
-Order-book frames are forwarded from the venue verbatim and are identified by an `event_type` field. The initial snapshot arrives as a **JSON array** of one book object; incremental events arrive as JSON objects.
+Order-book frames are forwarded from the venue verbatim and are identified by an `event_type` field. Incremental events arrive as JSON objects.
+
+The initial `book` snapshot arrives **either as a JSON array containing one book object, or as a bare object**, and you must handle both. The array form comes straight from the venue; the bare object is the replay Bravado sends when you subscribe to an asset it is already streaming, so you do not sit empty waiting for the next update. Normalise with `Array.isArray(msg) ? msg : [msg]`, as the samples above do.
 
 ### `book`
 
@@ -111,8 +113,8 @@ A full snapshot of the order book, sent on subscribe and re-sent to late joiners
 | `hash` | string | Book state hash. |
 | `bids` | array | Resting buy levels, each `{ price, size }` as decimal strings. |
 | `asks` | array | Resting sell levels, each `{ price, size }` as decimal strings. |
-| `tick_size` | string | Minimum price increment for the market. |
-| `last_trade_price` | string | Price of the most recent fill. |
+| `tick_size` | string | Minimum price increment for the market. **Rarely present** — it appeared on 1 of 95 `book` frames in a live capture, so treat it as optional and fall back to the market's tick size from the REST API. |
+| `last_trade_price` | string | Price of the most recent fill. **Rarely present on a `book` frame** (1 of 95 live); it is normally its own frame, see below. |
 
 ### `price_change`
 
@@ -139,9 +141,15 @@ Incremental level updates. Apply each entry in `price_changes` to your local boo
 
 A `size` of `"0"` means the level was removed. `best_bid` and `best_ask` give you the top of book without recomputing it.
 
-### `last_trade_price` and `best_bid_ask`
+### `last_trade_price`
 
-Lightweight updates for a running price display, each carries an `asset_id` and the relevant price fields.
+A lightweight update for a running price display: carries an `asset_id` at the top level and the price of the latest fill.
+
+There is **no `best_bid_ask` frame**. The top of book is delivered as the `best_bid` and `best_ask` **fields inside each `price_changes[]` entry** of a `price_change` frame — see above.
+
+### `tick_size_change`
+
+Emitted when the venue changes a market's minimum price increment. Carries an `asset_id` at the top level. Rare, but a client that switches on `event_type` should not treat it as unknown.
 
 ### `no_book`
 

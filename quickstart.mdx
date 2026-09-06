@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-The fastest way to see what Bravado does is to watch live prediction-market data flow. In this guide you connect to Bravado's WebSocket, receive realtime trades across the most active markets, subscribe to an order book, and then enrich what you see through REST. No trade required, and the market-data streams are **public**, so you can start with zero setup.
+The fastest way to see what Bravado does is to watch live prediction-market data flow. In this guide you connect to Bravado's WebSocket, receive realtime trades across every market (~70 per second), subscribe to an order book, and then enrich what you see through REST. No trade required, and the market-data streams are **public**, so you can start with zero setup.
 
 <Note>
   **Came here to place a trade?** Jump straight to the [Execute a Trade](/quickstart-trade) quickstart. You can always come back for the data layer.
@@ -76,12 +76,17 @@ The fastest way to see what Bravado does is to watch live prediction-market data
   </Step>
 
   <Step title="Subscribe to an order book">
-    Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=<TOKEN_ID>`. You receive a `book` snapshot (as a JSON array), then incremental `price_change` and `last_trade_price` updates.
+    Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=<TOKEN_ID>`. You receive a `book` snapshot, then incremental `price_change` and `last_trade_price` updates.
+
+    The snapshot arrives **either as a JSON array of one book object or as a bare object** — the samples below normalise with `Array.isArray(msg) ? msg : [msg]`, and so should your parser.
 
     <CodeGroup>
 
     ```javascript JavaScript
-    const assetId = "30216744678008528463608643201923934636445750175747926295346908540738127891986";
+    // Use the `assetId` you took from the trade feed in the previous step.
+    // A token id must be for a LIVE market: a resolved or inactive one connects
+    // and simply never sends a frame.
+    const assetId = /* from the trade feed above */ "";
     const book = new WebSocket(
       `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=${assetId}`
     );
@@ -104,7 +109,10 @@ The fastest way to see what Bravado does is to watch live prediction-market data
     ```python Python
     import asyncio, json, websockets
 
-    ASSET = "30216744678008528463608643201923934636445750175747926295346908540738127891986"
+    # Use the `assetId` you took from the trade feed in the previous step.
+    # A token id must be for a LIVE market: a resolved or inactive one connects
+    # and simply never sends a frame.
+    ASSET = ""  # from the trade feed above
 
     async def main():
         url = f"wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId={ASSET}"
