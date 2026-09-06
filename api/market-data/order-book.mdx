@@ -77,7 +77,17 @@ There is no per-asset envelope: a multi-asset client routes updates by `asset_id
 
 Order-book frames are forwarded from the venue verbatim and are identified by an `event_type` field. Incremental events arrive as JSON objects.
 
-The initial `book` snapshot arrives **either as a JSON array containing one book object, or as a bare object**, and you must handle both. The array form comes straight from the venue; the bare object is the replay Bravado sends when you subscribe to an asset it is already streaming, so you do not sit empty waiting for the next update. Normalise with `Array.isArray(msg) ? msg : [msg]`, as the samples above do.
+The initial `book` snapshot arrives **either as a JSON array containing one book object, or as a bare object**, and you must handle both. The array form is what we see in practice; the bare object can reach you as the replay of a cached book. Normalise with `Array.isArray(msg) ? msg : [msg]`, as the samples above do.
+
+There is a **third shape**, and it is the one that breaks parsers: an asset with no book can answer with `[[]]` — an array containing one **empty array**, no object at all. It is neither a book nor a bare object, and it does **not** produce a `no_book` frame: it is a message from the venue, so it cancels the timer described below. After normalising, skip anything that is not an object:
+
+```javascript
+const events = Array.isArray(msg) ? msg : [msg];
+for (const e of events) {
+  if (!e || typeof e !== "object" || Array.isArray(e)) continue;
+  // …switch on e.event_type
+}
+```
 
 ### `book`
 

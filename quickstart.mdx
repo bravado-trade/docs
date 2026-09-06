@@ -78,7 +78,7 @@ The fastest way to see what Bravado does is to watch live prediction-market data
   <Step title="Subscribe to an order book">
     Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=<TOKEN_ID>`. You receive a `book` snapshot, then incremental `price_change` and `last_trade_price` updates.
 
-    The snapshot arrives **either as a JSON array of one book object or as a bare object** — the samples below normalise with `Array.isArray(msg) ? msg : [msg]`, and so should your parser.
+    The snapshot arrives **either as a JSON array of one book object or as a bare object** — the samples below normalise with `Array.isArray(msg) ? msg : [msg]`, and so should your parser. An asset with no book can also answer `[[]]`, an array holding an empty array, so skip entries that are not objects.
 
     <CodeGroup>
 
@@ -125,6 +125,10 @@ The fastest way to see what Bravado does is to watch live prediction-market data
                 msg = json.loads(message)
                 events = msg if isinstance(msg, list) else [msg]
                 for e in events:
+                    # A dead asset answers `[[]]`, so `e` can be a list here —
+                    # `e.get(...)` on it raises AttributeError.
+                    if not isinstance(e, dict):
+                        continue
                     if e.get("event_type") == "book":
                         print("book:", len(e["bids"]), "bids", len(e["asks"]), "asks")
                     elif e.get("event_type") == "price_change":
