@@ -1,0 +1,97 @@
+---
+title: "Bravado for Quants and Trading Firms"
+sidebarTitle: "Quant / Trading Firm"
+description: "Use Bravado as an integrated infrastructure stack: discover markets, consume realtime data, analyze traders, execute, and monitor, across Polymarket and Predict.fun."
+icon:
+  name: "trending-up"
+  library: "lucide"
+---
+
+For a quant, trading desk, or technically sophisticated trader, Bravado is an infrastructure stack rather than a collection of endpoints. This page walks the loop a strategy runs, and names the product for each stage, using only what is supported today.
+
+```text
+Discover
+   ↓
+Realtime data
+   ↓
+Analyze
+   ↓
+Generate signal
+   ↓
+Execute
+   ↓
+Monitor
+```
+
+## Discover
+
+Find the markets and outcome tokens worth trading.
+
+The [Live Trades feed](/api/market-data/trade-feed) is the fastest way to see where activity is: it streams every fill across all markets, each carrying `assetId`, `conditionId`, and `eventSlug`, so you can rank markets by live flow. For a complete catalog of every market including inactive ones, read the venue's own market API; Bravado does not expose a market-listing REST endpoint today.
+
+## Realtime data
+
+Consume live market state over [Market Data WebSockets](/products/market-data):
+
+- **Order books** per outcome token, `book` snapshot then `price_change` deltas, from the [order-book feed](/api/market-data/order-book). One socket can carry up to 120 assets.
+- **Trades** across all markets from the [trade feed](/api/market-data/trade-feed).
+
+Both feeds are public and hand you a snapshot on connect. Run them the way [Production WebSockets](/guides/production-websockets) describes: exponential-backoff reconnect, resubscribe on reconnect, and stale-feed monitoring. There is no sequence-number replay, so recovery is reconnect-then-snapshot.
+
+<Warning>
+  Bravado does not offer historical L2 order books or market-data backtesting today. Backtesting against full historical book state is not available. Historical **trader** behavior (below) is queryable; historical **market microstructure** is not.
+</Warning>
+
+## Analyze
+
+Ground a signal in participant intelligence from the [Trader Data API](/products/data-api):
+
+| Question | Endpoint |
+| --- | --- |
+| How has this wallet performed? | `GET /trader-analytics/traders/{address}/pnl` |
+| What does it hold now? | `GET /trader-analytics/traders/{address}/positions/active` |
+| What has it traded? | `GET /trader-analytics/traders/{address}/trades` |
+| Who are the top traders? | `GET /trader-analytics/leaderboard` |
+| Performance by category | `GET /trader-analytics/traders/{address}/categories` |
+
+This is durable, reconstructed history: a wallet's full economic record from its first trade, computed by a FIFO cost-basis engine. Use it to build trader-following signals, flow analysis, and cohort studies. For an agent-native path to the same data, use the [MCP Server](/products/mcp-server).
+
+## Execute
+
+Act on a signal through the [Trade API](/products/trade-api):
+
+- Simple entries with `type: "MARKET"` or `"LIMIT"`.
+- Worked entries with `TWAP` and `ICEBERG` for size on a thin book, executed server-side so the strategy survives your process restarting.
+- Protective exits with `STOP_LOSS`, `TAKE_PROFIT`, and `TRAILING_STOP`.
+
+```python
+import os, uuid, requests
+API = "https://partner-api.bravadotrade.com"
+H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}", "Content-Type": "application/json"}
+
+def enter(symbol, side, notional_usd):
+    return requests.post(f"{API}/v2/trade/order",
+        headers={**H, "Idempotency-Key": str(uuid.uuid4())},
+        json={"symbol": symbol, "side": side, "type": "MARKET", "quote_amount": str(notional_usd)},
+    ).json()
+```
+
+Advanced order types and multi-venue routing (`"venue": "predictfun"`) are covered in the [Trade API](/products/trade-api) reference. Every mutation requires an `Idempotency-Key`; see [Idempotency](/reference/idempotency).
+
+## Monitor
+
+Close the loop:
+
+- **Fills and order state** from `GET /v2/trade/orders/open` and `GET /v2/trade/strategies`.
+- **Position and PnL** from the [Trade API](/products/trade-api) (your own account) and the [Trader Data API](/products/data-api) (any wallet).
+- **Market drift** from the same WebSocket feeds that fed your signal.
+- **Feed health** from the `/trade-feed/status` and `/orderbook-feed/status` endpoints.
+
+See [Production best practices](/reference/best-practices) for the monitoring checklist.
+
+## Related
+
+- [How Bravado Works](/concepts/how-bravado-works)
+- [Production WebSockets](/guides/production-websockets)
+- [Trade API](/products/trade-api)
+- [Trader Data API](/products/data-api)

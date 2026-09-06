@@ -1,0 +1,56 @@
+---
+title: "Production Best Practices"
+sidebarTitle: "Best Practices"
+description: "A production-readiness checklist for building on Bravado: REST, WebSockets, execution, numeric handling, and monitoring, with links to the deeper reference for each."
+icon:
+  name: "clipboard-check"
+  library: "lucide"
+---
+
+A concise checklist for taking a Bravado integration to production. This page routes to the deeper reference rather than repeating it; treat each item as a box to tick before you go live.
+
+## REST
+
+- **Cache what does not change fast.** Trader analytics reconstruct from settlement and move on the order of fills, not milliseconds. Cache profile and leaderboard responses briefly rather than refetching per render.
+- **Retry with idempotency, not blindly.** Retry idempotent GETs with backoff; for mutations, carry an `Idempotency-Key` so a retry cannot double-apply. See [Idempotency](/reference/idempotency).
+- **Page through large result sets** using the documented cursors rather than assuming one response holds everything. See [Pagination](/reference/pagination).
+- **Respect rate limits.** Read `X-RateLimit-*` headers and honor `Retry-After` on a `429`. See [Rate limits](/reference/rate-limits).
+
+## WebSockets
+
+- **Reconnect with exponential backoff and jitter**, capped. Reconnect logic is client-side.
+- **Resubscribe on reconnect.** The order-book feed does not remember a dropped connection's assets; resend them. The trade feed needs no subscription. See [Production WebSockets](/guides/production-websockets#resubscription).
+- **Rebuild from the snapshot.** There are no sequence numbers or replay: on reconnect, take the fresh snapshot as truth and reconcile.
+- **Monitor for stale feeds.** Track time since last message and reconnect when a subscribed stream goes quiet; poll `/trade-feed/status` and `/orderbook-feed/status`.
+
+## Execution
+
+- **Make every mutation idempotent.** Generate the `Idempotency-Key` inside your tool or wrapper, not in a prompt or by hand. A timed-out order retried with the same key returns the original result. See [Idempotency](/reference/idempotency).
+- **Read order state from the source.** Confirm fills with `GET /v2/trade/orders/open` and managed strategies with `GET /v2/trade/strategies`, rather than assuming a POST's response is the final state.
+- **Avoid duplicate execution.** Cap notional at the wrapper boundary, and never retry a mutation without its original idempotency key.
+
+## Numeric handling
+
+- **Parse monetary and price values as arbitrary-precision decimals.** They are returned as JSON **strings** on purpose; parsing them as floats reintroduces the rounding error the FIFO engine exists to avoid. See [Numeric conventions](/reference/numeric-conventions).
+- **Prices are decimal probabilities** between 0 and 1 (`"0.62"` is 62 cents), not cents. Sizes are token counts.
+- **Unknown is not zero.** A value the source cannot determine is returned as explicitly unknown; do not coerce it to `0`.
+
+## Monitoring
+
+Instrument and alert on:
+
+- **API errors**, by status and error code. See [Error reference](/reference/errors).
+- **Latency**, per endpoint.
+- **Rate-limit headroom**, from `X-RateLimit-Remaining`.
+- **WebSocket disconnects and reconnect frequency.**
+- **Stale streams**, time since last message per subscription.
+- **Execution failures**, rejected or unfilled orders, and idempotency-key reuse.
+
+## Related
+
+- [Production WebSockets](/guides/production-websockets)
+- [Idempotency](/reference/idempotency)
+- [Rate limits](/reference/rate-limits)
+- [Pagination](/reference/pagination)
+- [Numeric conventions](/reference/numeric-conventions)
+- [Error reference](/reference/errors)

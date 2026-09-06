@@ -1,0 +1,232 @@
+---
+title: "Production WebSockets"
+sidebarTitle: "Production WebSockets"
+description: "Run Bravado's Market Data WebSockets reliably in production: connecting, keep-alive, reconnect with backoff, resubscription, maintaining local order-book state, and stale-feed detection."
+icon:
+  name: "radio"
+  library: "lucide"
+---
+
+Bravado's [Market Data](/products/market-data) WebSockets are built to be simple to consume, which means the production hardening (reconnect, resubscribe, staleness) lives in your client. This guide shows exactly what the feeds do and do not do, and gives you a client pattern that holds up.
+
+<Warning>
+  **Set your expectations honestly.** These feeds hand you a **snapshot on connect** so you never start empty. They do **not** provide sequence numbers, a replay or resume protocol, or automated gap recovery. Recovery is always: reconnect, take the fresh snapshot, rebuild. Design for that, not for a replay cursor that does not exist.
+</Warning>
+
+## The two feeds
+
+| | [Live Trades](/api/market-data/trade-feed) | [Order Books](/api/market-data/order-book) |
+| --- | --- | --- |
+| Endpoint | `wss://partner-api.bravadotrade.com/trade-feed/ws` | `wss://partner-api.bravadotrade.com/orderbook-feed/ws` |
+| Auth | Public | Public |
+| Subscription | None, every market streams | Per asset, via query string and in-band frames |
+| Direction | One-way (server → client) | Bidirectional (you send `sub`/`unsub`) |
+| Snapshot on connect | Last 200 trades | `book` snapshot for each subscribed asset |
+| Coverage | Polymarket | Polymarket |
+
+## Connecting
+
+Both feeds are public: no API key, no signature, no headers. You connect and you are streaming.
+
+```javascript
+// Trades: no subscription needed, all markets stream immediately.
+const trades = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
+
+// Order book: name the asset(s) in the query string.
+const book = new WebSocket(
+  "wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=" + assetId
+);
+```
+
+For the order-book feed you can pass many assets with `?assetIds=a,b,c` and then add or drop them live over the same socket:
+
+```javascript
+book.send(JSON.stringify({ type: "sub", assetIds: [id3] }));
+book.send(JSON.stringify({ type: "unsub", assetIds: [id1] }));
+```
+
+One order-book connection carries up to **120** assets. A connection opened with no `assetId`/`assetIds` is closed with code `1008`.
+
+## Maintaining the connection
+
+The server keeps the socket healthy with its own pings, so **you do not need to send heartbeats**. The trade feed is one-way and ignores anything you send; the order-book feed reads only `sub`/`unsub` frames. There is no application-level ping you are required to answer.
+
+## Reconnects
+
+Reconnect logic is yours. Use exponential backoff with jitter, and cap the delay:
+
+```javascript
+let attempt = 0;
+function connect() {
+  const ws = new WebSocket(URL);
+  ws.onopen = () => { attempt = 0; onOpen(ws); };
+  ws.onclose = () => {
+    const delay = Math.min(30000, 1000 * 2 ** attempt) * (0.5 + Math.random());
+    attempt++;
+    setTimeout(connect, delay);
+  };
+  ws.onerror = () => ws.close();
+}
+```
+
+On every reconnect the trade feed sends a fresh `snapshot`, and the order-book feed sends a fresh `book` for each asset you resubscribe. Treat the snapshot as the new source of truth and reconcile your view against it (dedupe trades by `transactionHash`, replace the book wholesale).
+
+## Resubscription
+
+This is the step people miss:
+
+- **Trade feed:** nothing to do. It has no subscriptions; reconnecting is enough.
+- **Order-book feed:** subscriptions live on the connection, and a new connection starts empty. You **must** resend your assets, either in the query string of the new connection or with a `sub` frame on open. The server does not remember what the previous socket was watching.
+
+```javascript
+// Order-book onOpen after a reconnect:
+function onOpen(ws) {
+  ws.send(JSON.stringify({ type: "sub", assetIds: [...myAssets] }));
+}
+```
+
+## Initial state
+
+You do **not** need to prefetch REST state before subscribing to these feeds: the snapshot on connect is your initial state. The trade feed gives you the last 200 trades; the order-book feed gives you the current `book`. (This differs from venues where the socket starts empty and you must seed it from REST.)
+
+The trade-feed snapshot is a fixed count, not a time window: 200 trades is only a few seconds of history on a busy market, so it is a warm start, not a backfill.
+
+## Maintaining local order-book state
+
+The order-book feed sends a full `book` once, then incremental `price_change` deltas. Apply them to a local book:
+
+1. On a `book` frame, replace your local bids and asks with its levels.
+2. On a `price_change` frame, for each entry apply the new `size` at that `price` and `side`. A `size` of `"0"` removes the level. Each entry also carries `best_bid` and `best_ask` if you only need top of book.
+
+Three frame shapes you must handle, because they will otherwise break a naive parser:
+
+- The `book` snapshot arrives **either as a JSON array of one book object, or as a bare object**. Normalize with `Array.isArray(msg) ? msg : [msg]`.
+- An asset with no book can answer with `[[]]`, an array containing one empty array. It is neither a book nor a `no_book` frame. Skip anything that is not an object.
+- If nothing at all arrives within 8 seconds of opening the upstream, the server sends `{ "event_type": "no_book", "asset_id": "..." }` so you can render an empty state.
+
+```javascript
+function applyBookFrame(raw, book /* {bids: Map, asks: Map} */) {
+  const events = Array.isArray(raw) ? raw : [raw];
+  for (const e of events) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) continue; // [[]] etc.
+    if (e.event_type === "book") {
+      book.bids = new Map(e.bids.map((l) => [l.price, l.size]));
+      book.asks = new Map(e.asks.map((l) => [l.price, l.size]));
+    } else if (e.event_type === "price_change") {
+      for (const c of e.price_changes) {
+        const side = c.side === "BUY" ? book.bids : book.asks;
+        if (c.size === "0") side.delete(c.price);
+        else side.set(c.price, c.size);
+      }
+    } else if (e.event_type === "no_book") {
+      book.bids.clear(); book.asks.clear();
+    }
+  }
+}
+```
+
+See the [Order Books reference](/api/market-data/order-book) for every field and frame type.
+
+## Stale-data detection
+
+Because there are no sequence numbers, staleness is detected at the application level. Track:
+
+- **Time since last message.** If a subscribed order book has gone quiet longer than you expect for that market's activity, treat it as suspect and reconnect.
+- **Connection state.** A socket that is `OPEN` but silent is still a failure mode; the timer above catches it.
+- **Feed health.** Poll the diagnostic endpoints from a monitor: `GET /trade-feed/status` reports upstream connectivity and emitted-trade counts; `GET /orderbook-feed/status` reports broker state.
+
+```javascript
+let lastMessageAt = Date.now();
+ws.onmessage = () => { lastMessageAt = Date.now(); /* ...handle... */ };
+setInterval(() => {
+  if (Date.now() - lastMessageAt > STALE_MS) ws.close(); // triggers reconnect
+}, 5000);
+```
+
+## Error handling
+
+- Connection and protocol errors surface on the socket's `error`/`close` events, handled by the reconnect loop above.
+- For REST calls made alongside the feeds (Trade API, Trader Data API), see the [Error reference](/reference/errors) and [Rate limits](/reference/rate-limits) rather than duplicating them here.
+
+## A production order-book client
+
+A complete Python client: connects, resubscribes on reconnect, maintains a local book, and reconnects on staleness. It uses only documented behavior.
+
+```python
+import asyncio, json, time, random
+import websockets  # pip install websockets
+
+WS = "wss://partner-api.bravadotrade.com/orderbook-feed/ws"
+STALE_S = 15
+
+class OrderBook:
+    def __init__(self):
+        self.bids, self.asks = {}, {}
+    def apply(self, raw):
+        events = raw if isinstance(raw, list) else [raw]
+        for e in events:
+            if not isinstance(e, dict):
+                continue  # [[]] empty-book shape
+            et = e.get("event_type")
+            if et == "book":
+                self.bids = {l["price"]: l["size"] for l in e["bids"]}
+                self.asks = {l["price"]: l["size"] for l in e["asks"]}
+            elif et == "price_change":
+                for c in e["price_changes"]:
+                    side = self.bids if c["side"] == "BUY" else self.asks
+                    if c["size"] == "0":
+                        side.pop(c["price"], None)
+                    else:
+                        side[c["price"]] = c["size"]
+            elif et == "no_book":
+                self.bids.clear(); self.asks.clear()
+    def best(self):
+        bid = max(self.bids, key=float) if self.bids else None
+        ask = min(self.asks, key=float) if self.asks else None
+        return bid, ask
+
+async def run(asset_ids):
+    attempt = 0
+    while True:
+        try:
+            url = f"{WS}?assetIds={','.join(asset_ids)}"
+            async with websockets.connect(url, ping_interval=None) as ws:
+                attempt = 0
+                # Resubscribe explicitly so reconnects are self-healing.
+                await ws.send(json.dumps({"type": "sub", "assetIds": asset_ids}))
+                books = {a: OrderBook() for a in asset_ids}
+                last = time.monotonic()
+                while True:
+                    try:
+                        raw = await asyncio.wait_for(ws.recv(), timeout=STALE_S)
+                    except asyncio.TimeoutError:
+                        break  # stale -> drop and reconnect
+                    last = time.monotonic()
+                    msg = json.loads(raw)
+                    # Route by asset_id (top-level on book/no_book, per-entry on price_change).
+                    for a, b in books.items():
+                        b.apply(msg)
+                    for a, b in books.items():
+                        bid, ask = b.best()
+                        print(a[:10], "bid", bid, "ask", ask)
+        except Exception:
+            pass
+        delay = min(30, 2 ** attempt) * (0.5 + random.random())
+        attempt += 1
+        await asyncio.sleep(delay)
+
+asyncio.run(run([
+    "30216744678008528463608643201923934636445750175747926295346908540738127891986",
+]))
+```
+
+<Note>
+  In a multi-asset client, route each frame by `asset_id`: it is at the top level on `book`, `last_trade_price`, and `no_book` frames, and inside each `price_changes[]` entry on `price_change` frames. The snippet above keeps one book per asset for clarity; a real multi-asset client dispatches by that field.
+</Note>
+
+## Related
+
+- [Market Data overview](/products/market-data)
+- [Live Trades reference](/api/market-data/trade-feed)
+- [Order Books reference](/api/market-data/order-book)
+- [Production best practices](/reference/best-practices)

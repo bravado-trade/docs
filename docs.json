@@ -35,6 +35,15 @@
             ]
           },
           {
+            "group": "Start Here",
+            "pages": [
+              "concepts/how-bravado-works",
+              "start-here/app-builder",
+              "start-here/quant-trading",
+              "migrate/polymarket"
+            ]
+          },
+          {
             "group": "Supported Prediction Markets",
             "pages": [
               "markets/overview",
@@ -317,6 +326,13 @@
             ]
           },
           {
+            "group": "Market Data",
+            "pages": [
+              "guides/production-websockets",
+              "guides/build-a-market-page"
+            ]
+          },
+          {
             "group": "Trading Bots",
             "pages": [
               "guides/place-an-order",
@@ -394,6 +410,7 @@
           {
             "group": "Resources",
             "pages": [
+              "reference/best-practices",
               "reference/errors",
               "reference/rate-limits",
               "reference/pagination",

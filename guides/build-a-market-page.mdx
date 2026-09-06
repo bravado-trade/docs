@@ -1,0 +1,102 @@
+---
+title: "Build a Market-Detail Page"
+sidebarTitle: "Build a market page"
+description: "Combine Bravado REST and WebSocket feeds into a live market-detail view: title, price, order book, recent trades, and resolution status."
+icon:
+  name: "candlestick-chart"
+  library: "lucide"
+---
+
+A market-detail page is the canonical example of combining Bravado's realtime and REST surfaces: a live order book and tape over WebSockets, market metadata off the trade feed, and resolution status over REST. This guide wires one up against Polymarket, using only supported endpoints.
+
+<Info>
+  Everything here is Polymarket, where the [Market Data](/products/market-data) WebSockets run today. For the reliable-reconnect pattern behind the sockets, see [Production WebSockets](/guides/production-websockets).
+</Info>
+
+## What powers each element
+
+| Element | Source |
+| --- | --- |
+| Title, market question | `eventTitle` / `marketQuestion` on the [trade feed](/api/market-data/trade-feed) |
+| Live price / last trade | `last_trade_price` on the [order-book feed](/api/market-data/order-book) |
+| Order book | `book` then `price_change` on the [order-book feed](/api/market-data/order-book) |
+| Recent trades | [trade feed](/api/market-data/trade-feed), filtered by `assetId` |
+| Resolution status | [UMA API](/products/uma-api) |
+
+You need one input: the outcome token `assetId`. Read it off any trade on the [trade feed](/api/market-data/trade-feed), or from a market you already track.
+
+## 1. Subscribe to the order book
+
+The book gives you depth, best bid/ask, and last-trade price for the token:
+
+```javascript
+const assetId = "30216744678008528463608643201923934636445750175747926295346908540738127891986";
+const book = { bids: new Map(), asks: new Map(), lastTrade: null };
+
+const ws = new WebSocket(
+  `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=${assetId}`
+);
+
+ws.onmessage = (event) => {
+  const raw = JSON.parse(event.data);
+  const events = Array.isArray(raw) ? raw : [raw];
+  for (const e of events) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) continue;
+    if (e.event_type === "book") {
+      book.bids = new Map(e.bids.map((l) => [l.price, l.size]));
+      book.asks = new Map(e.asks.map((l) => [l.price, l.size]));
+      if (e.last_trade_price) book.lastTrade = e.last_trade_price;
+    } else if (e.event_type === "price_change") {
+      for (const c of e.price_changes) {
+        const side = c.side === "BUY" ? book.bids : book.asks;
+        c.size === "0" ? side.delete(c.price) : side.set(c.price, c.size);
+      }
+    } else if (e.event_type === "last_trade_price") {
+      book.lastTrade = e.price;
+    }
+  }
+  render(book);
+};
+```
+
+## 2. Add the live tape and the title
+
+The trade feed carries every market, so filter by `assetId` for this market's tape, and take the market title from the same frames:
+
+```javascript
+let title = null;
+const tape = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
+
+tape.onmessage = (event) => {
+  const frame = JSON.parse(event.data);
+  const trade = frame.type === "trade" ? frame.trade
+              : frame.type === "snapshot" ? frame.trades.find((t) => t.assetId === assetId)
+              : null;
+  if (!trade || trade.assetId !== assetId) return;
+  if (!title && trade.marketQuestion) title = trade.marketQuestion; // page heading
+  prependToTape(trade); // side, size, price, traderName
+};
+```
+
+<Tip>
+  A quiet market may not trade often enough to name itself from the tape. If you need the title immediately, read it from the venue's market metadata for that `conditionId`; Bravado does not expose a market-metadata REST endpoint today.
+</Tip>
+
+## 3. Show resolution status
+
+Once an event concludes, a position is not redeemable until it settles through UMA. Surface that state from the [UMA API](/products/uma-api) so your page distinguishes "concluded" from "settled".
+
+<Note>
+  The UMA API endpoint reference is still being written. Until it lands, infer resolution state from position data and the [Trade API](/api/trade/positions) redeem behavior. See [UMA API](/products/uma-api).
+</Note>
+
+## 4. Harden it
+
+Wrap both sockets in the reconnect-and-resubscribe pattern from [Production WebSockets](/guides/production-websockets): exponential backoff, resubscribe the order book on reconnect (the trade feed needs no resubscription), and reconnect on staleness. There are no sequence numbers, so on reconnect you rebuild from the fresh `book` snapshot.
+
+## Related
+
+- [Production WebSockets](/guides/production-websockets)
+- [Order Books reference](/api/market-data/order-book)
+- [Live Trades reference](/api/market-data/trade-feed)
+- [Building a prediction-market app](/start-here/app-builder)

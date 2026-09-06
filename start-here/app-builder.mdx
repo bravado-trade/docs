@@ -1,0 +1,126 @@
+---
+title: "Building a Prediction-Market App"
+sidebarTitle: "App / Platform Builder"
+description: "Which Bravado product powers each part of a prediction-market application: REST for state, WebSockets for realtime, Trader Data for participant intelligence, Trade API for execution."
+icon:
+  name: "layout-dashboard"
+  library: "lucide"
+---
+
+If you are building a prediction-market application, the rule of thumb is simple: use **REST for state**, **WebSockets for realtime updates**, the **Trader Data API for participant intelligence**, and the **Trade API when your users need to execute**. This page maps each feature of a typical app to the product that powers it.
+
+## Feature-to-product map
+
+| Product feature | Bravado interface |
+| --- | --- |
+| Live order book | [WebSocket](/api/market-data/order-book) |
+| Live trades | [WebSocket](/api/market-data/trade-feed) |
+| Live price / last trade | [WebSocket](/api/market-data/order-book) |
+| Active-market discovery | [Live Trades WebSocket](/api/market-data/trade-feed) (surfaces active markets) |
+| Trader profile | [Trader Data API](/products/data-api) |
+| Trader positions | [Trader Data API](/products/data-api) |
+| PnL and cost basis | [Trader Data API](/products/data-api) |
+| Leaderboards | [Trader Data API](/products/data-api) |
+| User balances and positions | [Trade API](/products/trade-api) |
+| Order placement and management | [Trade API](/products/trade-api) |
+| Copy trading | [Copytrade API](/products/copytrade-api) |
+| AI research | [MCP Server](/products/mcp-server) |
+| Resolution status | [UMA API](/products/uma-api) |
+
+<Note>
+  **On market discovery.** Bravado does not expose a market-catalog REST endpoint today. The [Live Trades feed](/api/market-data/trade-feed) surfaces the markets that are actively trading (each trade carries `assetId`, `conditionId`, `eventSlug`, and titles), which is enough to populate a live discovery view. For an exhaustive catalog of every market, including inactive ones, read the venue's own market API. This is a known gap, not a hidden endpoint.
+</Note>
+
+## Architecture
+
+```text
+                 Bravado
+                    │
+       ┌────────────┼────────────┐
+       ↓            ↓            ↓
+     REST          WSS        Trade API
+       │            │            │
+       ↓            ↓            ↓
+ Initial state   Live updates  Execution
+       │            │            │
+       └────────────┴────────────┘
+                    ↓
+               Your product
+```
+
+The pattern is the same across most screens: fetch **initial state** over REST, subscribe to a **WebSocket** for live updates, and call the **Trade API** when the user acts.
+
+## Market page
+
+A market-detail screen combines a realtime feed with venue metadata.
+
+| Element | Source |
+| --- | --- |
+| Title, market question | `eventTitle` / `marketQuestion` on the [trade feed](/api/market-data/trade-feed), or the venue's market metadata |
+| Live price / last trade | `last_trade_price` on the [order-book feed](/api/market-data/order-book) |
+| Order book (bids / asks) | `book` snapshot then `price_change` deltas on the [order-book feed](/api/market-data/order-book) |
+| Recent trades | [trade feed](/api/market-data/trade-feed), filtered client-side by `assetId` |
+| Resolution status | [UMA API](/products/uma-api) |
+
+Subscribe to the order book for the outcome token, and to the trade feed for the running tape:
+
+```javascript
+const assetId = "3021674467800852846360864320192393463..."; // outcome token
+const book = new WebSocket(
+  `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=${assetId}`
+);
+book.onmessage = (e) => applyBookFrame(JSON.parse(e.data)); // see Production WebSockets
+
+const tape = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
+tape.onmessage = (e) => {
+  const f = JSON.parse(e.data);
+  if (f.type === "trade" && f.trade.assetId === assetId) renderTrade(f.trade);
+};
+```
+
+See [Building a market-detail page](/guides/build-a-market-page) for the full worked example.
+
+## Trader profile
+
+A profile or portfolio screen is pure [Trader Data API](/products/data-api). All requests are signed with your partner key (the tax-report surface is public).
+
+| Element | Endpoint |
+| --- | --- |
+| Performance profile | `GET /trader-analytics/traders/{address}` |
+| PnL over time | `GET /trader-analytics/traders/{address}/pnl` |
+| Open positions | `GET /trader-analytics/traders/{address}/positions/active` |
+| Trade history | `GET /trader-analytics/traders/{address}/trades` |
+| Leaderboard placement | `GET /trader-analytics/leaderboard` |
+
+```bash
+curl "https://partner-api.bravadotrade.com/trader-analytics/traders/0x3a2b.../positions/active" \
+  -H "X-BRAVADO-API-KEY: $KEY" \
+  -H "X-BRAVADO-TIMESTAMP: $TS" \
+  -H "X-BRAVADO-SIGNATURE: $SIG"
+```
+
+## Trading interface
+
+When your users place orders, use the [Trade API](/products/trade-api).
+
+| Element | Endpoint |
+| --- | --- |
+| User balances | `GET /v2/trade/balances` |
+| User positions | `GET /v2/trade/positions` |
+| Place an order | `POST /v2/trade/order` |
+| Open orders | `GET /v2/trade/orders/open` |
+| Cancel an order | `DELETE /v2/trade/orders/{order_id}` |
+| Managed strategies (TWAP, etc.) | `GET /v2/trade/strategies` |
+
+Every mutating request takes an `Idempotency-Key`, so a retried order does not double-execute. See the [Execute a Trade quickstart](/quickstart-trade) and [Idempotency](/reference/idempotency).
+
+<Tip>
+  Building on **Predict.fun** too? Execution and trader analytics work there; add `"venue": "predictfun"` to Trade API requests and use the `/trader-analytics/predict/*` paths. Market-data WebSockets are Polymarket-only today, see [Supported Prediction Markets](/markets/overview).
+</Tip>
+
+## Related
+
+- [How Bravado Works](/concepts/how-bravado-works)
+- [Production WebSockets](/guides/production-websockets)
+- [Quant / Trading Firm guide](/start-here/quant-trading)
+- [Build with AI](/build-with-ai)

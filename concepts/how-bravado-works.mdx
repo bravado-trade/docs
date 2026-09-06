@@ -1,0 +1,111 @@
+---
+title: "How Bravado Works"
+sidebarTitle: "How Bravado Works"
+description: "The infrastructure behind Bravado: how prediction-market data is captured from venues, processed into a normalized model, persisted, computed into analytics, and served over REST, WebSockets, MCP, and execution APIs."
+icon:
+  name: "layers"
+  library: "lucide"
+---
+
+Bravado is prediction-market infrastructure. It sits between your application and the venues (Polymarket and Predict.fun), operating the data plumbing and execution machinery you would otherwise build and maintain yourself. This page explains what Bravado runs on your behalf, so you can decide where it saves you work.
+
+There are two distinct pipelines behind the platform, and it helps to keep them separate:
+
+- **Market data** is a realtime path: Bravado connects to the venue's live feeds, enriches and multiplexes them, and relays them to you over WebSockets.
+- **Trader data** is an analytical path: Bravado ingests on-chain settlement, reconstructs each wallet's economic history, and serves computed metrics over REST and MCP.
+
+```text
+      Polymarket                         Predict.fun
+          │                                   │
+   CLOB WS · on-chain · UMA            Trade routing · settlement
+          │                                   │
+          └────────────────┬──────────────────┘
+                           ↓
+                   Venue collectors
+                           ↓
+              Validation / normalization
+                           ↓
+        ┌──────────────────┴───────────────────┐
+        ↓                                       ↓
+ Realtime relay + enrichment          On-chain ingestion + FIFO engine
+   (trades, order books)              (positions, PnL, cost basis)
+        ↓                                       ↓
+   WebSockets                          Data layer + trader history
+        └──────────────────┬───────────────────┘
+                           ↓
+            REST  │  WebSockets  │  MCP  │  Execution
+```
+
+<Info>
+  Coverage is not uniform across venues. Realtime **market-data WebSockets are Polymarket today**; **trader analytics** cover Polymarket and Predict.fun; **execution** covers both. See [Supported Prediction Markets](/markets/overview) for the current matrix before you build.
+</Info>
+
+## Capture
+
+Bravado maintains live integrations with each venue and continuously ingests the data your application needs.
+
+**Polymarket:**
+
+- **CLOB order books and trades**, consumed from Polymarket's central-limit-order-book WebSocket, per market.
+- **Trader and wallet information**, the identities and profiles behind on-chain activity.
+- **On-chain settlement data**, the fills and transfers that define what a wallet actually holds and realized.
+- **UMA resolution**, proposals, disputes, and final outcomes for how a market settles.
+
+**Predict.fun:**
+
+- **Order routing and settlement** through the Trade API, on BNB Chain with USDT collateral.
+- **Trader analytics inputs**, the settlement data behind the Predict.fun analytics surface.
+
+Predict.fun does not have a Bravado market-data WebSocket today. Only claim a capability for a venue that appears in the [coverage matrix](/markets/overview).
+
+## Process
+
+Raw venue data is validated and turned into Bravado's own model so your application sees one consistent shape.
+
+- **Identifiers.** Outcome tokens are keyed by `assetId`, markets by `conditionId`, so the same identifiers thread through the trade feed, the order-book feed, and execution.
+- **Enrichment.** Every trade on the [Live Trades feed](/api/market-data/trade-feed) is enriched server-side with the trader's name and wallet address, so you never issue a second lookup to render a fill.
+- **Normalization.** Within a venue, prices are expressed as decimal probabilities and monetary values as arbitrary-precision decimal strings, consistently across products. This is per-venue normalization; Bravado does not claim a single cross-venue market-data schema today.
+- **Derived calculations.** Trader analytics run through a share-level FIFO cost-basis engine that reconstructs the full economic history of a wallet from settlement.
+
+## Persist
+
+Bravado stores history so you do not have to record every event yourself to answer a question later.
+
+- **Trader history is durable.** The [Trader Data API](/products/data-api) reconstructs a wallet's full economic history from its first trade, so PnL, positions, and cost basis are queryable for any public address without you having recorded them in advance.
+- **Feeds keep a short warm buffer.** The Live Trades feed hands each new client a snapshot of the most recent trades, and the order-book feed replays the last known book to a late-joining subscriber, so a fresh connection is not empty.
+
+<Warning>
+  Bravado does **not** offer historical market-data storage today: there is no historical L2 order-book archive and no market-data replay or resume protocol. The durable history is **trader** history. Do not architect around a market-data backfill that does not exist.
+</Warning>
+
+## Compute
+
+On top of the persisted data, Bravado computes the derived figures an application would otherwise build:
+
+- **PnL**, realized and unrealized, via the FIFO engine.
+- **Positions**, open and closed, marked to the latest CLOB mid.
+- **Cost basis**, share-level.
+- **Trader metrics and categories**, performance broken down over windows and market categories.
+- **Leaderboards**, traders ranked by realized PnL or volume.
+- **Reconciliation**, a proof that a wallet's statement is internally consistent.
+
+These are the same numbers whether you read them over [REST](/products/data-api) or through the [MCP server](/products/mcp-server): one engine, one answer.
+
+## Serve
+
+The same underlying data reaches you through the interface that fits your workload:
+
+| Interface | Use it for | Auth |
+| --- | --- | --- |
+| [Market Data WebSockets](/products/market-data) | Realtime order books and trades | Public |
+| [Trader Data API](/products/data-api) (REST) | Programmatic trader analytics | HMAC-signed partner key |
+| [MCP Server](/products/mcp-server) | Agent-native, read-only analytics | OAuth 2.1 |
+| [Trade API](/products/trade-api) (REST) | Execution and order management | Bearer token |
+| [UMA API](/products/uma-api) | Resolution and settlement data | Partner key |
+
+## Where to go next
+
+- [Migrating from Polymarket](/migrate/polymarket), the direct-integration tradeoff in detail.
+- [Building a prediction-market app](/start-here/app-builder), which product powers each part of an application.
+- [Production WebSockets](/guides/production-websockets), running the feeds reliably.
+- [Supported Prediction Markets](/markets/overview), the venue coverage matrix.

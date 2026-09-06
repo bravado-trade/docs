@@ -1,0 +1,121 @@
+---
+title: "Migrating from Polymarket"
+sidebarTitle: "From Polymarket"
+description: "Polymarket's APIs are free. This guide shows the engineering tradeoff of integrating them directly versus building on Bravado, with side-by-side code."
+icon:
+  name: "arrow-right-left"
+  library: "lucide"
+---
+
+Polymarket publishes its CLOB, Gamma, and on-chain contracts, and they are free to use. So the honest question is not "does Bravado give me access," it is "how much of the surrounding infrastructure do I want to own." This page lays out that tradeoff without marketing, so you can decide feature by feature.
+
+## What Polymarket gives you directly
+
+Integrating Polymarket yourself, you get:
+
+- The **CLOB REST and WebSocket** APIs for order books, trades, and prices.
+- The **Gamma** API for market metadata and discovery.
+- The **on-chain contracts** (Conditional Token Framework) for positions and settlement.
+- **UMA's Optimistic Oracle** on-chain for resolution.
+
+Everything below that (reconnect handling, PnL reconstruction, cost basis, leaderboards, resolution-as-data, advanced execution, copytrading) is yours to build and keep running.
+
+## What Bravado adds today
+
+- **An enriched, multiplexed market-data layer.** One [trade feed](/api/market-data/trade-feed) carries every fill across all markets, each already tagged with the trader's name and wallet, and one [order-book feed](/api/market-data/order-book) multiplexes many assets over a single socket with the upstream shared server-side.
+- **Trader analytics you would otherwise reconstruct from chain.** PnL, positions, cost basis, trade history, leaderboards, and tax statements through the [Trader Data API](/products/data-api), computed by a FIFO engine.
+- **Advanced execution.** Eight order types including TWAP, iceberg, and brackets, executed server-side with required idempotency, through the [Trade API](/products/trade-api).
+- **Copytrading infrastructure** via the [Copytrade API](/products/copytrade-api).
+- **Resolution as data** through the [UMA API](/products/uma-api), instead of indexing the oracle yourself.
+- **One authentication and credits model** across products, instead of a separate integration per surface.
+
+<Warning>
+  **Reliability, stated honestly.** Bravado's market-data feeds hand you a snapshot on connect (the last trades, or the current book) so a fresh connection is not empty. They do **not** provide sequence numbers, a replay/resume protocol, or automated snapshot recovery, and reconnect logic remains client-side. Do not design around WebSocket replay that does not exist. See [Production WebSockets](/guides/production-websockets) for the reconnect pattern that does work today.
+</Warning>
+
+## Responsibility, side by side
+
+| Responsibility | Direct Polymarket | Bravado |
+| --- | --- | --- |
+| Connect to venue APIs | You integrate CLOB, Gamma, chain | One Bravado surface |
+| WebSocket subscriptions | You open and manage per market | One trade feed (all markets), one multiplexed book feed |
+| Reconnect logic | You maintain | You maintain, with a snapshot on reconnect to rebuild from |
+| Trade enrichment | You fetch trader profiles | Name and wallet on every trade frame |
+| Trader PnL | You reconstruct from chain | [Trader Data API](/products/data-api) |
+| Positions | You reconstruct from chain | [Trader Data API](/products/data-api) |
+| Leaderboards | You build | [Trader Data API](/products/data-api) |
+| Cost basis | You build a FIFO engine | Computed for you |
+| UMA resolution | Separate on-chain integration | [UMA API](/products/uma-api) |
+| Execution | Direct CLOB order signing | [Trade API](/products/trade-api), eight order types |
+| Advanced orders | You build and host the engine | Server-side, survive your process restarting |
+| Copytrading | You build | [Copytrade API](/products/copytrade-api) |
+| Idempotency | Not enforced | Required `Idempotency-Key` on every mutation |
+
+## Side by side: live trades
+
+Direct from Polymarket's CLOB WebSocket, you subscribe per market and enrich trades yourself:
+
+```javascript Direct Polymarket
+// Open the CLOB market channel, subscribe to specific assets,
+// then resolve trader identities with your own lookups.
+const ws = new WebSocket("wss://ws-subscriptions-clob.polymarket.com/ws/market");
+ws.onopen = () => ws.send(JSON.stringify({ type: "market", assets_ids: [assetId] }));
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  // ...decode, then fetch the trader's profile separately to show a name
+};
+```
+
+Through Bravado, one connection gives you every market, already enriched:
+
+```javascript Bravado
+const ws = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
+ws.onmessage = (e) => {
+  const frame = JSON.parse(e.data);
+  if (frame.type === "trade") {
+    const t = frame.trade;
+    // t.traderName and t.trader are already populated
+    console.log(`${t.side} ${t.size} ${t.outcome} @ ${t.price} — ${t.traderName}`);
+  }
+};
+```
+
+See the [Live Trades reference](/api/market-data/trade-feed) for the frame shape and dedupe guidance.
+
+## Side by side: trader PnL
+
+Direct, you index every fill for a wallet from chain and run your own cost-basis math:
+
+```text Direct Polymarket
+Read the wallet's on-chain fills →
+  match buys and sells (FIFO) →
+    apply fees and settlements →
+      derive realized and unrealized PnL
+(a cost-basis engine you build, test, and maintain)
+```
+
+Through Bravado, it is one signed request:
+
+```bash Bravado
+curl "https://partner-api.bravadotrade.com/trader-analytics/traders/0x3a2b.../pnl" \
+  -H "X-BRAVADO-API-KEY: $KEY" \
+  -H "X-BRAVADO-TIMESTAMP: $TS" \
+  -H "X-BRAVADO-SIGNATURE: $SIG"
+```
+
+The [tax-report surface is public](/products/data-api#authentication), so you can try the analytics engine with no key before wiring up signing.
+
+## A pragmatic migration path
+
+You do not have to switch everything at once:
+
+1. **Start with what you would otherwise build.** Point trader analytics at the [Trader Data API](/products/data-api) and keep your existing execution if you have it.
+2. **Move realtime onto Bravado's feeds** when you want one enriched socket instead of many venue sockets. See [Production WebSockets](/guides/production-websockets).
+3. **Adopt the Trade API** when you need advanced order types or server-side strategy execution.
+4. **Add Copytrade and UMA** as those needs arise.
+
+## Related
+
+- [How Bravado Works](/concepts/how-bravado-works)
+- [Building a prediction-market app](/start-here/app-builder)
+- [Supported Prediction Markets](/markets/overview)
