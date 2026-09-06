@@ -153,13 +153,17 @@ Emitted when the venue changes a market's minimum price increment. Carries an `a
 
 ### `no_book`
 
-Emitted by Bravado when no order book arrives for a subscribed asset within a few seconds, so your UI can render an empty state instead of hanging:
+Emitted by Bravado when **no message at all** arrives from the venue for a subscribed asset within **8 seconds** of opening the upstream connection, so your UI can render an empty state instead of hanging:
 
 ```json
 { "event_type": "no_book", "asset_id": "<TOKEN_ID>" }
 ```
 
 This is the one frame Bravado originates rather than forwarding from the venue.
+
+<Warning>
+  It measures **silence, not the absence of a book.** The timer is cancelled by the first upstream message of any kind — including an empty frame that carries no book, and including a frame Bravado then discards. An asset that receives chatter but never a book therefore produces **no** `no_book`, and a client waiting for one waits forever. Do not use it as "this market has no book"; use it as "nothing came back". The timer is re-armed only when the upstream connection is re-opened.
+</Warning>
 
 ## Limits
 

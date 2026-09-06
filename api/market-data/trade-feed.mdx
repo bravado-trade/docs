@@ -111,7 +111,7 @@ The trade object in a `trade` frame and every element of the `snapshot` array sh
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | string | Per-connection identifier for the frame. **Not stable across restarts or instances** — do not dedupe on it, see below. |
+| `id` | string | Per-process identifier for the fill: two clients on the same instance see the same `id`, two instances do not. **Not stable across restarts or instances** — do not dedupe on it, see below. |
 | `eventTitle` | string | Human-readable event title. May be empty if not yet resolved server-side. |
 | `marketQuestion` | string | The market question. May be empty, on the same rows where `eventTitle` is. |
 | `outcome` | string | The outcome traded, for example `"Yes"`, `"No"`, or a named outcome. |

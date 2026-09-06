@@ -84,8 +84,10 @@ The fastest way to see what Bravado does is to watch live prediction-market data
 
     ```javascript JavaScript
     // Use the `assetId` you took from the trade feed in the previous step.
-    // A token id must be for a LIVE market: a resolved or inactive one connects
-    // and simply never sends a frame.
+    // The id must be for a LIVE market. A dead one still connects, may send an
+    // empty frame `[[]]` and no book at all, and the `no_book` frame may never
+    // arrive — the 8s timer that would emit it is cancelled by ANY upstream
+    // message, and the empty frame counts. Take the id from the trade feed.
     const assetId = /* from the trade feed above */ "";
     const book = new WebSocket(
       `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=${assetId}`
@@ -110,8 +112,10 @@ The fastest way to see what Bravado does is to watch live prediction-market data
     import asyncio, json, websockets
 
     # Use the `assetId` you took from the trade feed in the previous step.
-    # A token id must be for a LIVE market: a resolved or inactive one connects
-    # and simply never sends a frame.
+    # The id must be for a LIVE market. A dead one still connects, may send an
+    # empty frame `[[]]` and no book at all, and the `no_book` frame may never
+    # arrive — the 8s timer that would emit it is cancelled by ANY upstream
+    # message, and the empty frame counts. Take the id from the trade feed.
     ASSET = ""  # from the trade feed above
 
     async def main():
