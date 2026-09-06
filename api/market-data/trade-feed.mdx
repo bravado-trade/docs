@@ -7,10 +7,10 @@ icon:
   library: "lucide"
 ---
 
-Connect to `wss://partner-api.bravadotrade.com/trade-feed/ws` to receive a realtime stream of **every trade across all markets** — roughly 70 per second. On connect you get a snapshot of recent history, then a frame for every new fill. The feed is **public**, no API key or signature is required, and it is one-way: the server pushes to you, and any message you send is ignored.
+Connect to `wss://partner-api.bravadotrade.com/trade-feed/ws` to receive a realtime stream of **every trade across all markets**; the rate varies with market activity — on the order of tens of trades per second (samples measured 20–50/s). On connect you get a snapshot of recent history, then a frame for every new fill. The feed is **public**, no API key or signature is required, and it is one-way: the server pushes to you, and any message you send is ignored.
 
 <Info>
-  Coverage today is Polymarket. The feed carries **every trade on every market**, not a selection of the active ones — around **70 messages per second** in normal conditions. Size your buffers and your UI for the whole hose, and filter client-side for the markets you care about. To follow a specific market's book instead, use the [Order Books](/api/market-data/order-book) feed.
+  Coverage today is Polymarket. The feed carries **every trade on every market**, not a selection of the active ones, and the rate varies with market activity — on the order of tens of trades per second (samples measured 20–50/s). Size your buffers and your UI for the whole hose, and filter client-side for the markets you care about. To follow a specific market's book instead, use the [Order Books](/api/market-data/order-book) feed.
 </Info>
 
 ## Connect
@@ -68,7 +68,7 @@ Every message is a JSON object with a `type` field.
 
 Sent once, immediately on connect, so the feed does not start empty. It carries the **last 200 trades** as an array, newest first.
 
-The buffer is a fixed-count ring, not a time window: at around 70 trades per second, 200 trades is under three seconds of history, and it shrinks further when the market is busier.
+The buffer is a fixed-count ring, not a time window. At the rates we have measured (20–50 trades per second) 200 trades is roughly four to ten seconds of history, and less than that when the market is busier — nowhere near thirty seconds, and not a fixed span you can rely on.
 
 ```json
 {

@@ -1,7 +1,7 @@
 ---
 title: "Market Data: Realtime Feeds, Trades, and Order Books"
 sidebarTitle: "Overview"
-description: "Stream live prediction-market data over Bravado WebSockets: enriched trades across the most active markets and live order books for any outcome token. One connection, no venue integration to maintain."
+description: "Stream live prediction-market data over Bravado WebSockets: enriched trades across every market and live order books for any outcome token. One connection, no venue integration to maintain."
 icon:
   name: "activity"
   library: "lucide"
@@ -11,7 +11,7 @@ Bravado's Market Data layer streams realtime prediction-market data over WebSock
 
 <CardGroup cols={2}>
   <Card title="Live Trades" icon="list" href="/api/market-data/trade-feed">
-    A realtime stream of fills across the most active markets, each already enriched server-side with the trader's name and wallet address.
+    A realtime stream of fills across every market — no filter and no allowlist — each already enriched server-side with the trader's name and wallet address.
   </Card>
 
   <Card title="Order Books" icon="layers" href="/api/market-data/order-book">
@@ -39,7 +39,7 @@ The venue's own socket is public, so this is not about access. It is about not r
 
 - **Live tickers and tapes.** Render a running feed of fills across the market, no polling.
 - **Depth and price displays.** Drive an order-book widget or a best bid/ask readout straight from the socket.
-- **Signal and discovery.** Watch flow across the most active markets and react to it in realtime.
+- **Signal and discovery.** Watch flow across every market and react to it in realtime.
 - **Enriched activity.** Every trade arrives with the trader's wallet, so you can cross-reference [Trader Data](/products/data-api) (PnL, positions, history) for the wallets you see trading.
 
 ## Feeds
