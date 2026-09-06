@@ -9,6 +9,10 @@ icon:
 
 Bravado exposes a hosted **Model Context Protocol (MCP)** server so agent frameworks can call Bravado tools directly. Point an MCP-aware client at it, sign in once with your Bravado Portal account, and the agent can read leaderboards, trader profiles, PnL series, positions and the warehouse behind them.
 
+<Info>
+  The MCP server is one of several ways to build AI applications on Bravado, the agent-native path for reading trader intelligence. For how it fits alongside realtime [Market Data](/products/market-data), the [Trader Data API](/products/data-api), and execution through the [Trade API](/products/trade-api), start with the [Build with AI](/build-with-ai) guide.
+</Info>
+
 <Note>
   The MCP server is **read-only, permanently**. It cannot place, cancel or modify an order, and it cannot move funds. To trade programmatically, use the [Trade API](/products/trade-api).
 </Note>
@@ -128,5 +132,6 @@ The surface is read-only by construction; there is no write tool to disable. Whe
 
 - [Build with AI](/build-with-ai)
 - [AI agents use case](/use-cases/ai-agents)
-- [Data API](/products/data-api)
+- [Market Data](/products/market-data)
+- [Trader Data API](/products/data-api)
 - [Authentication](/authentication)

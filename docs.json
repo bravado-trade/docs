@@ -29,6 +29,7 @@
               "quickstart",
               "quickstart-trade",
               "build-with-ai",
+              "products/mcp-server",
               "authentication",
               "api-credits"
             ]
@@ -142,12 +143,6 @@
             "group": "Resolution",
             "pages": [
               "products/uma-api"
-            ]
-          },
-          {
-            "group": "MCP Server",
-            "pages": [
-              "products/mcp-server"
             ]
           },
           {
