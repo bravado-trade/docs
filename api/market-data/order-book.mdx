@@ -84,7 +84,10 @@ There is a **third shape**, and it is the one that breaks parsers: an asset with
 ```javascript
 const events = Array.isArray(msg) ? msg : [msg];
 for (const e of events) {
-  if (!e || typeof e !== "object" || Array.isArray(e)) continue;
+  if (!e || typeof e !== "object" || Array.isArray(e)) {
+    console.log("empty frame — no order book for this asset");
+    continue;
+  }
   // …switch on e.event_type
 }
 ```

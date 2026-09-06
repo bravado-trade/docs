@@ -97,6 +97,10 @@ The fastest way to see what Bravado does is to watch live prediction-market data
       const msg = JSON.parse(event.data);
       const events = Array.isArray(msg) ? msg : [msg];
       for (const e of events) {
+        if (!e || typeof e !== "object" || Array.isArray(e)) {
+          console.log("empty frame — no order book for this asset");
+          continue;
+        }
         if (e.event_type === "book") {
           console.log(`book: best bid ${e.bids.at(-1)?.price}, best ask ${e.asks[0]?.price}`);
         } else if (e.event_type === "price_change") {
@@ -128,6 +132,7 @@ The fastest way to see what Bravado does is to watch live prediction-market data
                     # A dead asset answers `[[]]`, so `e` can be a list here —
                     # `e.get(...)` on it raises AttributeError.
                     if not isinstance(e, dict):
+                        print("empty frame — no order book for this asset")
                         continue
                     if e.get("event_type") == "book":
                         print("book:", len(e["bids"]), "bids", len(e["asks"]), "asks")
