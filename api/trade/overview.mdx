@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Authenticate with HMAC. Signature values in request examples are placeholders; compute a fresh signature over the exact method, path and body. See [authentication](/authentication) and the [runnable quickstart](/quickstart-trade).</Note>
+
+
 The Bravado Trade API v2 is the single integration point for building Polymarket trading applications on Polygon. It exposes order placement (including algorithmic order types such as TWAP, Iceberg, and Pegged), position lifecycle management (redeem, split, merge), account inspection, and partner user provisioning, all behind a consistent REST interface using Polygon-native pUSD collateral.
 
 ## Base URL
@@ -19,10 +22,12 @@ All Trade API paths are prefixed with `/v2/trade/`.
 
 ## Authentication
 
-Every request must carry a Bearer token in the `Authorization` header:
+Sign every request with HMAC using the following headers:
 
 ```http
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 Mutating requests (POST, DELETE) additionally require an `Idempotency-Key` header containing a unique string (UUID recommended). Replaying the same key within the idempotency window returns the cached response without re-executing the operation.

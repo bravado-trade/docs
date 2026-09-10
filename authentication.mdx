@@ -1,109 +1,54 @@
 ---
-title: "Authenticate Requests to the Bravado API"
+title: "Authenticate requests"
 sidebarTitle: "Authentication"
-description: "Bravado uses Bearer token authentication. Learn how to pass your API key, understand API key scopes, and handle authentication errors correctly."
+description: "Sign Trade and Analytics API requests with HMAC, and connect MCP clients with OAuth."
 icon:
   name: "key"
   library: "lucide"
 ---
 
-Bravado authenticates every request using **API key Bearer tokens**. You include your token in the `Authorization` header of each HTTP request. There are no cookies and no session flows: just a static token your server sends with every call. The only public endpoint that does not require authentication is `GET /healthz`.
+Trade and Analytics API requests use **HMAC-SHA256** authentication. Each credential contains a public API key and a secret. Send the public key, timestamp and request signature; keep the secret in your server environment.
 
-<Note>
-  **The MCP server is the one exception.** It uses OAuth 2.1 rather than a static key, because an AI client cannot hold a long-lived partner secret safely and cannot compute an HMAC signature. See [MCP server authorization](#mcp-server-authorization) below.
-</Note>
+| Surface | Authentication |
+| --- | --- |
+| Trade API, including advanced orders, Combos and Copytrade | HMAC signature and required scopes |
+| Analytics API | HMAC signature and analytics access |
+| MCP server | OAuth 2.1; see [MCP authorization](#mcp-server-authorization) |
+| Market-data WebSockets | Feed-specific; see [trade feed](/api/market-data/trade-feed) and [order books](/api/market-data/order-book) |
 
 ## Getting your API key
 
-Create and manage your API keys in the [Bravado Portal](https://portal.bravadotrade.com/).
+1. Sign in to the [Bravado Console](https://console.bravadotrade.com).
+2. Open your product under **Endpoints**, then **API keys**.
+3. Create a credential using your organisation’s enabled access. Save the secret when it is revealed; it is shown once.
+4. Set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET` in your server environment.
 
-1. Sign in at [portal.bravadotrade.com](https://portal.bravadotrade.com/).
-2. Create a new API key and select the **scopes** it should hold (see [API key scopes](#api-key-scopes) below).
-3. Copy the Bearer token from the portal. This is the only time it will be shown in full.
-
-<Warning>
-  The `trade.withdraw` scope, which allows withdrawing pUSD to an external address, is **not included** in a standard partner key and must be explicitly requested and granted. Even a key with all other trade scopes cannot initiate withdrawals without it.
-</Warning>
-
-Store your token securely. Never embed it in client-side JavaScript, commit it to a public repository, or log it to an unprotected output stream. Treat it with the same care as a private key.
+Your organisation is created at first sign-in if you have no membership. Eligible invitations are accepted first. Plan changes apply to that organisation; they do not create a second one.
 
 ## Making authenticated requests
 
-Add your token to the `Authorization` header using the `Bearer` scheme:
+Send these headers:
 
 ```text
-Authorization: Bearer <your-token>
+X-BRAVADO-API-KEY: <public key>
+X-BRAVADO-TIMESTAMP: <Unix timestamp in milliseconds>
+X-BRAVADO-SIGNATURE: <hex HMAC-SHA256 signature>
 ```
 
-Here's how that looks in practice across common environments:
+The signed payload is four fields joined with newline characters, with no final newline:
 
-<CodeGroup>
-
-```bash cURL
-curl https://partner-api.bravadotrade.com/v2/trade/account \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+```text
+timestamp
+UPPERCASE_METHOD
+canonical_path_with_query
+sha256_of_exact_body_bytes
 ```
 
-```python Python
-import requests
-import os
+Canonicalize the path and query using the API signing rules: query keys are sorted lexicographically and values URL-encoded. Hash an empty body for a bodyless GET. For JSON writes, serialize once, hash that string and send those exact bytes. Sign the venue alias path when using `/v2/trade/predictfun/...` or `/v2/trade/polymarket/...`.
 
-headers = {
-    "Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}",
-    "Content-Type": "application/json",
-}
+The [Trade quickstart](/quickstart-trade) includes a complete, dependency-free Python example for a signed account read. The [Console quickstart](https://console.bravadotrade.com/endpoints/trade?section=connect) also provides TypeScript and cURL.
 
-response = requests.get(
-    "https://partner-api.bravadotrade.com/v2/trade/account",
-    headers=headers,
-)
-print(response.json())
-```
-
-```javascript JavaScript
-const response = await fetch(
-  "https://partner-api.bravadotrade.com/v2/trade/account",
-  {
-    headers: {
-      Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-  }
-);
-
-const account = await response.json();
-console.log(account);
-```
-
-```go Go
-package main
-
-import (
-	"fmt"
-	"net/http"
-	"os"
-)
-
-func main() {
-	req, _ := http.NewRequest("GET",
-		"https://partner-api.bravadotrade.com/v2/trade/account",
-		nil,
-	)
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("BRAVADO_API_KEY"))
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer resp.Body.Close()
-	fmt.Println(resp.Status)
-}
-```
-
-</CodeGroup>
-
-Read your token from an environment variable or a secrets manager. Never hardcode it inline.
+Static Bearer authentication is a legacy, deployment-gated fallback for selected per-user reads. It is not the integration contract for new clients and does not authorize Trade mutations or master-key requests.
 
 ## API key scopes
 
@@ -125,7 +70,7 @@ Every Bravado API key is issued with one or more scopes. A request to an endpoin
   **Data API requests are HMAC-signed**, not Bearer-authenticated: send `X-BRAVADO-API-KEY`, `X-BRAVADO-TIMESTAMP`, and `X-BRAVADO-SIGNATURE` as described in [Data API authentication](/products/data-api#authentication). Each request's venue (Polymarket, or Predict.fun under `/predict/*`) must also be enabled on your partner account. Bravado-issued static bearer tokens for the Data API are deprecated and only work during the migration window.
 </Note>
 
-Scopes are additive, a key can hold any combination. Configure your key's scopes when creating it in the [portal](https://portal.bravadotrade.com/), or edit an existing key's scopes there at any time.
+Scopes are additive, a key can hold any combination. Available scopes depend on your organisation’s access. Manage credentials in the [Console](https://console.bravadotrade.com/keys). Creating an endpoint does not grant additional scopes.
 
 ## Master keys vs. user keys
 
@@ -163,29 +108,11 @@ Bravado returns standard HTTP status codes for authentication failures. Your cli
 
 ### 401 Unauthorized
 
-Returned when the `Authorization` header is missing, malformed, or contains an invalid or expired token.
-
-```json
-{
-  "error": "unauthorized",
-  "message": "Missing or invalid Bearer token."
-}
-```
-
-Check that you're including the `Authorization: Bearer <token>` header and that the token value is correct and hasn't been rotated.
+Check the public key, timestamp and HMAC signature. Sign the path you actually call, include canonical query parameters, and hash the exact body bytes sent. A GET with no body hashes the empty string. Keep the client clock synchronized.
 
 ### 403 Forbidden
 
-Returned when your token is valid but lacks the scope required by the endpoint you called.
-
-```json
-{
-  "error": "forbidden",
-  "message": "Token does not have the required scope: trade.withdraw"
-}
-```
-
-Review your key's scopes by calling `GET /v2/trade/account` and inspecting the `api_key.scopes` array. If you need a scope added, contact the Bravado team.
+Authentication succeeded but a scope, venue entitlement or account-readiness requirement was not met. Inspect the response error code and your organisation’s access. A successful account read does not imply permission to execute or withdraw.
 
 ## Idempotency keys
 

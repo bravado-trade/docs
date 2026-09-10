@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Authenticate with HMAC. Signature values in request examples are placeholders; compute a fresh signature over the exact method, path and body. See [authentication](/authentication) and the [runnable quickstart](/quickstart-trade).</Note>
+
+
 Simulation mode lets you test a copytrade strategy without risking real capital. When you create a subscription with `is_simulation: true`, every copied fill is recorded as a paper trade, positions are tracked, PnL is calculated using live CLOB midpoint prices, and execution history is preserved, all without placing real on-chain orders. Use these endpoints to inspect your paper portfolio and wipe it clean when you want to start a fresh backtest.
 
 ---
@@ -19,7 +22,7 @@ Returns the current simulation paper account for the authenticated user, includi
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` |
+| HMAC headers | Yes | [Public key, timestamp and signature](/authentication) |
 
 ### Response
 
@@ -79,7 +82,9 @@ Returns the current simulation paper account for the authenticated user, includi
 
 ```http Request
 GET /v2/trade/copytrade/simulation
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 ```json Response
@@ -133,7 +138,7 @@ Deletes all paper fill history for a specific copytrade subscription, resetting 
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` |
+| HMAC headers | Yes | [Public key, timestamp and signature](/authentication) |
 
 ### Path parameters
 
@@ -159,7 +164,9 @@ This operation only clears paper fills associated with the specified subscriptio
 
 ```http Request
 POST /v2/trade/copytrade/ct_01HX6N0QRST9XDYP5FZELOH8I/simulation/reset
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 ```json Response

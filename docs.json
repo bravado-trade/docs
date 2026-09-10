@@ -26,6 +26,7 @@
             "group": "Get Started",
             "pages": [
               "introduction",
+              "api-catalog",
               "quickstart",
               "quickstart-trade",
               "authentication",

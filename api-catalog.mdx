@@ -1,0 +1,35 @@
+---
+title: "Explore the API platform"
+sidebarTitle: "API catalog"
+description: "Find each Bravado API, understand venue coverage and configure your organisation."
+---
+
+## Start with your organisation
+
+The [Console](https://console.bravadotrade.com) creates an organisation at first sign-in when you have no membership, after accepting eligible invitations. You become its owner. Billing changes apply to this existing organisation. The initial product access includes Analytics and MCP; Trade access requires the corresponding entitlements.
+
+A configured endpoint groups a product’s credentials, usage and settings. It does not enable every scope, venue or deployment feature. Use [Endpoints](https://console.bravadotrade.com/endpoints) to browse all APIs and manage your configured products.
+
+## Choose an API
+
+| API | Build with it | Documentation |
+| --- | --- | --- |
+| Analytics | History, traders, positions and PnL | [Data API](/products/data-api) |
+| Trade | Orders, accounts and managed strategies | [Trade API](/products/trade-api) |
+| Combos | Multi-leg RFQ and settlement on Polymarket | [Combos](/api/combos/overview) |
+| Copytrade | Polymarket subscriptions and simulation | [Copytrade](/api/copytrade/overview) |
+| Market data | Live trades and order books | [Market data](/products/market-data) |
+| MCP | OAuth access for analytics and SQL tools | [MCP server](/products/mcp-server) |
+| UMA | Polymarket proposals and resolution | [UMA API](/products/uma-api) |
+
+The UMA Console workspace is planned; its API documentation is available separately. SQL tools are available through MCP even while the dedicated SQL workspace is planned.
+
+## Match the venue to the workflow
+
+Both Polymarket and Predict.fun support LIMIT, MARKET, PEGGED, TWAP and ICEBERG on the v2 Trade surface. Conditional orders, brackets, Combos and Copytrade are Polymarket-only. TRAILING_BUY additionally requires its deployment feature flag. Read the [Polymarket](/markets/polymarket/trade-api) and [Predict.fun](/markets/predict-fun/trade-api) guides for detailed constraints.
+
+## Connect and measure
+
+1. Follow the [Trade quickstart](/quickstart-trade) or [market-data quickstart](/quickstart).
+2. Read [authentication](/authentication) for HMAC and OAuth contracts.
+3. Inspect product usage and [API credits](/api-credits) before changing your plan.
