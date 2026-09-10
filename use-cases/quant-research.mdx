@@ -7,83 +7,29 @@ icon:
   library: "lucide"
 ---
 
-## The problem
+## Research with wallet and market data
 
-Quantitative research on Polymarket requires clean historical fill data, position snapshots at arbitrary points in time, and PnL series that reconcile with wallet state. Reconstructing this from on-chain logs is possible but expensive: parsing conditional-token events, joining against order-book snapshots, and handling neg-risk mechanics is a several-week engineering project.
+Use [Trader Data](/products/data-api) for wallet trade history, positions and PnL series on Polymarket and Predict.fun. Use [live order books](/api/market-data/venue-order-books) to collect forward-looking market observations.
 
-## What Bravado provides
-
-- **Full historical fills** for any wallet via `GET /traders/{address}/trades` with cursor pagination.
-- **Position reconstruction** at any timestamp via `GET /traders/{address}/positions` with time range filters.
-- **PnL time series** via `GET /traders/{address}/pnl` with configurable bucketing.
-- **Universe-level data** via `GET /trades` for global fill data across wallets.
-- All PnL computed under [PMWAS](/products/data-api), so backtests reconcile with the live Analytics endpoints.
-
-## APIs used
-
-| API | What a research workflow uses it for |
+| Research input | Interface |
 | --- | --- |
-| [Data API](/products/data-api) | Trade logs, PnL series, and positions for any public wallet, paginated for bulk extraction |
-| [UMA API](/products/uma-api) | Resolution outcomes and timing, needed to label historical events correctly |
+| Wallet trades | `GET /trader-analytics/traders/{address}/trades` |
+| Wallet positions | `GET /trader-analytics/traders/{address}/positions` |
+| Wallet PnL | `GET /trader-analytics/traders/{address}/pnl` |
+| Trader discovery | `GET /trader-analytics/leaderboard` |
 
-## Worked example
+For Predict.fun, insert `/predict` after `/trader-analytics`. Sign requests using [Data API authentication](/products/data-api#authentication).
 
-Pull all fills for a leaderboard cohort and load them into a dataframe:
+Positions describe current/open or closed holdings; this endpoint is not an arbitrary historical timestamp reconstruction API. `/trader-analytics/trades` is wallet-scoped activity, not an unrestricted global historical tape.
 
-```python
-import os, requests, pandas as pd
+## Historical market datasets
 
-API = "https://partner-api.bravadotrade.com"
-H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+For historical L2, OHLCV, open-interest series or Parquet delivery, see [historical data coverage](/api/market-data/historical-data). We can scope a dataset around your markets and date range, including construction of additional research features from available sources.
 
-def all_trades(addr):
-    rows = []
-    cursor_ts, cursor_log = None, None
-    while True:
-        params = {"limit": 500}
-        if cursor_ts:
-            params["cursor_ts"] = cursor_ts
-            params["next_cursor_log_idx"] = cursor_log
+Agree coverage, gaps, time resolution and delivery dates with Bravado before relying on a dataset for backtesting. Wallet history, sampled prices and full market-state replay have different coverage.
 
-        r = requests.get(f"{API}/traders/{addr}/trades", params=params, headers=H).json()
-        rows.extend(r["trades"])
-        if not r["next_cursor"]:
-            break
-        cursor_ts = r["next_cursor"]
-        cursor_log = r.get("next_cursor_log_idx")
-    return rows
+## Accounting and numerics
 
-# Top 50 traders by 30-day PnL.
-leaderboard = requests.get(f"{API}/leaderboard?window=30d&limit=50", headers=H).json()
+Read the response's accounting disclosures. Full PMWAS statements and reconciliation are available for processed Polymarket wallets; tax-report fallbacks have different coverage. See [accounting coverage](/products/data-api#accounting-coverage).
 
-frames = []
-for t in leaderboard["traders"]:
-    trades = all_trades(t["address"])
-    df = pd.DataFrame(trades)
-    df["wallet"] = t["address"]
-    frames.append(df)
-
-all_df = pd.concat(frames, ignore_index=True)
-all_df.to_parquet("polymarket_top50_fills.parquet")
-```
-
-The resulting parquet has every fill for every wallet, with columns for `symbol`, `side`, `size`, `price`, `fee`, `block_timestamp`, and market metadata. Feed it directly to a Jupyter notebook or a research feature store.
-
-## Common research patterns
-
-- **Alpha decay.** Track leader wallets' PnL post-signal and correlate with mirroring latency.
-- **Fee sensitivity.** Simulate strategies at different fee levels using PMWAS cost-basis math.
-- **Liquidity modeling.** Cross-reference fill sizes against depth snapshots to model slippage.
-- **Neg-risk arbitrage.** Detect stale prices across a neg-risk basket where the YES-share sum diverges from \$1.
-
-## Notes on data
-
-- Numeric fields are strings. Cast to `Decimal` before arithmetic, not `float`. See [Numeric conventions](/reference/numeric-conventions).
-- Cursor pagination is stable against new inserts. Backfill jobs can resume from a persisted cursor.
-- Fees are itemized per fill.
-
-## Related
-
-- [Data API: PMWAS accounting](/products/data-api)
-- [Reference: Pagination](/reference/pagination)
-- [Data API reference](/api/analytics/overview)
+Parse decimal strings with arbitrary-precision arithmetic. Follow each endpoint's [pagination contract](/reference/pagination) and preserve returned cursors when resuming extraction.

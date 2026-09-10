@@ -7,20 +7,20 @@ icon:
   library: "lucide"
 ---
 
-Bravado's Market Data layer streams realtime prediction-market data over WebSockets, so you consume live trades and order books through Bravado infrastructure instead of connecting to each venue's socket yourself. Two feeds are available today, both served from `wss://partner-api.bravadotrade.com`:
+Bravado's Market Data layer streams realtime prediction-market data over WebSockets, so you consume live trades and order books through Bravado infrastructure instead of connecting to each venue's socket yourself. Trade and order-book feeds are served from `wss://partner-api.bravadotrade.com`:
 
 <CardGroup cols={2}>
   <Card title="Live Trades" icon="list" href="/api/market-data/trade-feed">
     A realtime stream of fills across every market — no filter and no allowlist — each already enriched server-side with the trader's name and wallet address.
   </Card>
 
-  <Card title="Order Books" icon="layers" href="/api/market-data/order-book">
-    Live order-book snapshots and incremental updates for any outcome token, plus last-trade price and best bid/ask, multiplexed over one socket.
+  <Card title="Order Books" icon="layers" href="/api/market-data/venue-order-books">
+    Live order-book snapshots and updates for outcome tokens on Polymarket and Predict.fun. Subscribe to multiple assets over one socket per venue.
   </Card>
 </CardGroup>
 
 <Info>
-  **Coverage today is Polymarket.** Both feeds currently source from Polymarket, the largest prediction market by volume. The wire format is designed to extend to additional venues as coverage grows, see [Supported Prediction Markets](/markets/overview).
+  **Live order books support Polymarket and Predict.fun.** The enriched trade feed currently covers Polymarket. See [venue order books](/api/market-data/venue-order-books) for the shared message format.
 </Info>
 
 ## Why stream through Bravado
@@ -47,11 +47,18 @@ The venue's own socket is public, so this is not about access. It is about not r
 | Feed | Endpoint | Auth | Direction |
 | --- | --- | --- | --- |
 | [Live Trades](/api/market-data/trade-feed) | `wss://partner-api.bravadotrade.com/trade-feed/ws` | Public | Server → client |
-| [Order Books](/api/market-data/order-book) | `wss://partner-api.bravadotrade.com/orderbook-feed/ws` | Public | Bidirectional (subscribe/unsubscribe) |
+| [Polymarket order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/polymarket/market` | Public | Bidirectional |
+| [Predict.fun order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/predictfun/market` | Public | Bidirectional |
 
 <Note>
-  The market-data streams are **public today**, no API key or signature is required to connect. This matches the access tier of the underlying venue's public market feed. Authentication and per-partner metering may be introduced later, so build your client to read a token from configuration even if it does not send one yet.
+  The market-data streams are **public today**, no API key or signature is required to connect. This matches the access tier of the underlying venue's public market feed. For authenticated partner streams and account-specific limits, contact Bravado during onboarding.
 </Note>
+
+## Historical data and custom delivery
+
+Wallet trade history and PnL are available through [Trader Data](/products/data-api). REST price history and bounded volume series are described in [historical data coverage](/api/market-data/historical-data).
+
+For historical L2 events, Parquet extracts, OHLCV, open-interest series or a market catalog integration, contact us with your markets and date range. We can scope delivery from available archives and develop additional datasets. Coverage and delivery dates are agreed per dataset; these are not unrestricted self-service history endpoints.
 
 ## Health and diagnostics
 

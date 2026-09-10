@@ -1,0 +1,35 @@
+---
+title: "Historical data and custom delivery"
+sidebarTitle: "Historical data"
+description: "REST history, market catalogs and custom historical datasets for prediction-market research."
+---
+
+## REST history
+
+All paths below use `https://partner-api.bravadotrade.com`.
+
+| Dataset | Endpoint | Coverage |
+| --- | --- | --- |
+| Wallet trades | `/trader-analytics/traders/{address}/trades` | Paginated wallet activity; see the endpoint's filters and pagination |
+| Wallet PnL | `/trader-analytics/traders/{address}/pnl` | Wallet performance series |
+| Polymarket price history | `/clob-proxy/prices-history?market={tokenId}&startTs={unixSeconds}&fidelity={minutes}` | Venue-sourced sampled prices, not OHLCV candles |
+| Polymarket volume history | `/clob-proxy/volume-history?market={tokenId}` | One-minute sums of trade size from up to 10,000 venue trades; coverage may be shorter |
+| Polymarket top holders | `/clob-proxy/holders?market={conditionId}` | Venue-sourced current holders |
+
+Predict.fun core wallet history uses `/trader-analytics/predict/` in place of `/trader-analytics/`. See [Predict.fun Trader Data](/markets/predict-fun/data-api).
+
+Price history returns `history` entries with `t` and `p`. Volume history returns `buckets` with `t` and `v`; `v` is summed trade size, not dollar notional. Neither proxy guarantees complete lifetime market history.
+
+## Historical L2 and bulk datasets
+
+Bravado maintains Polymarket archival infrastructure for order-book events and market data, including Parquet processing. Historical delivery is scoped directly with the team by market, source and date range. A live WebSocket snapshot is not historical replay.
+
+We can scope historical L2 extracts, OHLCV construction, open-interest series and bulk delivery around your requirements. Available source coverage, gaps, granularity and delivery format are confirmed before agreeing a delivery date. These datasets do not currently have a general self-service download endpoint.
+
+## Market catalogs
+
+Use the venue's market/event API for discovery, filtering and metadata today. Bravado can scope a catalog integration or normalized delivery for your application. There is no documented unified catalog endpoint in the Trader Data API.
+
+## Start an evaluation
+
+Contact Bravado with your venues, markets, date range and preferred format. We can arrange data-only credentials and evaluation access directly while the full self-service portal is being finalized. See [API credits](/api-credits) for REST and MCP request costs; bulk delivery is scoped separately.

@@ -6,7 +6,7 @@ icon: "/logo/uma.png"
 ---
 
 <Info>
-  **This page is a scaffold.** The endpoint reference below has not been filled in yet. Send the endpoint list and this page will be completed to match the other product pages.
+  For UMA integration, contact Bravado for the current endpoint list, access setup and historical coverage. The public endpoint reference is being updated.
 </Info>
 
 Polymarket markets do not settle themselves. When a market's event concludes, the outcome has to be reported on-chain and accepted before holders can redeem winning shares. Polymarket uses [UMA](https://uma.xyz)'s Optimistic Oracle for that step, and the Bravado UMA API exposes the resolution lifecycle as queryable data.
@@ -61,10 +61,7 @@ Resolution is the point where an outcome token stops being a probability and bec
      ResponseField blocks, and a worked example. */}
 
 <Note>
-  Endpoint documentation is pending. In the meantime, resolution-adjacent behaviour that **is** documented today:
-
-  - [`POST /v2/trade/positions/redeem`](/api/trade/positions), redeem winning shares once a market has settled.
-  - [Error reference](/reference/errors), includes the `503` / `available: false` behaviour returned while data is still being processed.
+  Bravado provides the current UMA endpoint details and integration examples directly during onboarding. Confirm the required resolution records and date range with the team. Redeeming positions is a separate operation in the [Trade API](/api/trade/positions).
 </Note>
 
 ## Related
