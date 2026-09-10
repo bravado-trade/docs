@@ -1,7 +1,7 @@
 ---
 title: "Trade API: Order Types, Execution, and Positions"
 sidebarTitle: "Overview"
-description: "The Bravado Trade API covers the full order lifecycle on supported prediction markets: eight order types, bracket orders, and position management including redeem, split, and merge."
+description: "The Bravado Trade API covers the full order lifecycle on supported prediction markets: standard and advanced order types, bracket orders, and position management including redeem, split, and merge."
 icon:
   name: "arrow-left-right"
   library: "lucide"
@@ -74,8 +74,8 @@ Mismatched units are the single most common source of bugs when integrating the 
 | `LIMIT` | `order_id` | Resting limit order posted to the CLOB | Polymarket, Predict.fun |
 | `MARKET` | `order_id` | Immediate execution at the best available price | Polymarket, Predict.fun |
 | `TWAP` | `record_id` | Time-weighted average price spread over a duration | Polymarket, Predict.fun |
-| `PEGGED` | `record_id` | Automatically chases the touch price within a budget | Polymarket |
-| `ICEBERG` | `record_id` | Large order executed as hidden, repeated slices | Polymarket |
+| `PEGGED` | `record_id` | Automatically chases the touch price within a budget | Polymarket, Predict.fun |
+| `ICEBERG` | `record_id` | Large order executed as hidden, repeated slices | Polymarket, Predict.fun |
 | `STOP_LOSS` | `record_id` | Sell trigger when price falls to a threshold | Polymarket |
 | `TAKE_PROFIT` | `order_id` | Immediate CLOB sell when price rises to a target | Polymarket |
 | `TRAILING_STOP` | `record_id` | Dynamic stop that trails the high-water mark | Polymarket |
@@ -90,17 +90,17 @@ The Trade API is multi-venue. Everything below is the Polymarket reference; the 
 
 <CardGroup cols={2}>
   <Card title="Polymarket" icon="/logo/polymarket.png" href="/markets/polymarket/trade-api">
-    Full support — all eight order types, brackets, and positions (redeem/split/merge). Polygon, pUSD.
+    Standard and advanced orders, brackets, and positions (redeem/split/merge). Polygon, pUSD.
   </Card>
   <Card title="Predict.fun" icon="/logo/predict-fun.png" href="/markets/predict-fun/trade-api">
-    LIMIT, MARKET, TWAP + positions (redeem/split/merge/withdraw). BNB Chain, USDT.
+    LIMIT, MARKET, PEGGED, TWAP, ICEBERG + positions (redeem/split/merge/withdraw). BNB Chain, USDT.
   </Card>
 </CardGroup>
 
 | | Polymarket | Predict.fun |
 | --- | --- | --- |
 | Chain / collateral | Polygon / pUSD | BNB Chain / USDT |
-| Order types | All 8 | LIMIT, MARKET, TWAP |
+| Order types | Standard, advanced and conditional; TRAILING_BUY is feature-gated | LIMIT, MARKET, PEGGED, TWAP, ICEBERG |
 | Price tick | `0.001` | `0.01` |
 | Minimum order | 5 shares (resting) / \$1 (market) | \$0.90 |
 | Trading fee | 0 | Market-set (`feeRateBps`, ~2%), taken in shares on buys |
@@ -359,3 +359,8 @@ Polymarket's conditional token framework lets you convert pUSD directly into a c
   }
   ```
 </Accordion>
+
+
+## Trailing buy
+
+`TRAILING_BUY` is a Polymarket-only conditional entry capability. It requires the trailing-buy feature to be enabled in addition to the organisation’s trading access. It is not supported on Predict.fun. See the [order reference](/api/trade/orders) for the request schema; do not infer availability from a configured Console endpoint.

@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Authenticate with HMAC. Signature values in request examples are placeholders; compute a fresh signature over the exact method, path and body. See [authentication](/authentication) and the [runnable quickstart](/quickstart-trade).</Note>
+
+
 These endpoints let you create, read, update, and delete copytrade subscriptions for the authenticated user. A subscription binds a follower to a leader wallet and defines exactly how fills should be sized, filtered, and risk-managed. All mutating requests require an `Idempotency-Key` header. Numeric response fields are returned as JSON strings.
 
 ---
@@ -19,7 +22,7 @@ Create a new copytrade subscription. The subscription starts in `ACTIVE` status 
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` |
+| HMAC headers | Yes | [Public key, timestamp and signature](/authentication) |
 | `Idempotency-Key` | Yes | Unique string per request (UUID recommended) |
 
 ### Required fields
@@ -170,7 +173,9 @@ Create a new copytrade subscription. The subscription starts in `ACTIVE` status 
 
 ```json Request
 POST /v2/trade/copytrade
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 Idempotency-Key: e5f6a7b8-c9d0-1234-efab-345678901234
 Content-Type: application/json
 
@@ -218,7 +223,7 @@ List all `ACTIVE` and `PAUSED` subscriptions for the authenticated user. Soft-de
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` |
+| HMAC headers | Yes | [Public key, timestamp and signature](/authentication) |
 
 ### Response
 
@@ -230,7 +235,9 @@ List all `ACTIVE` and `PAUSED` subscriptions for the authenticated user. Soft-de
 
 ```http Request
 GET /v2/trade/copytrade
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 ```json Response
@@ -268,7 +275,7 @@ Partially update an existing subscription. Only the fields you include in the re
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` |
+| HMAC headers | Yes | [Public key, timestamp and signature](/authentication) |
 | `Idempotency-Key` | Yes | Unique string per request |
 
 ### Path parameters
@@ -289,7 +296,9 @@ The full updated subscription object, reflecting all changes.
 
 ```json Request
 PATCH /v2/trade/copytrade/ct_01HX6N0QRST9XDYP5FZELOH8I
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 Idempotency-Key: f6a7b8c9-d0e1-2345-fabc-456789012345
 Content-Type: application/json
 
@@ -336,7 +345,7 @@ Soft-delete a subscription. The subscription is deactivated and removed from the
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` |
+| HMAC headers | Yes | [Public key, timestamp and signature](/authentication) |
 
 ### Path parameters
 
@@ -354,7 +363,9 @@ Soft-delete a subscription. The subscription is deactivated and removed from the
 
 ```http Request
 DELETE /v2/trade/copytrade/ct_01HX6N0QRST9XDYP5FZELOH8I
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 ```json Response
@@ -375,7 +386,7 @@ Transition a subscription between `ACTIVE`, `PAUSED`, and `DISABLED` states with
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` |
+| HMAC headers | Yes | [Public key, timestamp and signature](/authentication) |
 | `Idempotency-Key` | Yes | Unique string per request |
 
 ### Path parameters
@@ -404,7 +415,9 @@ Transition a subscription between `ACTIVE`, `PAUSED`, and `DISABLED` states with
 
 ```json Request
 PATCH /v2/trade/copytrade/ct_01HX6N0QRST9XDYP5FZELOH8I/status
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 Idempotency-Key: a7b8c9d0-e1f2-3456-abcd-567890123456
 Content-Type: application/json
 
@@ -432,7 +445,7 @@ Retrieve the execution history of all copied trades for the authenticated user, 
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` |
+| HMAC headers | Yes | [Public key, timestamp and signature](/authentication) |
 
 ### Query parameters
 
@@ -466,7 +479,9 @@ Retrieve the execution history of all copied trades for the authenticated user, 
 
 ```http Request
 GET /v2/trade/copytrade/history?limit=5
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 ```json Response
@@ -503,7 +518,7 @@ Retrieve realized profit and loss for the authenticated user across all copytrad
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` |
+| HMAC headers | Yes | [Public key, timestamp and signature](/authentication) |
 
 ### Response
 
@@ -528,7 +543,9 @@ Retrieve realized profit and loss for the authenticated user across all copytrad
 
 ```http Request
 GET /v2/trade/copytrade/pnl
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 ```json Response

@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Authenticate with HMAC. Signature values in request examples are placeholders; compute a fresh signature over the exact method, path and body. See [authentication](/authentication) and the [runnable quickstart](/quickstart-trade).</Note>
+
+
 When you submit a `PEGGED`, `TWAP`, `ICEBERG`, `STOP_LOSS`, or `TRAILING_STOP` order, Bravado returns a `record_id` instead of (or in addition to) a CLOB `order_id`. These long-running strategy records are tracked separately from the CLOB order book. Use the strategies endpoints to monitor their lifecycle and cancel them before they complete or trigger.
 
 ---
@@ -122,7 +125,7 @@ Cancels a managed strategy by its `record_id`. The operation is idempotent, canc
 
 | Header | Value |
 |--------|-------|
-| `Authorization` | `Bearer <token>` |
+| HMAC headers | [Public key, timestamp and signature](/authentication) |
 | `Idempotency-Key` | Unique string (UUID recommended) |
 
 ### Path parameters
@@ -151,7 +154,9 @@ Cancels a managed strategy by its `record_id`. The operation is idempotent, canc
 
 ```http Request
 DELETE /v2/trade/strategies/rec_twap_abc123
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <timestamp-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 Idempotency-Key: c9d0e1f2-a3b4-5678-2cde-678901234508
 ```
 

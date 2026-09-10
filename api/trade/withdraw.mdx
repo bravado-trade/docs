@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Authenticate with HMAC. Signature values in request examples are placeholders; compute a fresh signature over the exact method, path and body. See [authentication](/authentication) and the [runnable quickstart](/quickstart-trade).</Note>
+
+
 The withdraw endpoint lets you move pUSD, or any other ERC20 token held in your deposit wallet, to an external address on Polygon. This is how you take collateral out of the Bravado system, whether to return funds to a user in a white-label integration or to bridge assets elsewhere. Withdrawals are submitted on-chain by Bravado and confirmed before the response returns in most cases.
 
 <Warning>
@@ -23,7 +26,7 @@ Initiates an ERC20 transfer from your Bravado deposit wallet to a destination ad
 
 | Header | Value |
 |--------|-------|
-| `Authorization` | `Bearer <token>` |
+| HMAC headers | [Public key, timestamp and signature](/authentication) |
 | `Idempotency-Key` | Unique string (UUID recommended) |
 | `Content-Type` | `application/json` |
 
