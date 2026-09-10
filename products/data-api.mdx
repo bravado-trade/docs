@@ -11,7 +11,7 @@ icon:
   The **Trader Data API** is about *traders*: wallets, PnL, positions, history, and leaderboards derived from on-chain settlement. For realtime *market* data, live trades and order books, see [Market Data](/products/market-data). Requests here use the base path `/trader-analytics` and are sometimes referred to as the "Data API" in older material.
 </Info>
 
-Bravado's Trader Data API derives all metrics directly from on-chain settlement data, using a share-level FIFO cost-basis engine that reconstructs the full economic history of any wallet. You can query performance data for your own wallet or any public address, useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://partner-api.bravadotrade.com/trader-analytics`.
+Bravado's Trader Data API combines on-chain settlement history, FIFO cost-basis accounting and current market prices to serve wallet performance. You can query performance data for your own wallet or any public address, useful for leaderboard analysis, due diligence on traders you want to copy, and year-end tax reporting. The base URL for all analytics endpoints is `https://partner-api.bravadotrade.com/trader-analytics`.
 
 ## Authentication
 
@@ -48,33 +48,27 @@ Every Data API request belongs to exactly one venue, and your partner account mu
   All numeric fields in Data API responses, including PnL, volume, and prices, are returned as **JSON strings**. Always parse them as `BigDecimal` (or your language's equivalent arbitrary-precision type). Parsing as a float risks silent rounding errors on large values.
 </Warning>
 
-## Why Bravado over the native endpoints
+## Accounting coverage
 
-The difference here is accuracy, and it is worth being specific about where it comes from.
+Bravado reconstructs wallet cost basis and realized PnL using a share-level FIFO engine. Open positions are marked to market. You can read public wallet analytics without a funded trading account.
 
-Polymarket's own surfaces are built to run the exchange, not to account for a wallet. They expose recent activity and current holdings. They do not reconstruct what a position cost you, and they do not produce anything a preparer or an auditor can check.
+On Polymarket, processed wallets can also return PMWAS statements, R1 dispositions, performance metrics and R8 reconciliation certificates. A certificate reports internal accounting checks; it is not an independent audit opinion. Full statements depend on wallet processing and can return `503` with `available: false` while unavailable.
 
-Bravado computes every figure from **on-chain Polygon settlement records**, then replays a wallet's entire transaction history through a **share-level FIFO cost-basis engine**, starting at its first ever trade. Nothing is estimated from a midpoint or sampled from a recent window.
+Tax reports disclose whether they use PMWAS statements or a serving-engine FIFO fallback. The fallback does not provide the same lot lineage and cash-flow coverage as a full statement. [Entity rollups](/api/analytics/entity) aggregate mapped member wallets; they do not infer arbitrary wallet clusters.
 
-| | Native endpoints | Bravado Data API |
-| --- | --- | --- |
-| Source | Exchange state | On-chain settlement records, replayed |
-| History depth | Recent activity | Every fill since the wallet's first trade |
-| Cost basis | Not provided | Share-level FIFO, reconstructed per lot |
-| Consistency | Per-surface | One standard (PMWAS) across every endpoint |
-| Verifiability | None | R8 reconciliation certificate |
-| Tax output | None | R1 dispositions and per-year summaries |
-| Precision | JSON numbers | JSON strings, so no float drift |
+Predict.fun supports core wallet analytics. PMWAS statements, tax reports, reconciliation and entity rollups are Polymarket-only today.
 
-Three consequences follow from that design:
+## Data-only access and onboarding
 
-- **Numbers agree with each other.** PnL on the leaderboard, on the trader profile, and in the tax report come from the same computation, so they reconcile. Endpoints that each calculate independently drift apart.
-- **You can prove it.** [`GET /traders/{address}/reconciliation`](/api/analytics/trader-reconciliation) returns a certificate verifying the statement is internally consistent, which matters when a third party has to accept the numbers.
-- **It works on wallets you do not control.** Every read endpoint takes any public address, so you can analyse a trader before you follow them, with no funded account.
+You can use Trader Data with an `analytics.read` key and no trading permissions. Bravado can arrange evaluation access, venue enablement and the appropriate request allowance directly. Confirm commercial use and redistribution terms during onboarding.
 
-<Note>
-  Numeric fields are returned as JSON **strings** on purpose. Parsing them as floats reintroduces exactly the rounding error the FIFO engine exists to avoid. See [Numeric conventions](/reference/numeric-conventions).
-</Note>
+The full self-service portal is being finalized. You do not need to wait for it to start an integration: contact the team for credentials and setup assistance. See [API credits](/api-credits) for published request costs; exact quotas and historical coverage depend on the product and dataset.
+
+## Trader intelligence
+
+Beyond leaderboards, use wallet profiles, open and closed positions, trade history and category performance. Polymarket top holders are available through `GET /clob-proxy/holders?market={conditionId}`; this proxies venue holder data and is not a smart-money score.
+
+For similar-wallet discovery, clusters, per-market intelligence or additional style labels, contact us to scope the analysis. These are custom development requests rather than existing general-purpose endpoints.
 
 ## Key metrics
 
@@ -98,7 +92,7 @@ Three consequences follow from that design:
 
 ## The `window` parameter
 
-All analytics endpoints accept a `?window=` query parameter that controls the rolling lookback period for returned metrics.
+Analytics endpoints that document `window` accept a `?window=` query parameter that controls the rolling lookback period for returned metrics.
 
 | Value | Description |
 | --- | --- |
@@ -222,7 +216,7 @@ Bravado generates formal accounting documents for tax reporting and financial re
 </Accordion>
 
 <Accordion title="Reconciliation certificate">
-  A machine-verifiable certificate that confirms the on-chain data used to generate statements is complete and consistent. Include this with any professional tax filing for auditability.
+  A machine-readable report of internal reconciliation checks for the processed statement. Read the individual check results and coverage disclosures; the certificate is not a guarantee of complete source history or an independent audit.
 </Accordion>
 
 ```bash

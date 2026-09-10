@@ -9,7 +9,7 @@ icon:
 
 A prediction market lets people trade on the outcome of a future event. Each possible outcome is a token that settles at \$1 if it happens and \$0 if it does not, so the live price doubles as the market's implied probability, a share trading at `0.62` means the market collectively puts the outcome at about 62%.
 
-Bravado connects to these venues so you integrate once instead of per-venue. The same order types, copy-trading engine, and analytics model apply across every supported market.
+Bravado connects to these venues so you integrate once instead of per-venue. Product and feature coverage differ by venue; use the table below to choose the relevant API.
 
 <CardGroup cols={2}>
   <Card title="Polymarket" icon="/logo/polymarket.png" href="/markets/polymarket/overview">
@@ -47,12 +47,14 @@ The mechanics are broadly the same across venues, which is what makes a shared A
 
 | Bravado product | Polymarket | Predict.fun |
 | --- | --- | --- |
-| [Market Data (WebSockets)](/products/market-data) | Supported | Not yet |
+| [Order-book WebSockets](/api/market-data/venue-order-books) | Supported | Supported |
+| [Enriched live trade feed](/api/market-data/trade-feed) | Supported | Not available |
 | [Trader Data API](/products/data-api) | Supported | Supported |
 | [Trade API](/products/trade-api) | Supported | Supported (LIMIT, MARKET, TWAP) |
 | [Copytrade API](/products/copytrade-api) | Supported | Not available |
 | [Combos API](/api/combos/overview) | Supported | Not applicable |
-| [UMA API](/products/uma-api) | Supported | Not applicable |
+| [PMWAS, tax and entity rollups](/products/data-api#accounting-coverage) | Supported for covered wallets | Not available |
+| [UMA API](/products/uma-api) | Contact us for access and endpoint details | Not applicable |
 
 <Info>
   Predict.fun is supported through the Trade API v2 by adding `"venue": "predictfun"` to a request. It runs on BNB Chain with USDT collateral. See the [Predict.fun overview](/markets/predict-fun/overview) for venue rules.

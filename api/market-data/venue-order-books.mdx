@@ -1,0 +1,63 @@
+---
+title: "Live order books on Polymarket and Predict.fun"
+sidebarTitle: "Multi-venue order books"
+description: "Subscribe to live Polymarket and Predict.fun order books with a shared WebSocket message format."
+---
+
+Connect to the public endpoint for your venue. No API key is required on these routes.
+
+| Venue | WebSocket URL |
+| --- | --- |
+| Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/market` |
+| Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/market` |
+
+## Subscribe
+
+Use the venue's outcome token ID, not its event or market ID. On Predict.fun this is the outcome's `onChainId`.
+
+```javascript
+const venue = "predictfun"; // or "polymarket"
+const asset = "<OUTCOME_TOKEN_ID>";
+const ws = new WebSocket(
+  `wss://partner-api.bravadotrade.com/stream/${venue}/market`
+);
+ws.onopen = () => ws.send(JSON.stringify({
+  op: "sub",
+  streams: [`book:${asset}`]
+}));
+ws.onmessage = ({ data }) => {
+  const frame = JSON.parse(data);
+  if (frame.type === "error") {
+    console.error(frame.code, frame.message);
+    return;
+  }
+  if (frame.channel !== "book") return;
+  if (frame.type === "snapshot" || frame.type === "delta") {
+    // Both frame types carry complete sides: replace your local book.
+    console.log(frame.asset, frame.seq, frame.bids, frame.asks);
+  } else if (frame.type === "status") {
+    console.log(frame.state, frame.reason);
+  }
+};
+```
+
+Alternatively, pass `?streams=book:<OUTCOME_TOKEN_ID>` on the connection URL. Subscribe to multiple tokens with a `streams` array. Unsubscribe with `{"op":"unsub","streams":["book:<OUTCOME_TOKEN_ID>"]}`. The public route accepts up to 120 streams per connection.
+
+## Read the messages
+
+Book frames include `channel: "book"`, `venue`, `asset`, `type`, `seq`, `ts` and, for snapshots and deltas, `bids` and `asks`.
+
+- Each price level is `[price, size]`, with both values encoded as decimal strings.
+- **Both snapshots and deltas contain complete sides**, not level patches. Replace the previous sides on each frame.
+- Bids are descending; asks are ascending. A transient crossed book is possible during venue updates.
+- Sequence numbers are per venue and asset. A snapshot resets local book state; do not infer ordering across venues.
+- `ts` is Bravado's timestamp in milliseconds. `upstreamTs` is the venue timestamp when available, otherwise `null`.
+- Status frames distinguish `live` and `degraded`. Check `reason`; a connection or status frame alone does not mean a fresh book has arrived.
+
+Reconnect and resubscribe after a disconnection. Do not display a buffered book as fresh while the stream is degraded.
+
+## Coverage
+
+These routes serve live order books. Predict.fun subscriptions require an indexed binary market and its outcome token IDs. The [enriched trade feed](/api/market-data/trade-feed) is a separate Polymarket feed; book changes are not executions.
+
+For historical L2 or bulk extracts, see [historical data and custom delivery](/api/market-data/historical-data).

@@ -66,7 +66,9 @@
             "pages": [
               "products/market-data",
               "api/market-data/trade-feed",
-              "api/market-data/order-book"
+              "api/market-data/order-book",
+              "api/market-data/venue-order-books",
+              "api/market-data/historical-data"
             ]
           },
           {
@@ -186,7 +188,9 @@
             "pages": [
               "products/market-data",
               "api/market-data/trade-feed",
-              "api/market-data/order-book"
+              "api/market-data/order-book",
+              "api/market-data/venue-order-books",
+              "api/market-data/historical-data"
             ]
           },
           {
@@ -249,7 +253,9 @@
                 "pages": [
                   "products/market-data",
                   "api/market-data/trade-feed",
-                  "api/market-data/order-book"
+                  "api/market-data/order-book",
+                  "api/market-data/venue-order-books",
+                  "api/market-data/historical-data"
                 ]
               },
               {
