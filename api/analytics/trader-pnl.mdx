@@ -2,68 +2,211 @@
 title: "GET /traders/{address}/pnl: Cumulative PnL Time Series"
 sidebarTitle: "/traders/{address}/pnl"
 api: "GET /trader-analytics/traders/{address}/pnl"
-description: "Cumulative PnL time series for a wallet, suitable for plotting an equity curve."
+description: "Gap-free, cumulative-all-time PnL time series for a wallet, suitable for plotting an equity curve — including intraday (hourly) resolution."
 ---
 
-Returns a cumulative PnL time series for the wallet, suitable for plotting an equity curve.
+Returns a **gap-free, cumulative-all-time** PnL time series for the wallet,
+suitable for plotting an equity curve directly (no client-side stitching
+needed). Every point is the wallet's running total **as of that bucket** —
+the `window` only selects which slice of the curve comes back; it never
+resets the curve to zero. A bucket with no new activity repeats the previous
+total, so a wallet with real trading history but nothing inside the
+requested window returns a **flat line** at its pre-window level, not an
+empty array.
 
 ```text
 GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 ```
+
+<Note>
+  **Changed 2026-09-11.** Before this date, a bounded `window` (e.g. `30d`)
+  returned a curve *relative to window start* (starting near `0`) rather than
+  the wallet's cumulative total — and a wallet with no activity inside the
+  window returned `series: []` even when it had a long trading history
+  outside it. Both were defects: a wallet whose only activity predates the
+  window (e.g. it traded heavily in 2024 and nothing since) now correctly
+  renders as a flat line at its historical level, and every window's final
+  point now agrees with [`GET /traders/{address}`](/api/analytics/overview)'s
+  all-time total. If you previously computed your own baseline to splice
+  windows together or to backfill history before this endpoint's coverage
+  started, you can remove that logic — a single call now returns the
+  complete curve for the window you ask for.
+</Note>
 
 ### Path Parameters
 
 ### Query Parameters
 
 <ParamField query="window" default="30d" type="string">
-  Time range. Accepted values: `1h`, `4h`, `24h`, `7d`, `30d`, `90d`, `365d`, `all`.
+  Time range. Accepted values: `1h`, `4h`, `24h`, `7d`, `30d`, `90d`, `365d`,
+  `all` — plus `1y` as an alias of `365d`.
+</ParamField>
+
+<ParamField query="interval" default="window-dependent" type="string">
+  Bucket resolution: `1h` or `1d` (alias: `resolution`, same values). Default
+  depends on `window`: `1h` for `1h`/`4h`/`24h`/`7d`/`30d`, `1d` for
+  `90d`/`365d`/`1y`/`all`. There is no finer option (e.g. `5m`) — no data
+  source in the platform resolves a wallet's realized PnL more finely than
+  the hour, or its open-position mark more finely than the day, so this
+  endpoint does not invent resolution it does not have.
 </ParamField>
 
 <ParamField query="pnl_type" default="overall" type="string">
-  `realized` for the running realized-only curve; `unrealized` for current open-position marks; `overall` for the realized curve with current unrealized value appended.
+  `realized` for the running realized-only curve; `unrealized` for the
+  open-position mark series alone (not cumulative — each point is that
+  bucket's absolute mark, day-grained); `overall` for the realized curve plus
+  the unrealized mark at each bucket.
+</ParamField>
+
+<ParamField query="basis" default="net" type="string">
+  `net` (fees deducted — exact, integrated over the wallet's whole fee
+  history) or `gross`. `net` is automatically neutralized to `gross` at
+  `interval=1h`, because no fee source resolves finer than a day; check the
+  response's `fees_basis` field rather than assuming your requested `basis`
+  held.
 </ParamField>
 
 ### Response
 
-  
+<ResponseField name="interval" type="string">
+  The bucket resolution actually used (`1h` or `1d`) — the resolved value
+  even when you didn't pass `interval`/`resolution`.
+</ResponseField>
+
+<ResponseField name="fees_basis" type="string">
+  Which fees were actually deducted: `all_time` (exact, `basis=net` at
+  `interval=1d`), `unavailable_sub_day` (`basis=net` was neutralized to
+  `gross` because `interval=1h` has no hourly fee source), `none`
+  (`basis=gross` was requested), or `engine_net` (predict.fun, whose engine
+  realized PnL is already fee-net).
+</ResponseField>
+
+<ResponseField name="series_kind" type="string">
+  Always `cumulative_all_time` — a marker so your integration can detect
+  which contract a response is on (see the changelog note above) without
+  guessing from the numbers.
+</ResponseField>
+
+<ResponseField name="unrealized_marks" type="string">
+  How the series' unrealized component is sourced: `none` (`pnl_type=realized`
+  — no unrealized component), `day_grained` (`interval=1d` — an exact daily
+  mark), `day_grained_carried_forward` (`interval=1h` — no hourly
+  unrealized-mark source exists, so the day's mark is repeated across its
+  hours rather than interpolated).
+</ResponseField>
+
+<ResponseField name="empty_reason" type="string">
+  Present **only** when `series` is empty: `no_wallet_history` for a wallet
+  this platform has never observed any activity for. A wallet with real
+  history but nothing inside the requested window is **not** empty — see
+  above — so this field is otherwise omitted.
+</ResponseField>
 
 <ResponseField name="series" type="array">
   <Expandable title="Series point fields">
     <ResponseField name="ts" type="integer">
-      Unix timestamp.
+      Unix timestamp of the bucket boundary. One point per bucket, gap-free,
+      from window start to now.
     </ResponseField>
 
     <ResponseField name="pnl" type="string">
-      Cumulative PnL at this timestamp, decimal string USDC.
+      The wallet's cumulative PnL **as of this bucket** (decimal string,
+      USDC) — its running total, not a value relative to window start.
     </ResponseField>
   </Expandable>
 </ResponseField>
 
 <Note>
-  `pnl_type=unrealized` returns only a single data point representing the current snapshot. Use `overall` to get the full realized curve with current unrealized as the terminal point.
+  The **last point of every window's series is the same number**: the
+  wallet's current all-time total for the requested `pnl_type`/`basis`. That
+  also equals [`GET /traders/{address}`](/api/analytics/overview)'s
+  `realized_pnl` (for `pnl_type=realized`) or `total_pnl` (for
+  `pnl_type=overall`), same `basis` — a useful sanity check if you're
+  reconciling a chart against the profile card next to it.
 </Note>
 
-### Example
+### Example: hourly resolution over the last 24 hours
 
 <CodeGroup>
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../pnl \
   -H "Authorization: Bearer <token>" \
-  -d window=30d \
+  -d window=24h \
+  -d interval=1h \
   -d pnl_type=overall
 ```
 
 ```json Response (abbreviated)
 {
   "trader": "0xabc...",
-  "window": "30d",
+  "window": "24h",
+  "interval": "1h",
   "pnl_type": "overall",
+  "basis": "net",
+  "fees_basis": "unavailable_sub_day",
+  "series_kind": "cumulative_all_time",
+  "unrealized_marks": "day_grained_carried_forward",
   "series": [
-    { "ts": 1734307200, "pnl": "0.000000" },
-    { "ts": 1734393600, "pnl": "142.500000" },
-    { "ts": 1736899200, "pnl": "3630.550000" }
+    { "ts": 1789084800, "pnl": "18543120.500000" },
+    { "ts": 1789088400, "pnl": "18543120.500000" },
+    { "ts": 1789092000, "pnl": "18545372.250000" }
   ]
+}
+```
+
+</CodeGroup>
+
+### Example: a wallet with no activity in the window
+
+A wallet whose entire trading history predates the requested window still
+returns a full, gap-free series — a flat line at its historical level,
+**not** an empty array:
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../pnl \
+  -H "Authorization: Bearer <token>" \
+  -d window=30d
+```
+
+```json Response (abbreviated)
+{
+  "trader": "0xdef...",
+  "window": "30d",
+  "interval": "1h",
+  "pnl_type": "overall",
+  "basis": "net",
+  "fees_basis": "unavailable_sub_day",
+  "series_kind": "cumulative_all_time",
+  "unrealized_marks": "day_grained_carried_forward",
+  "series": [
+    { "ts": 1786492800, "pnl": "22029972.635797" },
+    { "ts": 1786496400, "pnl": "22029972.635797" },
+    { "ts": 1789084800, "pnl": "22029972.635797" }
+  ]
+}
+```
+
+</CodeGroup>
+
+### Example: a wallet with no history at all
+
+<CodeGroup>
+
+```json Response
+{
+  "trader": "0x000000000000000000000000000000000000dead",
+  "window": "30d",
+  "interval": "1h",
+  "pnl_type": "overall",
+  "basis": "net",
+  "fees_basis": "none",
+  "series_kind": "cumulative_all_time",
+  "unrealized_marks": "none",
+  "empty_reason": "no_wallet_history",
+  "series": []
 }
 ```
 
