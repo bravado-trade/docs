@@ -17,7 +17,42 @@ GET https://partner-api.bravadotrade.com/trader-analytics/trades
 
 ### Response
 
-Same shape as [/traders/](/api/analytics/trader-trades#response){address}[/trades](/api/analytics/trader-trades#response).
+Same shape as [/traders/](/api/analytics/trader-trades#response){address}[/trades](/api/analytics/trader-trades#response), **except for `type=DEPOSIT` and `type=WITHDRAW`/`WITHDRAW­AL`**, which requires `address` and returns a narrower envelope:
+
+```json
+{
+  "trader": "0xabc...",
+  "mode": "onchain",
+  "trades": [
+    {
+      "block_timestamp": 1778009606,
+      "ts": 1778009606,
+      "event_type": "DEPOSIT",
+      "side": "",
+      "shares": "",
+      "usdc_amount": "50.000000",
+      "price_cents": "",
+      "token_id": "",
+      "tx_hash": "0x...",
+      "log_index": 3,
+      "source": "onchain"
+    }
+  ],
+  "next_cursor": 0
+}
+```
+
+Cash movements come from our own on-chain data first (`mode: "onchain"`),
+merged with a third-party fallback for whatever our detection doesn't cover
+(`mode: "onchain+data-api"` when that fallback contributed at least one row).
+Every row states its own `source` (`"onchain"` or `"data-api"`), so a caller
+never has to guess which one answered. `log_index` (alongside `tx_hash`)
+is present on `source: "onchain"` rows and omitted — never fabricated —
+otherwise. Fields a cash movement genuinely doesn't have (`side`, `shares`,
+`price_cents`, `token_id`) are always the empty string, never a plausible
+zero. A `WITHDRAWAL` row here is specifically a pUSD burn (Polymarket's
+definition); a withdrawal made through Bravado's own infrastructure is a
+plain ERC-20 transfer and is not represented on this surface today.
 
 ### Example
 

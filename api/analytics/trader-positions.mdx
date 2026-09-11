@@ -23,7 +23,42 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Response: Position Fields
 
-             
+Every position row carries these fields. `value_usdc` and `unrealized_pnl` are
+always `"0"` on a closed row (no holdings remain); `shares_bought` through
+`close_reason` are populated on closed rows only.
+
+| Field | Type | Description |
+|---|---|---|
+| `token_id` | string | The outcome token's on-chain id. |
+| `market_id` / `question` / `outcome` / `category` | string \| null | Market metadata. |
+| `shares` | string | Shares held (open row) or shares acquired (closed row). |
+| `avg_cost_cents` | string | Average acquisition cost per share, in cents. |
+| `mark_price_cents` | string | Current mark (open) or average exit price (closed), in cents. |
+| `value_usdc` | string | Current position value (open) or `"0"` (closed). |
+| `unrealized_pnl` | string | Mark-to-market PnL on the open shares, or `"0"` (closed). |
+| `realized_pnl` | string | Realized PnL to date on this position/episode. |
+| `roi_pct` | number \| null | Return on investment in percent; `null` when cost basis is zero. |
+| `first_open_ts` | integer \| null | Unix timestamp the position was first opened. |
+
+**Closed positions only** — one row is one holding **episode** (a
+flat→open→flat cycle), not one row per token's whole lifetime: a token the
+wallet bought, fully sold, and later bought again serves as two rows sharing
+`token_id`, each with its own entry/exit prices and timestamps below.
+
+| Field | Type | Description |
+|---|---|---|
+| `shares_bought` | string | Shares acquired this episode. Same value as `shares` above. |
+| `shares_exited` | string | Shares disposed this episode — sold, redeemed, or consumed by a merge. |
+| `cost_usdc` | string | Exact cash paid to acquire `shares_bought`. |
+| `proceeds_usdc` | string | Exact cash actually received disposing of `shares_exited` — sale proceeds, redemption payout, or merge/convert proceeds, whichever applied. |
+| `avg_entry_price` | string \| null | `cost_usdc / shares_bought`, a decimal in `[0,1]`. `null` only if `shares_bought` is `0`. |
+| `avg_exit_price` | string \| null | `proceeds_usdc / shares_exited`, a decimal in `[0,1]`. `null` only if `shares_exited` is `0`. |
+| `opened_at` | integer | Unix timestamp of the episode's first acquisition fill. Same value as `first_open_ts`. |
+| `closed_at` | integer | Unix timestamp of the episode's final exit fill — when the position actually closed. |
+| `close_reason` | string | Why the episode closed: `SELL` (sold on the order book), `REDEEM` (redeemed for its payout), `MERGE` (consumed by a merge into collateral), `RESOLVED_WORTHLESS` (the market resolved and this outcome paid nothing — never separately redeemed because there was nothing to redeem), `RESOLVED` (the market resolved with a nonzero payout but this position was never manually redeemed or sold). |
+
+For every closed row, `proceeds_usdc − cost_usdc` equals `realized_pnl`
+exactly, to the micro-dollar.
 
 ### Example
 

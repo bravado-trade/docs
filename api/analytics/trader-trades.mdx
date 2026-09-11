@@ -76,10 +76,42 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
     <ResponseField name="event_type" type="string">
       Event classification.
     </ResponseField>
+
+    <ResponseField name="shares_source" type="string" default="omitted">
+      On a `REDEEM` row only: `"payload"` when `shares` is measured exactly
+      from the on-chain redemption event. **Omitted (not `""`) when the
+      redeemed share count could not be determined** — `shares` is then the
+      empty string `""`, deliberately never a fake `"0"`.
+    </ResponseField>
+
+    <ResponseField name="price_cents_source" type="string" default="omitted">
+      On a `REDEEM` row only: `"payload"` when `price_cents` is an exact
+      payout-per-share (computed from the redemption's real payout and share
+      count) — `0` for a losing outcome, `100` for a full winning payout,
+      fractional for a partial/split resolution. **Omitted when the redeemed
+      share count is unknown** (mirrors `shares_source`): `price_cents` then
+      stays `0` as a pending placeholder, not a claim the payout was zero —
+      check this field before trusting `price_cents` on a REDEEM row.
+    </ResponseField>
+
+    <ResponseField name="log_index" type="integer" default="omitted">
+      On `DEPOSIT`/`WITHDRAW` rows sourced from our own on-chain data: the
+      on-chain log index of the transfer, alongside `tx_hash` — together they
+      identify the exact event even when several logs share one transaction.
+      Omitted (never a fabricated `0`) when the source has no log index (a
+      row that fell back to a third-party API), or when `tx_hash` itself is
+      unavailable.
+    </ResponseField>
   </Expandable>
 </ResponseField>
 
- 
+**Deposits and withdrawals.** `type=DEPOSIT`/`WITHDRAW` rows are sourced from
+our own on-chain ClickHouse tables first (real `tx_hash` + `log_index` by
+construction), falling back to a third-party API only for a transfer our own
+detection does not cover. A `WITHDRAW` row here is specifically a **pUSD
+burn** — Polymarket's definition of a withdrawal. A withdrawal made through
+Bravado's own infrastructure is a plain ERC-20 transfer, not a burn, and is
+not yet represented on this surface.
 
 ### Pagination Example
 
