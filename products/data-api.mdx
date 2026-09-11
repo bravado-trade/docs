@@ -137,13 +137,52 @@ Bravado maintains two live leaderboards ranked by the `window` you specify:
     | `limit` / `offset` | Page size (max 500) and offset. |
 
     The response carries `total` (size of the candidate set after `min_trades` and the bot filter; `null` only if it could not be counted), `has_more` (`offset + rows < total`), and echoes the resolved `sort` and `order`.
+
+    It also carries a `totals` object — a board-wide aggregate over that same candidate set, for a stat-strip header rather than for paging:
+
+    ```json
+    "totals": {
+      "traders": 2559852,
+      "volume_usdc": "18234567890.123000",
+      "trades": 9812340,
+      "realized_pnl": "1234567.890000",
+      "unrealized_pnl": "-45678.120000",
+      "total_pnl": "1188889.770000",
+      "profitable_traders": 13102,
+      "unprofitable_traders": 11343
+    }
+    ```
+
+    `traders` always equals `total`. `profitable_traders`/`unprofitable_traders` classify by the sign of `total_pnl` (realized + current open mark-to-market) — the one figure defined the same way on every window. `totals` is `null` only if it could not be computed; it never adds latency, since it's computed alongside the ranked page rather than after it.
   </Tab>
   <Tab title="Volume leaderboard">
-    Returns traders ranked by USDC trading volume over the selected window. CTF infrastructure transactions are excluded.
+    Returns traders ranked by USDC trading volume over the selected window. CTF infrastructure transactions are excluded. Ranked in the database over the complete candidate set, with the same deterministic wallet tie-break as the PnL leaderboard.
 
     ```bash
     GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume?window=7d
     ```
+
+    | Parameter | Description |
+    | --- | --- |
+    | `sort` | Ranking column: `volume_usdc` (default), `trades`, `volume_shares`. This board carries no PnL fields, so PnL sort keys are rejected here. |
+    | `order` | `desc` (default) or `asc` — pass `order=asc` to read the **bottom** of the board directly (e.g. the least-active traders), without walking pages backward from an unknown end. |
+    | `min_trades` | Minimum trade count (default `0`). |
+    | `limit` / `offset` | Page size (max 500) and offset. |
+
+    The response carries `total` (size of the candidate set after `min_trades`; `null` only if it could not be counted), `has_more`, and echoes the resolved `sort` and `order` — same paging contract as the PnL leaderboard. It also carries a `totals` object scoped to the same candidate set:
+
+    ```json
+    "totals": {
+      "traders": 3194081,
+      "volume_usdc": "90018699131.670208",
+      "volume_shares": "216739307194.687436",
+      "trades": 2172472283
+    }
+    ```
+
+    <Note>
+      This board's default `min_trades` is `0` (any wallet with at least one real fill), while the PnL leaderboard's default is `5` — that is the entire reason the volume board's candidate set is larger. Pass a matching `min_trades` to both endpoints to compare the same population; they are not different populations of traders.
+    </Note>
   </Tab>
 </Tabs>
 
