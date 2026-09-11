@@ -19,18 +19,26 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 ```
 
 <Note>
-  **Changed 2026-09-11.** Before this date, a bounded `window` (e.g. `30d`)
-  returned a curve *relative to window start* (starting near `0`) rather than
-  the wallet's cumulative total — and a wallet with no activity inside the
-  window returned `series: []` even when it had a long trading history
-  outside it. Both were defects: a wallet whose only activity predates the
-  window (e.g. it traded heavily in 2024 and nothing since) now correctly
-  renders as a flat line at its historical level, and every window's final
-  point now agrees with [`GET /traders/{address}`](/api/analytics/overview)'s
-  all-time total. If you previously computed your own baseline to splice
-  windows together or to backfill history before this endpoint's coverage
-  started, you can remove that logic — a single call now returns the
-  complete curve for the window you ask for.
+  **Changed 2026-09-11 — this page describes the default since 2026-09-12.**
+  Before 2026-09-11, a bounded `window` (e.g. `30d`) returned a curve
+  *relative to window start* (starting near `0`) rather than the wallet's
+  cumulative total — and a wallet with no activity inside the window returned
+  `series: []` even when it had a long trading history outside it. Both were
+  defects: a wallet whose only activity predates the window (e.g. it traded
+  heavily in 2024 and nothing since) now correctly renders as a flat line at
+  its historical level, and every window's final point now agrees with
+  [`GET /traders/{address}`](/api/analytics/overview)'s all-time total. If
+  you previously computed your own baseline to splice windows together or to
+  backfill history before this endpoint's coverage started, you can remove
+  that logic — a single call now returns the complete curve for the window
+  you ask for.
+
+  **On 2026-09-12 this became the default rather than the only option**, via
+  `?series_kind=cumulative_all_time`. If your integration already adapted to
+  (or depends on) the pre-2026-09-11 relative-delta numbers, pass
+  `?series_kind=window_delta` to get them back exactly — still gap-filled, so
+  a wallet inactive in the window is a flat line at `0.000000`, not `[]`. See
+  the `series_kind` parameter below.
 </Note>
 
 ### Path Parameters
@@ -66,6 +74,15 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
   held.
 </ParamField>
 
+<ParamField query="series_kind" default="cumulative_all_time" type="string">
+  `cumulative_all_time` (default since 2026-09-12): the behavior described on
+  this page. `window_delta`: the pre-2026-09-12 numbers — each point is a
+  delta relative to window start (`0` at the first bucket) — still gap-filled
+  and carried forward, so an inactive-in-window wallet is a flat line at
+  `0.000000`, never `[]`. Use this if your integration depends on the older
+  relative-delta shape; the response always echoes which one you got.
+</ParamField>
+
 ### Response
 
 <ResponseField name="interval" type="string">
@@ -74,17 +91,20 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 </ResponseField>
 
 <ResponseField name="fees_basis" type="string">
-  Which fees were actually deducted: `all_time` (exact, `basis=net` at
-  `interval=1d`), `unavailable_sub_day` (`basis=net` was neutralized to
-  `gross` because `interval=1h` has no hourly fee source), `none`
-  (`basis=gross` was requested), or `engine_net` (predict.fun, whose engine
-  realized PnL is already fee-net).
+  Which fees were actually deducted: `all_time` (exact, `series_kind=
+  cumulative_all_time` + `basis=net` at `interval=1d`), `window_daily`
+  (`series_kind=window_delta` + `basis=net` at `interval=1d` — the window's
+  own fees, cumulative from `0`), `unavailable_sub_day` (`basis=net` was
+  neutralized to `gross` because `interval=1h` has no hourly fee source),
+  `none` (`basis=gross` was requested), or `engine_net` (predict.fun, whose
+  engine realized PnL is already fee-net).
 </ResponseField>
 
 <ResponseField name="series_kind" type="string">
-  Always `cumulative_all_time` — a marker so your integration can detect
-  which contract a response is on (see the changelog note above) without
-  guessing from the numbers.
+  Echoes the `series_kind` parameter you sent (or the default,
+  `cumulative_all_time`) — a marker so your integration can detect which
+  contract a response is on (see the changelog note above) without guessing
+  from the numbers.
 </ResponseField>
 
 <ResponseField name="unrealized_marks" type="string">
@@ -185,6 +205,42 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../p
     { "ts": 1786492800, "pnl": "22029972.635797" },
     { "ts": 1786496400, "pnl": "22029972.635797" },
     { "ts": 1789084800, "pnl": "22029972.635797" }
+  ]
+}
+```
+
+</CodeGroup>
+
+### Example: the pre-2026-09-12 numbers via `series_kind=window_delta`
+
+Same wallet and window as the previous example — with `series_kind=
+window_delta`, the flat line is at `0.000000` (delta from window start, its
+pre-2026-09-12 meaning) instead of the wallet's all-time total, and it is
+still a full gap-filled series, never `[]`:
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../pnl \
+  -H "Authorization: Bearer <token>" \
+  -d window=30d \
+  -d series_kind=window_delta
+```
+
+```json Response (abbreviated)
+{
+  "trader": "0xdef...",
+  "window": "30d",
+  "interval": "1h",
+  "pnl_type": "overall",
+  "basis": "net",
+  "fees_basis": "unavailable_sub_day",
+  "series_kind": "window_delta",
+  "unrealized_marks": "day_grained_carried_forward",
+  "series": [
+    { "ts": 1786492800, "pnl": "0.000000" },
+    { "ts": 1786496400, "pnl": "0.000000" },
+    { "ts": 1789084800, "pnl": "0.000000" }
   ]
 }
 ```
