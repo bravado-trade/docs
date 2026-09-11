@@ -113,6 +113,12 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
   mark), `day_grained_carried_forward` (`interval=1h` — no hourly
   unrealized-mark source exists, so the day's mark is repeated across its
   hours rather than interpolated).
+
+  In every case the carried-forward mark has a staleness bound: once a mark
+  is older than that bound, points that would otherwise carry it forward
+  serve `0` for the unrealized component instead — a wallet whose
+  position-marking rollup has stopped updating is treated as "no current
+  mark," never as "still holding whatever it last held."
 </ResponseField>
 
 <ResponseField name="empty_reason" type="string">
