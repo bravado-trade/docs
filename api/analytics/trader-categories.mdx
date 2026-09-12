@@ -11,6 +11,22 @@ Returns per-category PnL and volume breakdown for the wallet.
 GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/categories
 ```
 
+<Note>
+  **Category values changed 2026-09-12 (Polymarket only).** `category` now comes from the
+  same canonical classification the [PnL](/api/analytics/leaderboard) and
+  [volume](/api/analytics/leaderboard-volume) leaderboards' `category` field reads, so a
+  wallet's dominant category here and on the board can no longer disagree. Previously this
+  endpoint used a different, less reliable heuristic (the lowest-numbered Polymarket tag on
+  the market's event) that could surface a raw entity name instead of a topic — e.g.
+  `"Iran"` or `"patriots"` instead of `Geopolitics` or `Sports`. If you cached or hardcoded
+  any of the old values, re-check them: casing is now consistent, and several buckets
+  (Sports especially) now include markets that used to appear under a narrower or noisier
+  label. The response shape is unchanged. On predict.fun, categories still come from that
+  venue's own tag tree and were not affected by this change — they use a different
+  vocabulary from the leaderboard's `category` field, which is not available on that venue
+  at all yet.
+</Note>
+
 ### Path Parameters
 
 ### Query Parameters
