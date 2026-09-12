@@ -38,7 +38,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume
 </ParamField>
 
 <ParamField query="category" type="string">
-  Filter: keep only wallets whose **dominant** category (by volume, for this board's window) equals this value. One of `Politics`, `Crypto`, `Sports`, `Science`, `Tech`, `Entertainment`, `Earnings`, `Finance`, `Geopolitics`, `World`, `Elections`, `Weather`, `Other`. This is *not* "rank within category X" — it narrows which wallets qualify for the board at all, then ranks the survivors normally. Returns `400` on a sub-day `window` (`1h`/`4h`/`24h` — the category rollup has no hourly grain), on a window the category backfill hasn't reached yet (see `category_basis` below), and on any venue other than Polymarket.
+  Filter: keep only wallets whose **dominant** category equals this value. One of `Politics`, `Crypto`, `Sports`, `Science`, `Tech`, `Entertainment`, `Earnings`, `Finance`, `Geopolitics`, `World`, `Elections`, `Weather`, `Other`. This is *not* "rank within category X" — it narrows which wallets qualify for the board at all, then ranks the survivors normally. On day-grained windows (`7d`/`30d`/`90d`/`365d`/`all`) this matches the wallet's dominance *in that window*; on sub-day windows (`1h`/`4h`/`24h`), which have no day-grained answer to give, it matches the wallet's **all-time** dominant category instead (see `category_basis` below) — the filter works the same way on every board, just against an explicitly all-time question on sub-day ones. Returns `400` on a window the category backfill hasn't reached yet (see `category_basis` below), and on any venue other than Polymarket.
 </ParamField>
 
 ### Response
@@ -78,15 +78,15 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume
     </ResponseField>
 
     <ResponseField name="category" type="string | null">
-      The wallet's dominant category for this board's window (by volume) — e.g. a wallet ranked on a `24h` board because of one Elections bet reads `Elections` here, not an all-time label. `null` when unknown; see `category_basis`. May legitimately be `"Other"` — that is a real classification (the catalogue's explicit residual bucket), not a fake default.
+      The wallet's dominant category (by volume). On a day-grained window (`7d`/`30d`/`90d`/`365d`) this follows *that board's window* — e.g. a wallet ranked on a `30d` board because of one Elections bet reads `Elections` here, not an all-time label. On `window=all` and on **sub-day boards (`1h`/`4h`/`24h`)** it is the wallet's **all-time** dominant category — sub-day boards have no day-grained answer to give, so rather than show nothing they show the wallet's real all-time category, labelled distinctly (see `category_basis`). `null` when unknown; see `category_basis`. May legitimately be `"Other"` — that is a real classification (the catalogue's explicit residual bucket), not a fake default.
     </ResponseField>
 
     <ResponseField name="category_share" type="string | null">
-      `category`'s share of the **wallet's own** `volume_usdc` in the window (a volume share, not a PnL share). Present only alongside `category`.
+      `category`'s share of the **wallet's own** `volume_usdc` over whichever window `category` was computed on (the board's own window, or all-time for `window=all`/sub-day boards) — a volume share, not a PnL share. Present only alongside `category`.
     </ResponseField>
 
     <ResponseField name="category_basis" type="string">
-      Why `category` is present or absent: `all_time` / `window_daily` (a real classification), `no_classifiable_volume` (the wallet has no CLOB-traded volume in a classified market for this window — e.g. only splits/merges/redemptions; permanent), `backfill_incomplete` (the category rollup hasn't reached this window yet; transient — clears on its own, no client change needed), `unavailable_sub_day` (`1h`/`4h`/`24h`), or `unsupported_venue`.
+      Why `category` is present or absent, and how it should be read: `all_time` (`window=all`, a real classification), `all_time_fallback` (`1h`/`4h`/`24h` — the SAME all-time classification as `all_time`, served because no day-grained answer exists at that grain; not the window's own dominance), `window_daily` (`7d`/`30d`/`90d`/`365d`, a real classification for that window), `no_classifiable_volume` (the wallet has no CLOB-traded volume in a classified market — e.g. only splits/merges/redemptions; permanent), `backfill_incomplete` (the category rollup — or, for a sub-day board, the all-time coverage the fallback depends on — hasn't reached this window yet; transient, clears on its own, no client change needed), or `unsupported_venue`.
     </ResponseField>
   </Expandable>
 </ResponseField>
