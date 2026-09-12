@@ -25,6 +25,10 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard
   Offset for pagination. See [Pagination](/reference/pagination).
 </ParamField>
 
+<ParamField query="category" type="string">
+  Filter: keep only wallets whose **dominant** category (by volume, for this board's window) equals this value. One of `Politics`, `Crypto`, `Sports`, `Science`, `Tech`, `Entertainment`, `Earnings`, `Finance`, `Geopolitics`, `World`, `Elections`, `Weather`, `Other`. Not "rank within category X" — see the same param on [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume) for the full semantics (window/venue/backfill restrictions are identical on both boards).
+</ParamField>
+
 ### Response
 
 <ResponseField name="results" type="array">
@@ -63,6 +67,18 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard
 
     <ResponseField name="win_rate" type="string">
       Fraction of closed positions with positive realized PnL. String between "0" and "1".
+    </ResponseField>
+
+    <ResponseField name="category" type="string | null">
+      The wallet's dominant category for this board's window (by volume). `null` when unknown — see `category_basis`; see [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume) for full field semantics (identical on both boards).
+    </ResponseField>
+
+    <ResponseField name="category_share" type="string | null">
+      `category`'s share of the wallet's own `volume_usdc` in the window. Present only alongside `category`.
+    </ResponseField>
+
+    <ResponseField name="category_basis" type="string">
+      Why `category` is present or absent: `all_time` / `window_daily`, `no_classifiable_volume`, `backfill_incomplete`, `unavailable_sub_day`, or `unsupported_venue`.
     </ResponseField>
   </Expandable>
 </ResponseField>
@@ -121,7 +137,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard
 
 | Status | When |
 | --- | --- |
-| `400 Bad Request` | Invalid `window`, `limit`, or `offset` value |
+| `400 Bad Request` | Invalid `window`, `limit`, `offset`, or `category` value, or `category` requested for a window/venue it isn't available on yet |
 | `401 Unauthorized` | Missing or invalid Bearer token |
 | `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` header |
 
