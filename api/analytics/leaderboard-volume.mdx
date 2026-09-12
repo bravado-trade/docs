@@ -5,13 +5,37 @@ api: "GET /trader-analytics/leaderboard/volume"
 description: "Returns traders ranked by USDC trading volume for the requested rolling window."
 ---
 
-Returns traders ranked by USDC trading volume for the requested window.
+Returns traders ranked by USDC trading volume for the requested window. The ranking runs in the database over the complete candidate set on the served column, with a deterministic wallet tie-break, so pages never overlap or skip rows.
 
 ```text
 GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume
 ```
 
 ### Query Parameters
+
+<ParamField query="window" default="24h" type="string">
+  Rolling time window. One of `1h`, `4h`, `24h`, `7d`, `30d`, `90d`, `365d`, `all`.
+</ParamField>
+
+<ParamField query="limit" default="50" type="integer">
+  Number of traders to return. Maximum 500.
+</ParamField>
+
+<ParamField query="offset" default="0" type="integer">
+  Offset for pagination. See [Pagination](/reference/pagination). Passing `order=asc` is usually cheaper than a large offset — see the note below.
+</ParamField>
+
+<ParamField query="sort" default="volume_usdc" type="string">
+  Ranking column: `volume_usdc` (USDC notional), `trades` (fill count), or `volume_shares` (contracts traded). This board carries no PnL fields, so a PnL sort key from [`GET /leaderboard`](/api/analytics/leaderboard) is rejected with `400`.
+</ParamField>
+
+<ParamField query="order" default="desc" type="string">
+  `desc` or `asc`. `order=asc` reads the **bottom** of the board directly — e.g. the least-active traders — without walking pages backward from an offset you have to discover first.
+</ParamField>
+
+<ParamField query="min_trades" default="0" type="integer">
+  Minimum trade count to be included in the candidate set. Note this board's default is `0`, while [`GET /leaderboard`](/api/analytics/leaderboard)'s default is `5` — pass the same value to both endpoints to compare over the same set of traders.
+</ParamField>
 
 ### Response
 
@@ -51,6 +75,58 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume
   </Expandable>
 </ResponseField>
 
+<ResponseField name="window" type="string">
+  Echo of the window parameter used for the response.
+</ResponseField>
+
+<ResponseField name="sort" type="string">
+  Echo of the ranking column actually applied (default resolved).
+</ResponseField>
+
+<ResponseField name="order" type="string">
+  Echo of the ranking direction actually applied (default resolved).
+</ResponseField>
+
+<ResponseField name="total" type="integer | null">
+  Size of the candidate set after `min_trades` — the number of rows a full page walk visits. `null` only if it could not be counted; never a fake `0`.
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean">
+  `true` while `offset + results.length < total`.
+</ResponseField>
+
+<ResponseField name="totals" type="object | null">
+  Board-wide aggregate over the **same candidate set** as `total` — for a stat-strip header, not for paging. `null` only if it could not be computed.
+
+  <Expandable title="VolumeLeaderboardTotals fields">
+    <ResponseField name="traders" type="integer">
+      Always equal to the response's `total`.
+    </ResponseField>
+
+    <ResponseField name="volume_usdc" type="string">
+      Sum of `volume_usdc` over the candidate set.
+    </ResponseField>
+
+    <ResponseField name="volume_shares" type="string">
+      Sum of `volume_shares` over the candidate set.
+    </ResponseField>
+
+    <ResponseField name="trades" type="integer">
+      Sum of `trades` over the candidate set.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | Invalid `window`, `sort`, `order`, `limit`, or `offset` value |
+| `401 Unauthorized` | Missing or invalid Bearer token |
+| `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` header |
+
+See the [Error reference](/reference/errors).
+
 ### Example
 
 <CodeGroup>
@@ -58,19 +134,32 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume \
   -H "Authorization: Bearer <token>" \
-  -d window=30d
+  -d window=30d \
+  -d sort=volume_usdc \
+  -d order=desc
 ```
 
 ```json Response (abbreviated)
 {
   "mode": "volume",
   "window": "30d",
+  "sort": "volume_usdc",
+  "order": "desc",
+  "total": 354368,
+  "has_more": true,
+  "totals": {
+    "traders": 354368,
+    "volume_usdc": "4713238818.319375",
+    "volume_shares": "9321187808.414698",
+    "trades": 144097085
+  },
   "results": [
     {
       "rank": 1,
       "trader": "0xdef789...abc012",
       "username": "volumeking",
       "volume_usdc": "2145000.000000",
+      "volume_shares": "3980210.550000",
       "trades": 4820
     }
   ]
@@ -78,3 +167,13 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume
 ```
 
 </CodeGroup>
+
+### Reading the bottom of the board
+
+Because `total` is now on the response, finding the end of the board no longer requires a binary search over `offset`. If you need the worst-performing or least-active traders specifically, `sort=trades&order=asc` (or `sort=volume_usdc&order=asc`) reads them directly from the front of an ascending sort — which is meaningfully cheaper than a large `offset` against a descending one, since ClickHouse still has to produce every row before a large offset even though it only returns the page after it.
+
+## Related
+
+- [`GET /leaderboard`](/api/analytics/leaderboard) for PnL-ranked results.
+- [`GET /traders/{address}`](/api/analytics/trader) for per-trader detail.
+- [Guide: Build a PnL leaderboard](/guides/pnl-leaderboard).

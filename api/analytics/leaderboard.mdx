@@ -79,6 +79,44 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard
   True if additional pages exist.
 </ResponseField>
 
+<ResponseField name="totals" type="object | null">
+  Board-wide aggregate over the **same candidate set** as `total` (window, `min_trades`, `is_mm_bot`/`exclude_bots`, and — for the PnL sums — `basis`) — for a stat-strip header, not for paging. `null` only if it could not be computed.
+
+  <Expandable title="PnLLeaderboardTotals fields">
+    <ResponseField name="traders" type="integer">
+      Always equal to the response's `total`.
+    </ResponseField>
+
+    <ResponseField name="volume_usdc" type="string">
+      Sum of `volume_usdc` over the candidate set.
+    </ResponseField>
+
+    <ResponseField name="trades" type="integer">
+      Sum of `trades` over the candidate set.
+    </ResponseField>
+
+    <ResponseField name="realized_pnl" type="string">
+      Sum of realized PnL over the candidate set (respects `?basis=`).
+    </ResponseField>
+
+    <ResponseField name="unrealized_pnl" type="string">
+      Sum of current open mark-to-market over the candidate set.
+    </ResponseField>
+
+    <ResponseField name="total_pnl" type="string">
+      Sum of `realized_pnl + unrealized_pnl` over the candidate set.
+    </ResponseField>
+
+    <ResponseField name="profitable_traders" type="integer">
+      Count of wallets in the candidate set with `total_pnl > 0`.
+    </ResponseField>
+
+    <ResponseField name="unprofitable_traders" type="integer">
+      Count of wallets in the candidate set with `total_pnl < 0`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
 ### Errors
 
 | Status | When |
