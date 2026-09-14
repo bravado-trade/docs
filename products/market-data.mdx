@@ -35,6 +35,27 @@ The venue's own socket is public, so this is not about access. It is about not r
 | Fan-out | Every client opens its own upstream | Upstream shared and ref-counted across all subscribers |
 | Surface | Separate integration per venue | Same interface across supported venues |
 
+## Ultra-low-latency: the mempool feed
+
+For latency-sensitive consumers — market makers, execution engines, signal — Bravado
+operates a **mempool-sourced fills feed** in addition to the standard trade feed. Fills
+are decoded directly from the Polygon public mempool and delivered **~1–2 s before the
+venue's own real-time feed reports them** (measured against Polymarket RTDS: earlier on
+~100% of trades, ~1.5–2 s median). Each fill carries:
+
+- The full **pending → mined → settled** lifecycle — including the negative states
+  (**reverted / dropped / replaced**), so you learn when a trade *didn't* land, not just
+  when it did.
+- The **controlling wallet (owner EOA)** behind the trading proxy, inline on every fill —
+  not just the proxy address.
+- Exact on-chain economics from the settlement calldata, before the trade is confirmed.
+
+<Info>
+  The mempool feed is a **partner tier** — token-gated and provisioned during onboarding.
+  The standard [Live Trades](/api/market-data/trade-feed) feed below is public and mirrors
+  the venue's own push feed. Contact Bravado to enable the low-latency feed.
+</Info>
+
 ## What you can build
 
 - **Live tickers and tapes.** Render a running feed of fills across the market, no polling.
