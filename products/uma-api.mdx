@@ -1,15 +1,18 @@
 ---
 title: "UMA API: Optimistic Oracle Resolution Data"
 sidebarTitle: "UMA API"
-description: "Query how Polymarket markets are resolved through UMA's Optimistic Oracle, including proposals, disputes, and final settlement outcomes."
+description: "Query and stream how Polymarket markets resolve through UMA's Optimistic Oracle — proposals, disputes, and final settlement outcomes — over REST and WebSocket."
 icon: "/logo/uma.png"
 ---
 
-<Info>
-  For UMA integration, contact Bravado for the current endpoint list, access setup and historical coverage. The public endpoint reference is being updated.
-</Info>
+Polymarket markets do not settle themselves. When a market's event concludes, the outcome has to be reported on-chain and accepted before holders can redeem winning shares. Polymarket uses [UMA](https://uma.xyz)'s Optimistic Oracle (V2) for that step, and the Bravado UMA API exposes the resolution lifecycle as both **queryable data** (REST) and a **realtime stream** (WebSocket).
 
-Polymarket markets do not settle themselves. When a market's event concludes, the outcome has to be reported on-chain and accepted before holders can redeem winning shares. Polymarket uses [UMA](https://uma.xyz)'s Optimistic Oracle for that step, and the Bravado UMA API exposes the resolution lifecycle as queryable data.
+<Info>
+  The UMA REST endpoints and stream are served from the Bravado feed edge
+  (`stream.bravadotrade.com`) and are **token-gated**: send your Bravado feed
+  token as `Authorization: Bearer <token>` or a `?token=<token>` query parameter.
+  Tokens are provisioned during onboarding. Coverage today is Polymarket.
+</Info>
 
 ## Why Bravado over reading the chain
 
@@ -17,56 +20,163 @@ Resolution data exists on-chain, so this is not about access. It is about not ha
 
 | | Reading the chain yourself | Bravado UMA API |
 | --- | --- | --- |
-| Setup | Index UMA oracle events yourself | Query an endpoint |
-| Assertion state | Decode on-chain events | Returned as data |
-| Dispute tracking | Watch for challenges and votes | Surfaced in the resolution record |
-| Correlation to positions | Map oracle events back to your holdings | Aligned with the same market identifiers as the rest of Bravado |
+| Setup | Index the UMA oracle + adapter events yourself | Query an endpoint / subscribe to a stream |
+| Lifecycle state | Decode `ProposePrice` / `DisputePrice` / `Settle` logs | `stage` returned as data |
+| Answer | Interpret the raw `int256` price | `answer` classified (`yes` / `no` / `50-50` / `too-early`) |
+| Correlation to positions | Map oracle events back to your holdings | `condition_id` aligned with the same market identifiers as the rest of Bravado |
+| Freshness | Wait for the confirmed resolution | The **proposal** streams the moment it hits a block — before finality |
 
 The practical payoff is that a "concluded" event and a redeemable position stop being the same thing in your data model. An application that conflates them will show users balances they cannot access, and book PnL that has not been realised.
 
-## Why resolution matters for traders
-
-Resolution is the point where an outcome token stops being a probability and becomes worth exactly \$1 or \$0. Three things about that transition affect anyone trading or building on Polymarket:
-
-- **Timing.** A market's event can conclude well before its outcome is finalized on-chain. Positions are not redeemable during that window.
-- **Disputes.** A proposed outcome can be challenged, which extends the window and introduces the possibility that the initially proposed answer is not the final one.
-- **Finality.** Only after resolution settles can a position be redeemed via [`POST /v2/trade/positions/redeem`](/api/trade/positions).
-
 ## How UMA resolution works
 
+Bravado decodes UMA's Optimistic Oracle V2 directly, so you see each step as it happens.
+
 <Steps>
-  <Step title="Assertion">
-    Once the event concludes, a proposer asserts the outcome on-chain and posts a bond backing that claim.
+  <Step title="Proposal">
+    Once the event concludes, a proposer posts the outcome to the oracle with a bond. This is the `proposed` stage; `answer` carries the proposed result.
   </Step>
   <Step title="Challenge window">
-    The assertion stays open for a fixed period. If nobody disputes it, it is treated as correct and settles automatically.
+    The proposal stays open for a fixed liveness period. If nobody disputes it, it settles automatically on the proposed answer.
   </Step>
   <Step title="Dispute (optional)">
-    Any party may dispute within the window by posting their own bond. A disputed assertion escalates to UMA's token-holder vote rather than settling on the proposer's word.
+    Any party may dispute within the window by posting their own bond (`disputed` stage). A disputed request escalates to UMA's token-holder vote rather than settling on the proposer's word.
   </Step>
   <Step title="Settlement">
-    The final outcome is written on-chain. Winning outcome tokens become redeemable at \$1; losing tokens go to \$0.
+    The final answer is written on-chain (`settled` stage, with the `payout`). Winning outcome tokens become redeemable at \$1; losing tokens go to \$0.
   </Step>
 </Steps>
 
 <Warning>
-  A market whose event has visibly concluded is not necessarily settled. Always confirm final resolution state before treating a position as realized, an undisputed assertion can still be disputed until its challenge window closes.
+  A market whose event has visibly concluded is not necessarily settled. Always confirm `settled: true` before treating a position as realized — an undisputed proposal can still be disputed until its challenge window closes.
 </Warning>
 
-## Endpoints
+## Identifiers
 
-{/* TODO: Replace with the real endpoint list.
-     For each endpoint, follow the pattern used in the Data API pages:
-     an `api:` frontmatter entry on its own page under api/, a description,
-     ResponseField blocks, and a worked example. */}
+Every lifecycle record carries two ids:
 
-<Note>
-  Bravado provides the current UMA endpoint details and integration examples directly during onboarding. Confirm the required resolution records and date range with the team. Redeeming positions is a separate operation in the [Trade API](/api/trade/positions).
-</Note>
+- **`question_id`** — `keccak256(ancillaryData)`, the UMA adapter's question id. This is the stable, exact key for a resolution.
+- **`condition_id`** — the CTF condition id used everywhere else in Bravado to identify the market. Use it to join resolution state to positions and trades.
+
+The `answer` field classifies the oracle's `int256` price: `yes`, `no`, `50-50`, `too-early`, or `other`; `price_raw` preserves the exact value.
+
+## REST — query resolution state
+
+Base URL: `https://stream.bravadotrade.com` (send `Authorization: Bearer <token>` or `?token=`). JSON; ids are hex, `payout` is an integer micro-USDC string.
+
+### `GET /uma/question`
+
+The full lifecycle of one question.
+
+```text
+GET https://stream.bravadotrade.com/uma/question?id=<0x questionId>
+```
+
+<ParamField query="id" type="string" required>
+  The `0x` 32-byte `question_id`.
+</ParamField>
+
+<ResponseField name="question_id" type="string">Hex question id (`keccak256(ancillaryData)`).</ResponseField>
+<ResponseField name="condition_id" type="string">Hex CTF condition id for the market.</ResponseField>
+<ResponseField name="title" type="string">Human-readable market question (from the ancillary data).</ResponseField>
+<ResponseField name="answer" type="string">Latest answer: `yes` · `no` · `50-50` · `too-early` · `other`.</ResponseField>
+<ResponseField name="settled" type="boolean">Whether the resolution has finalized on-chain.</ResponseField>
+<ResponseField name="proposed" type="object">
+  <Expandable title="stage fields">
+    <ResponseField name="proposer" type="string">Address that posted the proposal.</ResponseField>
+    <ResponseField name="answer" type="string">Answer classified from the proposed price.</ResponseField>
+    <ResponseField name="price_raw" type="string">Exact `int256` price, hex.</ResponseField>
+    <ResponseField name="request_ts" type="integer">Oracle request timestamp (unix seconds).</ResponseField>
+    <ResponseField name="block" type="integer">Polygon block.</ResponseField>
+    <ResponseField name="tx" type="string">Transaction hash.</ResponseField>
+    <ResponseField name="log_index" type="integer">Log index within the block.</ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="disputed" type="object">Same shape as `proposed`, plus `disputer`. Present only if the proposal was disputed.</ResponseField>
+<ResponseField name="settled_at" type="object">Same shape, plus `payout` (micro-USDC string). Present once `settled`.</ResponseField>
+<ResponseField name="updated_ms" type="integer">When Bravado last updated this record (unix ms).</ResponseField>
+
+```json Example response
+{
+  "question_id": "0x3281d5f64c96c007212bdc90b29cb51581058dac59a57fc2b98a31fd7abe0538",
+  "condition_id": "0x19c79788f1288b497b5305f81b71c3f20db1ae338b049d733dcb09b5d5d352f6",
+  "title": "Will Ben Shelton win the 2026 Men's US Open?",
+  "answer": "no",
+  "settled": true,
+  "proposed": {
+    "proposer": "0xef3990a7c8fa92d84dce0e7816ca3410820c1d36",
+    "answer": "no", "price_raw": "0x00…00",
+    "request_ts": 1767385181, "block": 93012001, "tx": "0x42879bd3…", "log_index": 5
+  },
+  "settled_at": {
+    "answer": "no", "price_raw": "0x00…00", "payout": "500800000",
+    "request_ts": 1767385181, "block": 93012040, "tx": "0x7c80413d…", "log_index": 9
+  },
+  "updated_ms": 1789253500123
+}
+```
+
+### `GET /uma/market`
+
+The same record, keyed by the market's CTF condition id.
+
+```text
+GET https://stream.bravadotrade.com/uma/market?condition_id=<0x conditionId>
+```
+
+<ParamField query="condition_id" type="string" required>The `0x` 32-byte CTF condition id.</ParamField>
+
+### `GET /uma/recent`
+
+Recently-updated questions, newest first — a feed of live proposals, disputes, and settlements.
+
+```text
+GET https://stream.bravadotrade.com/uma/recent?stage=settled&limit=100
+```
+
+<ParamField query="stage" type="string">Filter by current stage: `proposed` · `disputed` · `settled`. Omit for all.</ParamField>
+<ParamField query="limit" type="integer" default="100">Max records (1–500).</ParamField>
+
+<ResponseField name="questions" type="array">Array of question records (same shape as `GET /uma/question`).</ResponseField>
+<ResponseField name="count" type="integer">Number of records returned.</ResponseField>
+
+## WebSocket — stream the lifecycle
+
+For push instead of poll, subscribe to the `uma:polymarket:*` channel on the Bravado market-data socket. Each proposal, dispute, and settlement arrives as a `uma` frame the moment it lands in a block — the earliest signal that a market is resolving.
+
+<CodeGroup>
+
+```javascript JavaScript
+const ws = new WebSocket("wss://stream.bravadotrade.com/ws?streams=uma:polymarket:*");
+ws.onmessage = (e) => {
+  const f = JSON.parse(e.data);
+  if (f.type === "uma") {
+    console.log(`${f.stage} — ${f.title} → ${f.answer}`);
+  }
+};
+```
+
+```python Python
+import json, asyncio, websockets  # pip install websockets
+
+async def main():
+    url = "wss://stream.bravadotrade.com/ws?streams=uma:polymarket:*"
+    async for ws in websockets.connect(url, ping_interval=None):
+        async for msg in ws:
+            f = json.loads(msg)
+            if f.get("type") == "uma":
+                print(f["stage"], "—", f.get("title"), "→", f["answer"])
+
+asyncio.run(main())
+```
+
+</CodeGroup>
+
+Subscribe to a single market's lifecycle with `uma:polymarket:question:<0x questionId>`. The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`.
 
 ## Related
 
-- [Trade API](/products/trade-api), order execution and position management
-- [Trader Data API](/products/data-api), wallet PnL, trade logs, and tax statements
-- [Market Data](/products/market-data), realtime trades and order books over WebSockets
-- [Polymarket](/markets/polymarket/overview), market coverage and supported features
+- [Trade API](/products/trade-api) — order execution; redeem settled positions via [`POST /v2/trade/positions/redeem`](/api/trade/positions)
+- [Trader Data API](/products/data-api) — wallet PnL, trade logs, and tax statements
+- [Market Data](/products/market-data) — realtime trades and order books over WebSockets
+- [Polymarket](/markets/polymarket/overview) — market coverage and supported features

@@ -5,21 +5,21 @@ description: "How Polymarket markets settle through UMA's Optimistic Oracle, why
 icon: "/logo/uma.png"
 ---
 
-Polymarket markets do not settle themselves. When an event concludes, the outcome must be reported on-chain and accepted before winning shares can be redeemed. Polymarket uses [UMA](https://uma.xyz)'s Optimistic Oracle for that step.
+Polymarket markets do not settle themselves. When an event concludes, the outcome must be reported on-chain and accepted before winning shares can be redeemed. Polymarket uses [UMA](https://uma.xyz)'s Optimistic Oracle (V2) for that step — a price is **proposed**, optionally **disputed**, then **settled**. Bravado decodes each step and exposes it over the [UMA API](/products/uma-api) (REST + WebSocket).
 
 The practical consequence: **an event finishing in the real world and a position becoming redeemable are two different moments**, sometimes separated by a meaningful window.
 
 ## The resolution lifecycle
 
 <Steps>
-  <Step title="Assertion">
-    A proposer asserts the outcome on-chain and posts a bond backing that claim.
+  <Step title="Proposal">
+    A proposer posts the outcome to the oracle on-chain with a bond backing that claim (the `proposed` stage).
   </Step>
   <Step title="Challenge window">
-    The assertion stays open for a fixed period. If nobody disputes it, it is accepted and settles automatically.
+    The proposal stays open for a fixed liveness period. If nobody disputes it, it is accepted and settles automatically.
   </Step>
   <Step title="Dispute (optional)">
-    Any party may dispute within the window by posting their own bond. A disputed assertion escalates to a UMA token-holder vote instead of settling on the proposer's word, so the initially proposed outcome is not guaranteed to be the final one.
+    Any party may dispute within the window by posting their own bond. A disputed proposal escalates to a UMA token-holder vote instead of settling on the proposer's word, so the initially proposed outcome is not guaranteed to be the final one.
   </Step>
   <Step title="Settlement">
     The final outcome is written on-chain. Winning outcome tokens become redeemable at \$1; losing tokens are worth \$0.
@@ -33,7 +33,7 @@ The practical consequence: **an event finishing in the real world and a position
 - **Redeem only after settlement.** Calling [`POST /v2/trade/positions/redeem`](/api/trade/positions) before a market settles will not produce collateral.
 
 <Warning>
-  A market whose event has visibly concluded is not necessarily settled, and an undisputed assertion can still be disputed until its challenge window closes. Confirm final resolution state before treating a position as closed.
+  A market whose event has visibly concluded is not necessarily settled, and an undisputed proposal can still be disputed until its challenge window closes. Confirm final resolution state before treating a position as closed.
 </Warning>
 
 ## Data availability during resolution
