@@ -17,6 +17,13 @@ The mempool feed is Bravado's **low-latency** fills stream. Settlements are deco
   lifecycle, and inline identity. Coverage today is Polymarket.
 </Info>
 
+<Note>
+  This feed is served **directly from the feed edge** (`stream.bravadotrade.com`), not
+  proxied through `partner-api.bravadotrade.com` like the other APIs. That is deliberate:
+  an extra proxy hop would add relay latency and erode the mempool lead that is the whole
+  point of this feed. Connect to the edge host directly.
+</Note>
+
 ## Connect
 
 Pass an initial stream set and (optionally) a mode and replay count on the query string, and present your token as a `Bearer` header or a `?token=` parameter.
