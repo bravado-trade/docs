@@ -1,0 +1,199 @@
+---
+title: "Mempool Fills WebSocket"
+sidebarTitle: "Mempool Fills (Low-Latency)"
+description: "Subscribe to Polymarket fills decoded from the Polygon mempool — delivered ~1–2s before the venue's own feed, with the full pending→settled→reverted lifecycle and the controlling wallet behind each proxy."
+icon:
+  name: "zap"
+  library: "lucide"
+---
+
+The mempool feed is Bravado's **low-latency** fills stream. Settlements are decoded directly from the Polygon **public mempool**, so a fill reaches you **~1–2s before the venue's own real-time feed reports it** (measured against Polymarket RTDS: earlier on ~100% of trades, ~1.5–2s median). Every fill carries the full on-chain lifecycle — **pending → mined → settled**, and the negative states (**reverted / dropped / replaced**) — plus the **owner wallet (EOA)** behind the trading proxy.
+
+<Info>
+  This is a **partner tier**. Connect to `wss://stream.bravadotrade.com/ws` with a
+  Bravado feed token (provisioned during onboarding). The public
+  [Live Trades](/api/market-data/trade-feed) feed mirrors the venue's push feed and
+  needs no credentials; this feed adds the mempool lead, the settlement-truth
+  lifecycle, and inline identity. Coverage today is Polymarket.
+</Info>
+
+## Connect
+
+Pass an initial stream set and (optionally) a mode and replay count on the query string, and present your token as a `Bearer` header or a `?token=` parameter.
+
+```
+wss://stream.bravadotrade.com/ws?streams=fills:polymarket:*&mode=compact&replay=100
+```
+
+<CodeGroup>
+
+```javascript JavaScript
+const token = "<your Bravado feed token>";
+const ws = new WebSocket(
+  `wss://stream.bravadotrade.com/ws?streams=fills:polymarket:*&mode=compact&token=${token}`
+);
+
+ws.onmessage = (e) => {
+  const f = JSON.parse(e.data);
+  if (f.type === "fill") {
+    const leg = f.legs?.[0];
+    console.log(
+      `${f.status} ${leg?.side} ${leg?.shares} @ ${leg?.price_micro} ` +
+      `(exact=${f.exact}, owner=${leg?.owner ?? "?"})`
+    );
+  }
+};
+```
+
+```python Python
+import json, asyncio, websockets  # pip install websockets
+
+TOKEN = "<your Bravado feed token>"
+URL = f"wss://stream.bravadotrade.com/ws?streams=fills:polymarket:*&token={TOKEN}"
+
+async def main():
+    async for ws in websockets.connect(URL, ping_interval=None):
+        async for msg in ws:
+            f = json.loads(msg)
+            if f.get("type") == "fill":
+                leg = (f.get("legs") or [{}])[0]
+                print(f["status"], leg.get("side"), leg.get("shares"),
+                      "@", leg.get("price_micro"), "exact=", f["exact"])
+
+asyncio.run(main())
+```
+
+</CodeGroup>
+
+<Warning>
+  **All amounts are integer base units as decimal strings** — 6-decimal micro-USDC and
+  6-decimal share units; `token_id` is an exact decimal string and `price_micro` is
+  `usdc * 1e6 / shares`. Never parse these as floats.
+</Warning>
+
+## Streams
+
+Subscribe to the firehose or narrow to a token, market, or wallet. One connection may hold **120** streams.
+
+| Stream | Delivers |
+| --- | --- |
+| `fills:polymarket:*` | Firehose — every settlement. |
+| `fills:polymarket:token:<decimal tokenId>` | Every fill touching that outcome token. |
+| `fills:polymarket:market:<0x conditionId>` | Every fill in that market (both outcomes). |
+| `fills:polymarket:wallet:<0x address>` | Every fill where the address is a maker, signer, on-chain taker, or the tx sender. |
+| `ghost:polymarket:*` | Ghost fills — CLOB matches that never settled on-chain (also delivered on `fills:*`). |
+| `stats:polymarket:latency` | Periodic feed-health stats: per-source win-rates, mempool-lead percentiles, coverage. |
+| `market:polymarket:<decimal tokenId>` | Proxied Polymarket CLOB book/price/trade events (a convenience; one hop slower than connecting to the venue directly). |
+
+<Note>
+  A wallet matches a fill if it is any leg's maker or signer, any leg's on-chain taker,
+  **or the transaction sender** — the operator rotates senders, so identity is never keyed
+  on the sender alone. Related resolution and collateral streams
+  (`resolutions:polymarket:*`, `collateral:polymarket:*`) and the
+  [UMA resolution lifecycle](/products/uma-api) (`uma:polymarket:*`) are available over the
+  same socket.
+</Note>
+
+## The fill lifecycle
+
+A fill is not one event — it is a sequence of status transitions for the same transaction. This is the "did it actually settle?" signal no post-block feed can give you.
+
+| `status` | Meaning | `exact` |
+| --- | --- | --- |
+| `matched` | Earliest signal — the venue's CLOB reported the off-chain match (`signal_source: "polymarket-clob"`), before a settle tx exists. | `false` |
+| `pending` | The settle transaction is in the mempool (`signal_source: "mempool"`) — provisional amounts from calldata. | `false` |
+| `mined` | Included in a block; exact amounts from the `OrderFilled` logs. Adds `lead_ms`, `block`. | `true` |
+| `finalized` | The block reached finality. Carries `block`. | `true` |
+| `reverted` | The transaction reverted on-chain — the fill did **not** happen. Carries no legs. | `true` |
+| `dropped` | A pending/matched fill that never settled (`ghost: true` for an unmatched CLOB signal). | — |
+| `replaced` | Superseded by another tx (same nonce). Carries `replaced_by`. | — |
+| `reorged` | A mined block was reorged out. Carries `orphaned_block`; treat the tx as pending again. | — |
+
+A `matched` signal **upgrades** to `pending` when the settle tx hits the mempool, or expires as a **ghost fill** if it never settles. Track a transaction by `tx_hash`, and **dedupe by `(tx_hash, status)`** — the same tx legitimately arrives once per transition.
+
+## The `fill` frame
+
+```json
+{
+  "type": "fill",
+  "stream": "fills:polymarket:token:7132…",
+  "seq": 4181,
+  "ts_seen": 1756080000101,
+  "ts_sent": 1756080000102,
+  "venue": "polymarket",
+  "exchange": "ctf_v2",
+  "tx_hash": "0x9a…",
+  "status": "pending",
+  "exact": false,
+  "seen_pending": true,
+  "legs": [
+    {
+      "leg": 0, "role": "taker",
+      "token_id": "7132…", "condition_id": "0x3f…", "outcome_index": 0,
+      "side": "BUY", "shares": "10000000", "usdc": "5000000",
+      "price_micro": "500000", "maker": "0xab…", "owner": "0x73a0…"
+    }
+  ]
+}
+```
+
+<ResponseField name="status" type="string">The lifecycle transition (see the table above).</ResponseField>
+<ResponseField name="exact" type="boolean">`false` for provisional (`matched`/`pending`) amounts from calldata; `true` once log-derived (`mined`).</ResponseField>
+<ResponseField name="seen_pending" type="boolean">Whether we observed the settle tx in the mempool before the block.</ResponseField>
+<ResponseField name="signal_source" type="string">Which upstream produced this frame: `polymarket-clob` (a `matched` signal) or `mempool`.</ResponseField>
+<ResponseField name="tx_hash" type="string">The Polygon transaction hash — the key you track a fill by.</ResponseField>
+<ResponseField name="seq" type="integer">Per-stream sequence, increasing within a connection; resets when a stream is re-established (a fresh `status` frame marks the reset).</ResponseField>
+<ResponseField name="ts_seen" type="integer">First mempool observation (unix ms).</ResponseField>
+<ResponseField name="ts_sent" type="integer">When we emitted the frame (unix ms). Subtract from `ts_seen` to measure your own delivery latency.</ResponseField>
+<ResponseField name="legs" type="array">
+  <Expandable title="leg fields">
+    <ResponseField name="role" type="string">`maker` or `taker`.</ResponseField>
+    <ResponseField name="token_id" type="string">Outcome token id (exact decimal string).</ResponseField>
+    <ResponseField name="condition_id" type="string">CTF condition id (hex) — joins to markets, positions, and resolutions.</ResponseField>
+    <ResponseField name="outcome_index" type="integer">0 or 1.</ResponseField>
+    <ResponseField name="side" type="string">`BUY` or `SELL`.</ResponseField>
+    <ResponseField name="shares" type="string">Share units (6-dec integer string).</ResponseField>
+    <ResponseField name="usdc" type="string">Micro-USDC (6-dec integer string).</ResponseField>
+    <ResponseField name="price_micro" type="string">`usdc * 1e6 / shares` (integer string).</ResponseField>
+    <ResponseField name="maker" type="string">The maker's on-chain (proxy) address.</ResponseField>
+    <ResponseField name="owner" type="string">The controlling **owner EOA** behind the proxy — resolved from the order signer or by proxy-bytecode recovery. Absent when unresolved. This is identity no mempool-only feed provides.</ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="lead_ms" type="integer">On `mined`/`reverted`: how far ahead of the block we saw the tx in the mempool.</ResponseField>
+<ResponseField name="block" type="integer">On `mined`/`finalized`/`reverted`: the Polygon block.</ResponseField>
+<ResponseField name="replay" type="boolean">`true` if re-sent from the recent buffer because you connected with `replay=N`. Backfill of what you missed; may interleave with the first live frames — dedupe by `(tx_hash, status)`.</ResponseField>
+
+<Note>
+  **Modes.** `compact` (default) omits `from`/`nonce`/`gas`/`source` and the per-leg
+  `signer`/`fee`/`order_hash`/`log_index`; request `mode=full` for those. `owner` is present
+  in both modes when known.
+</Note>
+
+## Subscribe, unsubscribe, and replay in band
+
+Beyond the query string, manage subscriptions over the socket. `replay=N` (0–500) backfills up to N recent fills per stream before live frames — so a reconnecting client recovers what it missed.
+
+```json
+{"type":"sub","streams":["fills:polymarket:token:7132…","fills:polymarket:*"],"replay":100}
+{"type":"unsub","streams":["fills:polymarket:*"]}
+{"type":"ping"}
+```
+
+## Stream health and errors
+
+A `status` frame is sent on subscribe and whenever a stream's health changes:
+
+```json
+{"type":"status","stream":"fills:polymarket:*","state":"live","since":1756080000000,"ts":1756080001234}
+```
+
+`state` is `live` or `degraded`; on `degraded`, `reason` is one of `upstream_disconnected`, `heads_stale`, `pending_silent`, `reorg_depth_exceeded`.
+
+`error` frames carry a `code`: `TOO_MANY_STREAMS`, `BAD_STREAM`, `UNAUTHORIZED`, `SLOW_CONSUMER`, `BAD_MESSAGE`. A client whose send queue backs up is disconnected (`SLOW_CONSUMER`, close `1013`) rather than buffered — one slow consumer never delays another.
+
+## Related
+
+- [Live Trades](/api/market-data/trade-feed) — the public, venue-mirrored trade feed
+- [UMA Resolution](/products/uma-api) — the `uma:polymarket:*` lifecycle over REST + WebSocket
+- [Order Books](/api/market-data/venue-order-books) — live books for outcome tokens
+- [Trader Data](/products/data-api) — cross-reference the `owner` wallet's PnL, positions, and history

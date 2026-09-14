@@ -17,7 +17,10 @@ Bravado's Market Data layer streams realtime prediction-market data over WebSock
   <Card title="Order Books" icon="layers" href="/api/market-data/venue-order-books">
     Live order-book snapshots and updates for outcome tokens on Polymarket and Predict.fun. Subscribe to multiple assets over one socket per venue.
   </Card>
-</CardGroup>
+
+  <Card title="Mempool Fills" icon="zap" href="/api/market-data/mempool-feed">
+    The low-latency tier: fills decoded from the Polygon mempool, ~1–2s ahead of the venue feed, with the full pending→settled→reverted lifecycle and the owner wallet behind each proxy. Partner tier.
+  </Card>
 
 <Info>
   **Live order books support Polymarket and Predict.fun.** The enriched trade feed currently covers Polymarket. See [venue order books](/api/market-data/venue-order-books) for the shared message format.
@@ -53,7 +56,7 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 <Info>
   The mempool feed is a **partner tier** — token-gated and provisioned during onboarding.
   The standard [Live Trades](/api/market-data/trade-feed) feed below is public and mirrors
-  the venue's own push feed. Contact Bravado to enable the low-latency feed.
+  the venue's own push feed. See the [Mempool Fills feed](/api/market-data/mempool-feed) — contact Bravado to enable it.
 </Info>
 
 ## What you can build
@@ -68,11 +71,12 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 | Feed | Endpoint | Auth | Direction |
 | --- | --- | --- | --- |
 | [Live Trades](/api/market-data/trade-feed) | `wss://partner-api.bravadotrade.com/trade-feed/ws` | Public | Server → client |
+| [Mempool Fills](/api/market-data/mempool-feed) (low-latency) | `wss://stream.bravadotrade.com/ws` | Partner | Bidirectional |
 | [Polymarket order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/polymarket/market` | Public | Bidirectional |
 | [Predict.fun order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/predictfun/market` | Public | Bidirectional |
 
 <Note>
-  The market-data streams are **public today**, no API key or signature is required to connect. This matches the access tier of the underlying venue's public market feed. For authenticated partner streams and account-specific limits, contact Bravado during onboarding.
+  The trade and order-book streams are **public today**, no API key or signature is required to connect. This matches the access tier of the underlying venue's public market feed. The low-latency [Mempool Fills](/api/market-data/mempool-feed) feed is a partner tier — contact Bravado during onboarding to enable it.
 </Note>
 
 ## Historical data and custom delivery
