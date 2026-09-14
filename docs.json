@@ -438,8 +438,8 @@
     ],
     "primary": {
       "type": "button",
-      "label": "Portal",
-      "href": "https://portal.bravadotrade.com/"
+      "label": "Console",
+      "href": "https://console.bravadotrade.com/"
     }
   },
   "logo": {

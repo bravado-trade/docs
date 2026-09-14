@@ -23,7 +23,7 @@ Sign Data API requests with your **partner API key**, using the same HMAC scheme
 | `X-BRAVADO-TIMESTAMP` | Unix **milliseconds**, within ±30s of server time |
 | `X-BRAVADO-SIGNATURE` | Lowercase-hex HMAC-SHA256 of `timestamp\nMETHOD\ncanonical_path\nsha256_hex(body)`, keyed by your secret. The Data API is GET-only, so the body hash is always the empty-body constant `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`. |
 
-Your key needs the **`analytics.read`** scope (select the Data API product when creating the key in the [portal](https://portal.bravadotrade.com/)), and your partner account needs the request's **venue** enabled — see [Venues](#venues) below.
+Your key needs the **`analytics.read`** scope (select the Data API product when creating the key in the [Console](https://console.bravadotrade.com/keys)), and your partner account needs the request's **venue** enabled — see [Venues](#venues) below.
 
 Every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`; a `429` includes `Retry-After`.
 
@@ -62,7 +62,7 @@ Predict.fun supports core wallet analytics. PMWAS statements, tax reports, recon
 
 You can use Trader Data with an `analytics.read` key and no trading permissions. Bravado can arrange evaluation access, venue enablement and the appropriate request allowance directly. Confirm commercial use and redistribution terms during onboarding.
 
-The full self-service portal is being finalized. You do not need to wait for it to start an integration: contact the team for credentials and setup assistance. See [API credits](/api-credits) for published request costs; exact quotas and historical coverage depend on the product and dataset.
+Create an account in the [Bravado Console](https://console.bravadotrade.com/), then open **Endpoints** to configure your product and **API keys** to manage credentials. Contact the team if your organisation needs additional venue or product access. See [API credits](/api-credits) for published request costs; exact quotas and historical coverage depend on the product and dataset.
 
 ## Trader intelligence
 
