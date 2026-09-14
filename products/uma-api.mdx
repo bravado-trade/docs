@@ -24,7 +24,7 @@ Resolution data exists on-chain, so this is not about access. It is about not ha
 | Lifecycle state | Decode `ProposePrice` / `DisputePrice` / `Settle` logs | `stage` returned as data |
 | Answer | Interpret the raw `int256` price | `answer` classified (`yes` / `no` / `50-50` / `too-early`) |
 | Correlation to positions | Map oracle events back to your holdings | `condition_id` aligned with the same market identifiers as the rest of Bravado |
-| Freshness | Wait for the confirmed resolution | The **proposal** streams the moment it hits a block — before finality |
+| Freshness | Wait for the confirmed resolution | The **proposal** streams from the mempool ~1 s **before** it is mined (`seen_pending`), then confirms with the block |
 
 The practical payoff is that a "concluded" event and a redeemable position stop being the same thing in your data model. An application that conflates them will show users balances they cannot access, and book PnL that has not been realised.
 
@@ -34,7 +34,7 @@ Bravado decodes UMA's Optimistic Oracle V2 directly, so you see each step as it 
 
 <Steps>
   <Step title="Proposal">
-    Once the event concludes, a proposer posts the outcome to the oracle with a bond. This is the `proposed` stage; `answer` carries the proposed result.
+    Once the event concludes, a proposer posts the outcome to the oracle with a bond. This is the `proposed` stage; `answer` carries the proposed result. Bravado decodes the proposer's transaction straight from the mempool, so the proposal is delivered with `"seen_pending":true` ~0.3–1.4 s before it is mined, then a confirming frame follows with the `block` and `tx`.
   </Step>
   <Step title="Challenge window">
     The proposal stays open for a fixed liveness period. If nobody disputes it, it settles automatically on the proposed answer.
@@ -90,6 +90,7 @@ GET https://stream.bravadotrade.com/uma/question?id=<0x questionId>
     <ResponseField name="block" type="integer">Polygon block.</ResponseField>
     <ResponseField name="tx" type="string">Transaction hash.</ResponseField>
     <ResponseField name="log_index" type="integer">Log index within the block.</ResponseField>
+    <ResponseField name="seen_pending" type="boolean">Present and `true` while this proposal/dispute is known only from the mempool (`block` is `0`); cleared once mined.</ResponseField>
   </Expandable>
 </ResponseField>
 <ResponseField name="disputed" type="object">Same shape as `proposed`, plus `disputer`. Present only if the proposal was disputed.</ResponseField>
@@ -172,7 +173,7 @@ asyncio.run(main())
 
 </CodeGroup>
 
-Subscribe to a single market's lifecycle with `uma:polymarket:question:<0x questionId>`. The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`.
+Subscribe to a single market's lifecycle with `uma:polymarket:question:<0x questionId>`. The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
 
 ## Related
 
