@@ -7,13 +7,15 @@ icon:
   library: "lucide"
 ---
 
-Bravado exposes a hosted **Model Context Protocol (MCP)** server so agent frameworks can call Bravado tools directly. Point an MCP-aware client at it, sign in once with your Bravado Portal account, and the agent can read leaderboards, trader profiles, PnL series, positions and the warehouse behind them.
+Bravado exposes a hosted **Model Context Protocol (MCP)** server so agent frameworks can call Bravado tools directly. Point an MCP-aware client at it, authorize your Bravado organisation, and the agent can read leaderboards, trader profiles, PnL series, positions and the warehouse behind them.
 
 <Note>
   The MCP server is **read-only, permanently**. It cannot place, cancel or modify an order, and it cannot move funds. To trade programmatically, use the [Trade API](/products/trade-api).
 </Note>
 
 ## Connection
+
+New to Bravado? [Create an account in the Console](https://console.bravadotrade.com/) and open **MCP server** to begin setup. Existing OAuth clients must continue using discovery; do not replace their issuer URLs with the Console URL.
 
 | | |
 | --- | --- |
@@ -24,7 +26,7 @@ Bravado exposes a hosted **Model Context Protocol (MCP)** server so agent framew
 
 ### Claude.ai and Claude Desktop
 
-Add it as a custom connector using the URL above. The client registers itself, then opens the Bravado Portal so you can sign in and approve the connection. Nothing is shared until you approve.
+Add it as a custom connector using the URL above. The client registers itself, then opens Bravado’s authorization screen so you can sign in and approve the connection. Nothing is shared until you approve.
 
 ### Claude Code
 
@@ -45,7 +47,7 @@ The server publishes standard discovery documents, so a compliant client needs o
 
 Access is granted by a human, not by a key you paste.
 
-1. Your client sends you to the [Bravado Portal](https://portal.bravadotrade.com/).
+1. Start with [MCP in the Console](https://console.bravadotrade.com/endpoints/mcp); your client opens the discovered authorization endpoint.
 2. You sign in with your partner account (password plus your second factor).
 3. You approve a consent screen naming the application, your partner account and the permissions requested.
 4. The client receives a token scoped to that partner.

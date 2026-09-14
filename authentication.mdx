@@ -95,7 +95,7 @@ The flow, from the client's point of view:
 
 1. It reads `https://mcp.bravadotrade.com/.well-known/oauth-protected-resource` to find the authorization server.
 2. It registers itself (RFC 7591 Dynamic Client Registration). Registering grants nothing on its own.
-3. It sends you to [portal.bravadotrade.com](https://portal.bravadotrade.com/) to sign in and approve.
+3. It opens the discovered Bravado authorization endpoint for sign-in and consent. Start setup from [MCP in the Console](https://console.bravadotrade.com/endpoints/mcp).
 4. It receives a short-lived access token plus a rotating refresh token.
 
 Tokens are scoped to `mcp.read` and `mcp.query` — the **MCP Server** product, which is separate from the Data API — and bound to the partner your portal account is linked to. They are audience-bound to the MCP server, so a token issued for it cannot be replayed against any other Bravado surface.
