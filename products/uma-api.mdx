@@ -8,10 +8,10 @@ icon: "/logo/uma.png"
 Polymarket markets do not settle themselves. When a market's event concludes, the outcome has to be reported on-chain and accepted before holders can redeem winning shares. Polymarket uses [UMA](https://uma.xyz)'s Optimistic Oracle (V2) for that step, and the Bravado UMA API exposes the resolution lifecycle as both **queryable data** (REST) and a **realtime stream** (WebSocket).
 
 <Info>
-  The UMA REST endpoints and stream are served from the Bravado feed edge
-  (`stream.bravadotrade.com`) and are **token-gated**: send your Bravado feed
-  token as `Authorization: Bearer <token>` or a `?token=<token>` query parameter.
-  Tokens are provisioned during onboarding. Coverage today is Polymarket.
+  The UMA REST endpoints and stream are served from `partner-api.bravadotrade.com`,
+  the same host as the rest of the Bravado API. UMA resolution is public
+  market data, so these endpoints need **no authentication** — no token, no key.
+  Coverage today is Polymarket.
 </Info>
 
 ## Why Bravado over reading the chain
@@ -62,14 +62,14 @@ The `answer` field classifies the oracle's `int256` price: `yes`, `no`, `50-50`,
 
 ## REST — query resolution state
 
-Base URL: `https://stream.bravadotrade.com` (send `Authorization: Bearer <token>` or `?token=`). JSON; ids are hex, `payout` is an integer micro-USDC string.
+Base URL: `https://partner-api.bravadotrade.com`. No authentication required. JSON; ids are hex, `payout` is an integer micro-USDC string.
 
 ### `GET /uma/question`
 
 The full lifecycle of one question.
 
 ```text
-GET https://stream.bravadotrade.com/uma/question?id=<0x questionId>
+GET https://partner-api.bravadotrade.com/uma/question?id=<0x questionId>
 ```
 
 <ParamField query="id" type="string" required>
@@ -122,7 +122,7 @@ GET https://stream.bravadotrade.com/uma/question?id=<0x questionId>
 The same record, keyed by the market's CTF condition id.
 
 ```text
-GET https://stream.bravadotrade.com/uma/market?condition_id=<0x conditionId>
+GET https://partner-api.bravadotrade.com/uma/market?condition_id=<0x conditionId>
 ```
 
 <ParamField query="condition_id" type="string" required>The `0x` 32-byte CTF condition id.</ParamField>
@@ -132,7 +132,7 @@ GET https://stream.bravadotrade.com/uma/market?condition_id=<0x conditionId>
 Recently-updated questions, newest first — a feed of live proposals, disputes, and settlements.
 
 ```text
-GET https://stream.bravadotrade.com/uma/recent?stage=settled&limit=100
+GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100
 ```
 
 <ParamField query="stage" type="string">Filter by current stage: `proposed` · `disputed` · `settled`. Omit for all.</ParamField>
@@ -143,12 +143,15 @@ GET https://stream.bravadotrade.com/uma/recent?stage=settled&limit=100
 
 ## WebSocket — stream the lifecycle
 
-For push instead of poll, subscribe to the `uma:polymarket:*` channel on the Bravado market-data socket. Each proposal, dispute, and settlement arrives as a `uma` frame the moment it lands in a block — the earliest signal that a market is resolving.
+For push instead of poll, connect to `wss://partner-api.bravadotrade.com/uma/ws`.
+No subscription message and no authentication are needed — every Polymarket
+proposal, dispute, and settlement is pushed to you as a `uma` frame. To follow a
+single market, filter on `question_id` (or `condition_id`) client-side.
 
 <CodeGroup>
 
 ```javascript JavaScript
-const ws = new WebSocket("wss://stream.bravadotrade.com/ws?streams=uma:polymarket:*");
+const ws = new WebSocket("wss://partner-api.bravadotrade.com/uma/ws");
 ws.onmessage = (e) => {
   const f = JSON.parse(e.data);
   if (f.type === "uma") {
@@ -161,8 +164,8 @@ ws.onmessage = (e) => {
 import json, asyncio, websockets  # pip install websockets
 
 async def main():
-    url = "wss://stream.bravadotrade.com/ws?streams=uma:polymarket:*"
-    async for ws in websockets.connect(url, ping_interval=None):
+    url = "wss://partner-api.bravadotrade.com/uma/ws"
+    async for ws in websockets.connect(url):
         async for msg in ws:
             f = json.loads(msg)
             if f.get("type") == "uma":
@@ -173,7 +176,7 @@ asyncio.run(main())
 
 </CodeGroup>
 
-Subscribe to a single market's lifecycle with `uma:polymarket:question:<0x questionId>`. The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
+The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
 
 ## Related
 
