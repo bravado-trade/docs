@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## The problem
 
 Polymarket order books are thin. Common markets have $$2,000 to $$10,000 of depth at top-of-book. A serious algorithmic trader running signal-driven strategies needs execution primitives beyond LIMIT and MARKET, or they eat the entire cost of their edge in slippage.
@@ -36,11 +39,12 @@ All six execute server-side on Bravado's engine on top of the Polymarket CLOB. T
 Signal fires, size the position, execute with TWAP \+ ICEBERG, and set a trailing stop for the exit. All in one flow:
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, uuid, requests
 
 API = "https://partner-api.bravadotrade.com"
 KEY = os.environ["BRAVADO_API_KEY"]
-H = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
+H = {"Content-Type": "application/json"}
 
 def new_key():
     return {"Idempotency-Key": str(uuid.uuid4())}
@@ -49,7 +53,7 @@ symbol = "7132104567925221259462638553270691275033272857194253228963137931245558
 target_size = "20000"
 
 # 1. Enter with TWAP + ICEBERG.
-entry = requests.post(f"{API}/v2/trade/order", headers={**H, **new_key()}, json={
+entry = http.post(f"{API}/v2/trade/order", headers={**H, **new_key()}, json={
     "symbol": symbol,
     "side": "buy",
     "type": "TWAP",
@@ -63,7 +67,7 @@ parent_id = entry["order_id"]
 print(f"Entry: {parent_id}")
 
 # 2. Attach a trailing stop for the exit.
-exit_stop = requests.post(f"{API}/v2/trade/order", headers={**H, **new_key()}, json={
+exit_stop = http.post(f"{API}/v2/trade/order", headers={**H, **new_key()}, json={
     "symbol": symbol,
     "side": "sell",
     "type": "TRAILING_STOP",

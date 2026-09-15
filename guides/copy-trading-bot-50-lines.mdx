@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 Most copy trading bots pick a leader off a leaderboard and mirror everything they do. That works right up until the wallet you copied turns out to have made its entire return on one correct bet, and you are now mirroring a trader with no repeatable edge into markets they know nothing about.
@@ -52,7 +55,8 @@ This guide builds a follower service that treats selection as the product.
 - USDC collateral in your Bravado wallet, but only for the live step at the end
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 ```
 
 <Note>
@@ -76,15 +80,16 @@ The decision layer is pure logic with no side effects, which means you can run i
 Two helpers cover everything: a plain reader, and a writer that attaches an idempotency key to every mutating call.
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, uuid, requests
 from decimal import Decimal
 
 BASE = "https://partner-api.bravadotrade.com"
-H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+H = {}
 
 
 def read(path, **params):
-    r = requests.get(f"{BASE}{path}", headers=H, params=params or None, timeout=15)
+    r = http.get(f"{BASE}{path}", headers=H, params=params or None, timeout=15)
     r.raise_for_status()
     return r.json()
 

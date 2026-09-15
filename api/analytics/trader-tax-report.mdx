@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}/tax-report"
 description: "Per-calendar-year tax summary with short-term and long-term capital gains and income breakdown."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns a per-calendar-year tax summary with short-term and long-term capital gains, income by kind, and capital flow totals.
 
 ```text
@@ -69,7 +72,9 @@ An array of per-year summary objects (or a single object when `year` is specifie
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../tax-report \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d year=2024
 ```
 

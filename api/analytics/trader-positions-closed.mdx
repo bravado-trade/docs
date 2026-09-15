@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}/positions/closed"
 description: "The wallet's closed positions."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns only the wallet's closed positions. Response shape matches [/positions](/api/analytics/trader-positions).
 
 ```text
@@ -21,5 +24,7 @@ Array of position objects. See [/positions field reference](/api/analytics/trade
 
 ```bash cURL
 curl https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../positions/closed \
-  -H "Authorization: Bearer <token>"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```

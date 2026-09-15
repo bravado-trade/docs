@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 Most order APIs give you a different endpoint per order type, so adding a stop-loss to a working integration means writing a new client method, new error handling, and new state tracking.
@@ -54,7 +57,8 @@ This guide places a real order, then walks all eight types, then covers where ea
 - An outcome token id to trade, covered below
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 export BASE="https://partner-api.bravadotrade.com"
 ```
 
@@ -66,7 +70,9 @@ Two calls save a lot of confused debugging later.
 
 ```bash
 curl $BASE/v2/trade/account \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 ```json
@@ -91,7 +97,9 @@ The `rate_limit_per_min` value is worth keeping: it is your polling budget later
 
 ```bash
 curl $BASE/v2/trade/balances \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 ```json
@@ -126,7 +134,9 @@ Spend \$10 at whatever the book offers:
 
 ```bash cURL
 curl -X POST $BASE/v2/trade/order \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{
@@ -138,14 +148,14 @@ curl -X POST $BASE/v2/trade/order \
 ```
 
 ```python Python
+from bravado_auth import session as http, BravadoAuth
 import os, uuid, requests
 
 BASE = "https://partner-api.bravadotrade.com"
 
-res = requests.post(
+res = http.post(
     f"{BASE}/v2/trade/order",
     headers={
-        "Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}",
         "Idempotency-Key": str(uuid.uuid4()),
     },
     json={
@@ -161,12 +171,12 @@ print(order["order_id"], order["status"], order["average_price"])
 ```
 
 ```typescript TypeScript
+import { bravadoFetch } from "./bravado-auth.mjs";
 const BASE = "https://partner-api.bravadotrade.com";
 
-const res = await fetch(`${BASE}/v2/trade/order`, {
+const res = await bravadoFetch(`${BASE}/v2/trade/order`, {
   method: "POST",
   headers: {
-    Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
     "Content-Type": "application/json",
     "Idempotency-Key": crypto.randomUUID(),
   },
@@ -426,12 +436,16 @@ strategies = read("/v2/trade/strategies")["strategies"]
 ```bash
 # a CLOB order
 curl -X DELETE $BASE/v2/trade/orders/{order_id} \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Idempotency-Key: $(uuidgen)"
 
 # a managed strategy
 curl -X DELETE $BASE/v2/trade/strategies/{record_id} \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Idempotency-Key: $(uuidgen)"
 ```
 
@@ -443,7 +457,9 @@ curl -X DELETE $BASE/v2/trade/strategies/{record_id} \
 
 ```bash
 curl $BASE/v2/trade/positions \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 ```json

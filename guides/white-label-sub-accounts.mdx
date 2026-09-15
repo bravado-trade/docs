@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 If your product trades on behalf of end users, the tempting shortcut is to run everyone through one account and track ownership in your own database. It works until the first time you need to answer a real question: what is *this user's* PnL, what happens if they want to withdraw, and how do you stop one user's losses touching another's collateral.
@@ -49,7 +52,8 @@ This guide covers provisioning them safely, including the one place where a dete
 - Somewhere encrypted to keep per-user keys
 
 ```bash
-export BRAVADO_MASTER_KEY="your-master-bearer-token"
+export BRAVADO_MASTER_KEY="your-master-public-key"
+export BRAVADO_MASTER_SECRET="your-master-secret"
 export BASE="https://partner-api.bravadotrade.com"
 ```
 
@@ -57,7 +61,9 @@ export BASE="https://partner-api.bravadotrade.com"
 
 ```bash
 curl $BASE/v2/trade/account \
-  -H "Authorization: Bearer $BRAVADO_MASTER_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_MASTER_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 Two things to check in the response:
@@ -81,7 +87,9 @@ A key without `trade.users` cannot provision, and the failure is a `403` that lo
 
 ```bash
 curl -X POST $BASE/v2/trade/users \
-  -H "Authorization: Bearer $BRAVADO_MASTER_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_MASTER_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: provision:user_8813" \
   -d '{ "external_id": "user_8813" }'
@@ -102,17 +110,19 @@ A duplicate order is bad. A duplicate **wallet** is worse: you now have one user
 Keying on your own user id makes that impossible:
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, requests
 
 BASE = "https://partner-api.bravadotrade.com"
-MASTER = {"Authorization": f"Bearer {os.environ['BRAVADO_MASTER_KEY']}"}
+MASTER = BravadoAuth(os.environ["BRAVADO_MASTER_KEY"], os.environ["BRAVADO_MASTER_SECRET"])
 
 
 def provision(user_id: str):
     """Deterministic key: retrying this user can never create a second wallet."""
-    r = requests.post(
+    r = http.post(
         f"{BASE}/v2/trade/users",
-        headers={**MASTER, "Idempotency-Key": f"provision:{user_id}"},
+        auth=MASTER,
+        headers={"Idempotency-Key": f"provision:{user_id}"},
         json={"external_id": user_id},
         timeout=20,
     )
@@ -168,9 +178,10 @@ Scopes limit what a compromised or misused key can do:
 Limits are per key, so a hundred provisioned users have a hundred budgets rather than sharing one:
 
 ```python
-def budget_for(user_key: str) -> int:
-    acct = requests.get(f"{BASE}/v2/trade/account",
-                        headers={"Authorization": f"Bearer {user_key}"}).json()
+from bravado_auth import session as http, BravadoAuth
+def budget_for(user_key: str, user_secret: str) -> int:
+    acct = http.get(f"{BASE}/v2/trade/account",
+                        auth=BravadoAuth(user_key, user_secret)).json()
     return acct["api_key"]["rate_limit_per_min"]
 ```
 
@@ -181,12 +192,13 @@ Worth reflecting in your own scheduling. A naive implementation that funnels all
 Everything a normal integration does works with that user's key:
 
 ```python
-def portfolio(user_key: str):
-    H = {"Authorization": f"Bearer {user_key}"}
+from bravado_auth import session as http, BravadoAuth
+def portfolio(user_key: str, user_secret: str):
+    auth = BravadoAuth(user_key, user_secret)
     return {
-        "balances":  requests.get(f"{BASE}/v2/trade/balances",  headers=H).json(),
-        "positions": requests.get(f"{BASE}/v2/trade/positions", headers=H).json(),
-        "activity":  requests.get(f"{BASE}/v2/trade/activity",  headers=H).json(),
+        "balances":  http.get(f"{BASE}/v2/trade/balances",  auth=auth).json(),
+        "positions": http.get(f"{BASE}/v2/trade/positions", auth=auth).json(),
+        "activity":  http.get(f"{BASE}/v2/trade/activity",  auth=auth).json(),
     }
 ```
 

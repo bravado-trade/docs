@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 "My TWAP disappeared" is the most common integration report on Bravado, and every time the order is exactly where it should be. The client was looking in the wrong place.
@@ -48,7 +51,8 @@ Once that model is clear, a whole class of bugs stops happening: orders that loo
 - A Bravado API key with `trade.read` and `trade.cancel`
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 export BASE="https://partner-api.bravadotrade.com"
 ```
 
@@ -74,15 +78,16 @@ That distinction explains everything else:
 ## Fetch complete state
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, requests
 
 BASE = "https://partner-api.bravadotrade.com"
-H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+H = {}
 
 
 def working():
-    orders     = requests.get(f"{BASE}/v2/trade/orders/open", headers=H).json()["orders"]
-    strategies = requests.get(f"{BASE}/v2/trade/strategies",  headers=H).json()["strategies"]
+    orders     = http.get(f"{BASE}/v2/trade/orders/open", headers=H).json()["orders"]
+    strategies = http.get(f"{BASE}/v2/trade/strategies",  headers=H).json()["strategies"]
 
     return (
         [{"kind": "order",    "id": o["order_id"],  **o} for o in orders] +
@@ -143,12 +148,16 @@ Distinguish it visually from an error state. A muted badge reads correctly; a re
 ```bash
 # a CLOB order
 curl -X DELETE $BASE/v2/trade/orders/{order_id} \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Idempotency-Key: $(uuidgen)"
 
 # a managed strategy
 curl -X DELETE $BASE/v2/trade/strategies/{record_id} \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Idempotency-Key: $(uuidgen)"
 ```
 

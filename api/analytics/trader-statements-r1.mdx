@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}/statements/r1"
 description: "Paginated R1 Form-8949-style disposition rows for heavy wallets."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Standalone paginated endpoint for R1 Form-8949-style disposition rows. Use this for heavy wallets where the full [`/statements`](/api/analytics/trader-statements) response is too large.
 
 ```text
@@ -45,7 +48,9 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/stat
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../statements/r1 \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d limit=50 \
   -d offset=0
 ```

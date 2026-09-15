@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}"
 description: "Wallet performance summary: PnL, volume, position counts, streaks, and identity fields."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns the performance summary for a single wallet, including PnL, volume, position counts, streak data, and identity fields.
 
 ```text
@@ -63,7 +66,9 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc123def456abc123def456abc123def456abc1 \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=30d \
   -d basis=net \
   -d income=detail

@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## The problem
 
 Autonomous agents (LLM-driven or otherwise) that trade prediction markets need three things at once: a clean market data feed, a safe execution surface with strong idempotency guarantees, and a way to reason about wallet state without ambiguity. Wiring an agent to Polymarket's raw contracts requires custom code to smooth all three.
@@ -36,10 +39,11 @@ Autonomous agents (LLM-driven or otherwise) that trade prediction markets need t
 An LLM tool-calling function that lets an agent evaluate a market and place a scaled position:
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, uuid, requests
 
 API = "https://partner-api.bravadotrade.com"
-H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}", "Content-Type": "application/json"}
+H = {"Content-Type": "application/json"}
 
 def place_scaled_order(symbol: str, side: str, confidence: float, max_notional_usd: float):
     """Tool an agent can call.
@@ -47,7 +51,7 @@ def place_scaled_order(symbol: str, side: str, confidence: float, max_notional_u
     """
     notional = str(round(max_notional_usd * confidence, 2))
 
-    r = requests.post(
+    r = http.post(
         f"{API}/v2/trade/order",
         headers={**H, "Idempotency-Key": str(uuid.uuid4())},
         json={
@@ -62,7 +66,7 @@ def place_scaled_order(symbol: str, side: str, confidence: float, max_notional_u
 
 def get_position(symbol: str):
     """Agent can inspect its own state."""
-    r = requests.get(f"{API}/v2/trade/positions", headers=H, params={"symbol": symbol})
+    r = http.get(f"{API}/v2/trade/positions", headers=H, params={"symbol": symbol})
     r.raise_for_status()
     return r.json()
 ```

@@ -7,14 +7,19 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 The Bravado Data API surfaces trader performance data derived entirely from on-chain Polygon settlement records. Every PnL figure, position valuation, and fee total is calculated by a share-level FIFO cost-basis engine that replays each wallet's full transaction history, no off-chain estimates or manual adjustments. The base URL for all endpoints is `https://partner-api.bravadotrade.com`.
 
 ## Authentication
 
-All endpoints (except `/healthz`) require a Bearer token in the `Authorization` header.
+Authenticated endpoints require the three HMAC headers below. See [authentication](/authentication).
 
 ```http
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <unix-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 ## All Endpoints
@@ -102,7 +107,7 @@ Common status codes:
 | Status | Meaning |
 | --- | --- |
 | `400` | Bad request, invalid parameter value |
-| `401` | Missing or invalid Bearer token |
+| `401` | Missing or invalid HMAC credentials |
 | `404` | Resource not found (wallet has no recorded activity) |
 | `503` | Data not yet available for this wallet, retry in a few minutes |
 

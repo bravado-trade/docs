@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 Tax reporting for prediction markets is harder than for spot trading, and not for the reason people expect. The difficulty is not volume. It is that **a position can end three different ways, and only one of them looks like a trade**.
@@ -56,7 +59,8 @@ This guide pulls dispositions that account for all three, reconciles them, and e
 - Python with `requests`
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 export BASE="https://partner-api.bravadotrade.com"
 ```
 
@@ -64,7 +68,9 @@ export BASE="https://partner-api.bravadotrade.com"
 
 ```bash
 curl -G $BASE/traders/0xWALLET/tax-report \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d year=2025
 ```
 
@@ -74,7 +80,9 @@ Per-calendar-year totals: short-term and long-term capital gains, income by kind
 
 ```bash
 curl -G $BASE/traders/0xWALLET/statements/r1 \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d year=2025 -d limit=500
 ```
 
@@ -89,11 +97,12 @@ Each row is a closed lot: acquisition date, disposition date, proceeds, cost bas
 Disposition sets run long, and a truncated pull is worse than no pull because it looks complete.
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, requests
 from decimal import Decimal
 
 BASE = "https://partner-api.bravadotrade.com"
-H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+H = {}
 
 
 def dispositions(address, year):
@@ -104,7 +113,7 @@ def dispositions(address, year):
         if cursor:
             params["cursor"] = cursor
 
-        r = requests.get(f"{BASE}/traders/{address}/statements/r1",
+        r = http.get(f"{BASE}/traders/{address}/statements/r1",
                          headers=H, params=params, timeout=60)
 
         if r.status_code == 503 and not r.json().get("available", True):
@@ -131,7 +140,9 @@ This is what makes the output defensible rather than merely available.
 
 ```bash
 curl -G $BASE/traders/0xWALLET/reconciliation \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d year=2025
 ```
 
@@ -152,7 +163,7 @@ R8 verifies the statement is internally consistent: that the reports agree with 
 rows = dispositions("0xWALLET", 2025)
 line_total = sum(Decimal(r["gain_loss"]) for r in rows)
 
-report = requests.get(f"{BASE}/traders/0xWALLET/tax-report",
+report = http.get(f"{BASE}/traders/0xWALLET/tax-report",
                       headers=H, params={"year": 2025}).json()
 summary_total = Decimal(report["short_term_gain"]) + Decimal(report["long_term_gain"])
 

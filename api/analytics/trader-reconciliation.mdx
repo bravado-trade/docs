@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}/reconciliation"
 description: "R8 reconciliation certificate verifying internal consistency of the wallet's statement."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns the R8 reconciliation certificate, which verifies the internal consistency of the wallet's statement. Useful for institutional audit workflows.
 
 ```text
@@ -75,7 +78,9 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/reco
 
 ```bash cURL
 curl https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../reconciliation \
-  -H "Authorization: Bearer <token>"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 ```json Response

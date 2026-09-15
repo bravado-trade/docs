@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 A leaderboard is the cheapest way to make a prediction market product feel alive. It gives a new user something to look at before they have traded, it turns wallets into pages worth visiting, and it feeds directly into copy trading.
@@ -48,7 +51,8 @@ The parts worth getting right are subtler: which ranking you show, which fields 
 - A Bravado API key. No collateral needed; every endpoint here is read-only.
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 export BASE="https://partner-api.bravadotrade.com"
 ```
 
@@ -56,11 +60,15 @@ export BASE="https://partner-api.bravadotrade.com"
 
 ```bash
 curl -G $BASE/leaderboard \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=30d -d limit=50
 
 curl -G $BASE/leaderboard/volume \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=30d -d limit=50
 ```
 
@@ -86,16 +94,17 @@ What it never changes is **cost basis**. That is always reconstructed from the w
 ## Fetch and render
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, requests
 from decimal import Decimal
 
 BASE = "https://partner-api.bravadotrade.com"
-H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+H = {}
 
 
 def leaderboard(metric="pnl", window="30d", limit=50):
     path = "/leaderboard" if metric == "pnl" else "/leaderboard/volume"
-    data = requests.get(f"{BASE}{path}", headers=H,
+    data = http.get(f"{BASE}{path}", headers=H,
                         params={"window": window, "limit": limit},
                         timeout=20).json()
 
@@ -143,10 +152,10 @@ The **category breakdown** is the most interesting of these in product terms and
 ```python
 def profile(address):
     return {
-        "summary":    requests.get(f"{BASE}/traders/{address}", headers=H).json(),
-        "pnl":        requests.get(f"{BASE}/traders/{address}/pnl", headers=H).json(),
-        "positions":  requests.get(f"{BASE}/traders/{address}/positions/active", headers=H).json(),
-        "categories": requests.get(f"{BASE}/traders/{address}/categories", headers=H).json(),
+        "summary":    http.get(f"{BASE}/traders/{address}", headers=H).json(),
+        "pnl":        http.get(f"{BASE}/traders/{address}/pnl", headers=H).json(),
+        "positions":  http.get(f"{BASE}/traders/{address}/positions/active", headers=H).json(),
+        "categories": http.get(f"{BASE}/traders/{address}/categories", headers=H).json(),
     }
 ```
 
@@ -165,7 +174,7 @@ def all_trades(address):
         if cursor:
             params["cursor"] = cursor
 
-        page = requests.get(f"{BASE}/traders/{address}/trades",
+        page = http.get(f"{BASE}/traders/{address}/trades",
                             headers=H, params=params, timeout=30).json()
         trades.extend(page["trades"])
 
@@ -182,7 +191,7 @@ A leaderboard is read far more often than it changes, and every request counts a
 
 ```python
 def budget():
-    acct = requests.get(f"{BASE}/v2/trade/account", headers=H).json()
+    acct = http.get(f"{BASE}/v2/trade/account", headers=H).json()
     return acct["api_key"]["rate_limit_per_min"]
 ```
 
@@ -201,7 +210,7 @@ On `429`, honour `Retry-After` rather than retrying immediately, which extends t
 ## Handle the processing state
 
 ```python
-r = requests.get(f"{BASE}/traders/{address}/statements", headers=H)
+r = http.get(f"{BASE}/traders/{address}/statements", headers=H)
 
 if r.status_code == 503 and not r.json().get("available", True):
     return {"state": "processing"}     # spinner, poll later

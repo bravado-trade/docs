@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 On a spot market, a position that moves against you loses value gradually and you can usually still sell. On a prediction market it does not work that way. When the event resolves, the losing outcome is worth exactly **\$0**, and there is nobody to sell to at any price.
@@ -47,7 +50,8 @@ Polymarket's native API has none of these order types. This guide covers all fou
 - A Bravado API key with `trade.execute` and `trade.cancel`
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 export BASE="https://partner-api.bravadotrade.com"
 ```
 
@@ -74,7 +78,9 @@ Hence one returns an `order_id` and the other a `record_id`, and they appear on 
 
 ```bash
 curl -X POST $BASE/v2/trade/order \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{
@@ -100,7 +106,9 @@ Before it triggers: `GET /v2/trade/strategies` only. After: `GET /v2/trade/order
 
 ```bash
 curl -X POST $BASE/v2/trade/order \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{
@@ -120,7 +128,9 @@ Follows the price up, fires when it reverses by your offset:
 
 ```bash
 curl -X POST $BASE/v2/trade/order \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{

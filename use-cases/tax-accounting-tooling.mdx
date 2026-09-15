@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## The problem
 
 Prediction-market gains and losses need to be reported to tax authorities in most jurisdictions. On Polymarket, that means reconstructing every disposition (sale, merge, redemption) with cost basis and proceeds, over an entire tax year, and producing a document a preparer can hand to the tax authority. Wallet-level exports from Polymarket's UI do not contain the required fields.
@@ -30,15 +33,16 @@ Prediction-market gains and losses need to be reported to tax authorities in mos
 Generate a year-end statement CSV for a client wallet:
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, requests, csv
 
 API = "https://partner-api.bravadotrade.com"
-H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+H = {}
 
 def fetch_r1(addr, year):
     rows, offset = [], 0
     while True:
-        r = requests.get(
+        r = http.get(
             f"{API}/traders/{addr}/statements/r1",
             params={"year": year, "limit": 1000, "offset": offset},
             headers=H,

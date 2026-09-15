@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 Rendering a position looks like a solved problem. Take size, take price, multiply, show a number.
@@ -56,7 +59,9 @@ npm install decimal.js
 
 ```bash
 curl $BASE/v2/trade/positions \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 ```json
@@ -96,7 +101,9 @@ For history across a wallet's whole life rather than current holdings:
 
 ```bash
 curl $BASE/traders/{address}/pnl \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 That works on **any public address**, so a portfolio view of someone else's wallet needs no permission from them.
@@ -153,7 +160,9 @@ Redeeming is a normal mutating call:
 
 ```bash
 curl -X POST $BASE/v2/trade/positions/redeem \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{"symbol": "..."}'

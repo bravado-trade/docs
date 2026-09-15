@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}/metrics"
 description: "Low-latency R5/R6/R7 performance and fee metrics without the full R1 disposition set."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns R5, R6, and R7 report metrics without assembling the full R1 disposition set. This is the lowest-latency way to retrieve performance and fee data for a wallet.
 
 ```text
@@ -27,7 +30,9 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/metr
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../metrics \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d basis=net
 ```
 

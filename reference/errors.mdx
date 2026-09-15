@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Bravado uses standard HTTP status codes to indicate the success or failure of every request. When a request fails, the response body always contains a JSON object with a single `error` field describing what went wrong. Successful responses never include an `error` key, but may include a `warnings` array. Always check for warnings on mutation requests.
 
 ## Error response format
@@ -24,7 +27,7 @@ The `error` value is a human-readable string. Your code should branch on the HTT
 | Status | Meaning | Common cause |
 | --- | --- | --- |
 | 400 Bad Request | Invalid request parameters | Wrong `window` value, price out of range, missing required field |
-| 401 Unauthorized | Missing or invalid Bearer token | No `Authorization` header, expired or revoked token |
+| 401 Unauthorized | Missing or invalid HMAC credentials | Missing signing headers, invalid signature, stale timestamp or revoked key |
 | 403 Forbidden | Valid token, insufficient scope | Calling `/withdraw` without the `trade.withdraw` scope |
 | 404 Not Found | Resource doesn't exist | An `order_id` that doesn't belong to your account |
 | 409 Conflict | Duplicate resource | Creating a copytrade for a leader where one already exists |

@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## The problem
 
 Retail interest in prediction markets is high but sophistication is uneven. A product that lets a user pick a top trader and automatically mirror their fills combines a proven UX pattern (Etoro-style copy trading) with a market that has no native copy-trading feature. Building this from scratch requires watching every fill on-chain, replaying it against a follower wallet, handling partial fills, and reconciling.
@@ -36,21 +39,22 @@ Polymarket does not offer a native equivalent. Every copy-trading product on Pol
 Provision a follower, subscribe to a leader, and print mirrored fills:
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, uuid, time, requests
 
 API = "https://partner-api.bravadotrade.com"
 KEY = os.environ["BRAVADO_API_KEY"]
-H = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
+H = {"Content-Type": "application/json"}
 
 def new_key():
     return {"Idempotency-Key": str(uuid.uuid4())}
 
 # 1. Pick a leader from the leaderboard.
-leaderboard = requests.get(f"{API}/leaderboard?window=30d&order=pnl&limit=1", headers=H).json()
+leaderboard = http.get(f"{API}/leaderboard?window=30d&order=pnl&limit=1", headers=H).json()
 leader = leaderboard["traders"][0]["address"]
 
 # 2. Subscribe with proportional sizing and a per-fill cap.
-sub = requests.post(f"{API}/v2/trade/copytrade/subscriptions", headers={**H, **new_key()}, json={
+sub = http.post(f"{API}/v2/trade/copytrade/subscriptions", headers={**H, **new_key()}, json={
     "leader_address": leader,
     "sizing_mode": "proportional",
     "sizing_factor": "0.10",
@@ -61,7 +65,7 @@ sub = requests.post(f"{API}/v2/trade/copytrade/subscriptions", headers={**H, **n
 # 3. Stream mirrored fills.
 seen = set()
 while True:
-    fills = requests.get(
+    fills = http.get(
         f"{API}/v2/trade/copytrade/subscriptions/{sub['subscription_id']}/fills?limit=100",
         headers=H,
     ).json()

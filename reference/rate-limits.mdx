@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Bravado enforces rate limits on a per-API-key basis to ensure fair and stable access for all integrations. Your specific limit is tied to your account tier and is visible in your account snapshot, you can retrieve it programmatically at any time without hitting a separate billing dashboard.
 
 ## Finding your rate limit
@@ -15,7 +18,9 @@ Call `GET /v2/trade/account` to retrieve your current API key metadata, includin
 
 ```http
 GET /v2/trade/account HTTP/1.1
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <unix-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 The response includes an `api_key` object with a `rate_limit_per_min` field:
@@ -100,7 +105,9 @@ All mutating requests should include an `Idempotency-Key` header. If your reques
 
 ```http
 POST /v2/trade/order HTTP/1.1
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <unix-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 Content-Type: application/json
 ```

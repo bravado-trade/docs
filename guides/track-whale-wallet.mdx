@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 Copying a wallet is one API call. Choosing the right wallet is the entire problem, and it is the part a leaderboard actively works against you on.
@@ -49,7 +52,8 @@ This guide is about the verification step in between. Everything here is read-on
 - `trade.execute` only for the final live step
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 export BASE="https://partner-api.bravadotrade.com"
 ```
 
@@ -60,12 +64,16 @@ Two rankings, two different questions:
 ```bash
 # who made the most money
 curl -G $BASE/leaderboard \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=30d -d limit=25
 
 # who trades the most
 curl -G $BASE/leaderboard/volume \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=30d -d limit=25
 ```
 
@@ -88,7 +96,9 @@ Three checks, each catching a different kind of false positive.
 
 ```bash
 curl $BASE/traders/0xWALLET/metrics \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 Look at trade count and win rate together. A wallet with 12 trades and a large PnL made one good call. Copying it is a bet that lightning strikes twice, and you will be paying 25 bips a side for the privilege of finding out.
@@ -99,7 +109,9 @@ A useful floor is somewhere around 50 trades before a record means anything.
 
 ```bash
 curl $BASE/traders/0xWALLET/pnl \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 Cumulative PnL from the wallet's **first ever trade**, not from the start of your window. This is what the leaderboard cannot show you.
@@ -110,7 +122,9 @@ Two wallets with identical 30-day PnL can look completely different here: one cl
 
 ```bash
 curl $BASE/traders/0xWALLET/categories \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 This is the check that changes outcomes most, and the one people skip.
@@ -139,7 +153,9 @@ That wallet is worth following in politics. Following it everywhere means volunt
 
 ```bash
 curl -X POST $BASE/v2/trade/copytrade \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{
@@ -170,7 +186,9 @@ The `filters` block is where step 2 pays off. Without it you are copying the who
 
 ```bash
 curl $BASE/v2/trade/copytrade/simulation \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 Simulation runs the whole subscription against live prices without touching the chain. Compare against the leader's own PnL over the same period, and look for three things:
@@ -193,7 +211,9 @@ Simulation runs the whole subscription against live prices without touching the 
 
 ```bash
 curl -X PATCH $BASE/v2/trade/copytrade/{id} \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{"simulation": false}'
@@ -206,15 +226,21 @@ curl -X PATCH $BASE/v2/trade/copytrade/{id} \
 ## Step 6: monitor
 
 ```bash
-curl $BASE/v2/trade/copytrade/pnl     -H "Authorization: Bearer $BRAVADO_API_KEY"
-curl $BASE/v2/trade/copytrade/history -H "Authorization: Bearer $BRAVADO_API_KEY"
+curl $BASE/v2/trade/copytrade/pnl     -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+curl $BASE/v2/trade/copytrade/history -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 Pause without losing configuration:
 
 ```bash
 curl -X PATCH $BASE/v2/trade/copytrade/{id}/status \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{"status": "paused"}'
 ```

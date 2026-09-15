@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 Prediction market books are thin. That is not a defect, it is what a market for a specific question about a specific event looks like: a few hundred shares at the touch, a few hundred more a couple of cents away, then a gap.
@@ -50,7 +53,8 @@ Two tools address this from opposite directions. This guide covers when each is 
 - Enough collateral for the full position
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 export BASE="https://partner-api.bravadotrade.com"
 ```
 
@@ -85,7 +89,9 @@ The choice is really about whether **time or price** is your binding constraint.
 
 ```bash
 curl -X POST $BASE/v2/trade/order \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{
@@ -134,7 +140,9 @@ curl -X POST $BASE/v2/trade/order \
 
 ```bash
 curl -X POST $BASE/v2/trade/order \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{
@@ -166,7 +174,9 @@ Both strategies live here, and **not** on open orders:
 
 ```bash
 curl $BASE/v2/trade/strategies \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 ```json
@@ -195,7 +205,9 @@ An **Iceberg appears in two places at once**: the parent as a `record_id` here, 
 
 ```bash
 curl -X DELETE $BASE/v2/trade/strategies/rec_twap_abc123 \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Idempotency-Key: $(uuidgen)"
 ```
 

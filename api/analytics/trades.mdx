@@ -5,6 +5,9 @@ api: "GET /trader-analytics/trades"
 description: "Trade log for a wallet supplied as a query parameter. Alternative to /traders/{address}/trades."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns the same trade log as [`/traders/{address}/trades`](/api/analytics/trader-trades), but the wallet address is passed as a query parameter instead of a path segment. Response shape is identical.
 
 ```text
@@ -23,7 +26,9 @@ Same shape as [/traders/](/api/analytics/trader-trades#response){address}[/trade
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/trades \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d address=0xabc... \
   -d limit=100
 ```

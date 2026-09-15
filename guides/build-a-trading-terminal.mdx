@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 A terminal has to answer four questions at a glance: what do I hold, what is it worth, what is working, and how do I act. On a spot exchange that is largely solved by rendering the API's response objects.
@@ -60,13 +63,13 @@ npm install decimal.js
 ## Bootstrap: the four calls
 
 ```typescript
+import { bravadoFetch } from "./bravado-auth.mjs";
 const BASE = "https://partner-api.bravadotrade.com";
 
 async function api(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await bravadoFetch(`${BASE}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
       "Content-Type": "application/json",
       ...init.headers,
     },

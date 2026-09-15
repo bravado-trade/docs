@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}/trades"
 description: "Paginated log of all trade events for a wallet in reverse chronological order."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns a paginated log of all trade events for the wallet in reverse chronological order.
 
 ```text
@@ -87,13 +90,17 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
 
 ```bash First page
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../trades \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d limit=100
 ```
 
 ```bash Next page
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../trades \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d limit=100 \
   -d cursor_ts=1736800000 \
   -d cursor_log_idx=42
