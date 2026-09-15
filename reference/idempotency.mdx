@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Every mutating request to Bravado (`POST`, `PATCH`, `DELETE`) requires an `Idempotency-Key` header. This lets you safely retry after network failures without creating duplicate orders, cancellations, withdrawals, or copy-trade subscriptions.
 
 ## Key format
@@ -75,6 +78,7 @@ Do not retry with the same key when:
 Placing an order with retry-safe idempotency:
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import requests
 import uuid
 import time
@@ -85,11 +89,10 @@ payload = {"symbol": "71321...", "side": "buy", "type": "MARKET", "quote_amount"
 
 for attempt in range(3):
     try:
-        r = requests.post(
+        r = http.post(
             url,
             json=payload,
             headers={
-                "Authorization": f"Bearer {API_KEY}",
                 "Idempotency-Key": key,
                 "Content-Type": "application/json",
             },

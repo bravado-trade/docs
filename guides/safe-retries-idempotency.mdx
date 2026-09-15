@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 A request times out. You do not know whether the order was placed.
@@ -48,7 +51,8 @@ Retry, and you might end up with two positions. Do not retry, and you might have
 - A Bravado API key with `trade.execute`
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 export BASE="https://partner-api.bravadotrade.com"
 ```
 
@@ -56,7 +60,9 @@ export BASE="https://partner-api.bravadotrade.com"
 
 ```bash
 curl -X POST $BASE/v2/trade/order \
-  -H "Authorization: Bearer $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: e4b9c1a2-38df-4f77-a3c5-012bd9e8f231" \
   -d '{"type":"MARKET","symbol":"...","side":"BUY","quote_amount":"10"}'
@@ -71,6 +77,7 @@ The key is bound to the original request. Reusing it with a **different** payloa
 <CodeGroup>
 
 ```python Python
+from bravado_auth import session as http, BravadoAuth
 import os, time, uuid, random, requests
 
 BASE = "https://partner-api.bravadotrade.com"
@@ -82,10 +89,9 @@ def place_order(payload, attempts=4):
 
     for i in range(attempts):
         try:
-            r = requests.post(
+            r = http.post(
                 f"{BASE}/v2/trade/order",
-                headers={"Authorization": f"Bearer {KEY}",
-                         "Idempotency-Key": key},     # same key every attempt
+                headers={"Idempotency-Key": key},     # same key every attempt
                 json=payload,
                 timeout=10,
             )
@@ -107,6 +113,7 @@ def place_order(payload, attempts=4):
 ```
 
 ```typescript TypeScript
+import { bravadoFetch } from "./bravado-auth.mjs";
 const BASE = "https://partner-api.bravadotrade.com";
 
 export async function placeOrder(payload: object, attempts = 4) {
@@ -114,10 +121,9 @@ export async function placeOrder(payload: object, attempts = 4) {
 
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch(`${BASE}/v2/trade/order`, {
+      const res = await bravadoFetch(`${BASE}/v2/trade/order`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.BRAVADO_API_KEY}`,
           "Content-Type": "application/json",
           "Idempotency-Key": key,        // same key every attempt
         },
@@ -174,7 +180,7 @@ The rule: **the key belongs to the intention, and the intention exists before th
 Provisioning a user is the clear case:
 
 ```python
-requests.post(f"{BASE}/v2/trade/users",
+http.post(f"{BASE}/v2/trade/users",
               headers={**MASTER, "Idempotency-Key": f"provision:{user_id}"},
               json={"external_id": user_id})
 ```
@@ -216,7 +222,9 @@ if r.status_code == 429:
 Read your budget rather than guessing at it:
 
 ```bash
-curl $BASE/v2/trade/account -H "Authorization: Bearer $BRAVADO_API_KEY"
+curl $BASE/v2/trade/account -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 # api_key.rate_limit_per_min
 ```
 

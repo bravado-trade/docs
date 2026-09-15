@@ -46,6 +46,8 @@ sha256_of_exact_body_bytes
 
 Canonicalize the path and query using the API signing rules: query keys are sorted lexicographically and values URL-encoded. Hash an empty body for a bodyless GET. For JSON writes, serialize once, hash that string and send those exact bytes. Sign the venue alias path when using `/v2/trade/predictfun/...` or `/v2/trade/polymarket/...`.
 
+See [request signing examples](/authentication-examples) for reusable Python and Node.js helpers.
+
 The [Trade quickstart](/quickstart-trade) includes a complete, dependency-free Python example for a signed account read. The [Console quickstart](https://console.bravadotrade.com/endpoints/trade?section=connect) also provides TypeScript and cURL.
 
 Static Bearer authentication is a legacy, deployment-gated fallback for selected per-user reads. It is not the integration contract for new clients and does not authorize Trade mutations or master-key requests.

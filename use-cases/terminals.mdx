@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## The problem
 
 A trading terminal has to show a complete picture in one place: what the user holds, what it is worth, what the market is doing, and how to act on it. Assembled directly against a venue, that means stitching together an order endpoint, a positions endpoint, an indexer for history, and your own accounting layer to make the numbers agree.
@@ -45,19 +48,27 @@ A minimal terminal screen needs four calls on load:
 ```bash
 # 1. who am I, and what can this key do
 curl https://partner-api.bravadotrade.com/v2/trade/account \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 
 # 2. spendable collateral
 curl https://partner-api.bravadotrade.com/v2/trade/balances \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 
 # 3. current positions with cost basis
 curl https://partner-api.bravadotrade.com/v2/trade/positions \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 
 # 4. resting orders to render on the book
 curl https://partner-api.bravadotrade.com/v2/trade/orders/open \
-  -H "Authorization: Bearer $BRAVADO_API_KEY"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 Order entry is a single call regardless of order type, so the same code path serves a market order and a TWAP:

@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}/categories"
 description: "Per-category PnL and volume breakdown for the wallet."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns per-category PnL and volume breakdown for the wallet.
 
 ```text
@@ -45,7 +48,9 @@ An array of category breakdown objects.
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../categories \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=90d
 ```
 

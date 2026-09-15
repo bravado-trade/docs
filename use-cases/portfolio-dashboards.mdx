@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## The problem
 
 Polymarket's web app shows a user their current positions and cash balance. It does not show cumulative PnL over time, cost basis, category exposure, or realized vs. unrealized breakdowns. Traders who want any of that must either export CSVs or build it themselves.
@@ -36,14 +39,15 @@ All PnL numbers are computed under [PMWAS](/products/data-api), so cost basis is
 Assemble a portfolio snapshot for a wallet in a single function:
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, requests, concurrent.futures
 
 API = "https://partner-api.bravadotrade.com"
-H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+H = {}
 
 def snapshot(addr):
     def fetch(path):
-        return requests.get(f"{API}{path}", headers=H).json()
+        return http.get(f"{API}{path}", headers=H).json()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
         pnl = ex.submit(fetch, f"/traders/{addr}/pnl")

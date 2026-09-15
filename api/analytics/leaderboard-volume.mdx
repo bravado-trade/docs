@@ -5,6 +5,9 @@ api: "GET /trader-analytics/leaderboard/volume"
 description: "Returns traders ranked by USDC trading volume for the requested rolling window."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns traders ranked by USDC trading volume for the requested window. The ranking runs in the database over the complete candidate set on the served column, with a deterministic wallet tie-break, so pages never overlap or skip rows.
 
 ```text
@@ -138,7 +141,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume
 | Status | When |
 | --- | --- |
 | `400 Bad Request` | Invalid `window`, `sort`, `order`, `limit`, `offset`, or `category` value, or `category` requested for a window/venue it isn't available on yet |
-| `401 Unauthorized` | Missing or invalid Bearer token |
+| `401 Unauthorized` | Missing or invalid HMAC credentials |
 | `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` header |
 
 See the [Error reference](/reference/errors).
@@ -149,7 +152,9 @@ See the [Error reference](/reference/errors).
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=30d \
   -d sort=volume_usdc \
   -d order=desc

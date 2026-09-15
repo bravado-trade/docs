@@ -13,14 +13,20 @@
   ],
   "components": {
     "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
-      },
-      "internalApiKey": {
+      "partnerKey": {
         "type": "apiKey",
         "in": "header",
-        "name": "X-Internal-API-Key"
+        "name": "X-BRAVADO-API-KEY"
+      },
+      "partnerTimestamp": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-BRAVADO-TIMESTAMP"
+      },
+      "partnerSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-BRAVADO-SIGNATURE"
       }
     },
     "schemas": {}
@@ -96,7 +102,8 @@
             }
           }
         },
-        "operationId": "get_v2_trade_healthz"
+        "operationId": "get_v2_trade_healthz",
+        "security": []
       }
     },
     "/v2/trade/openapi.json": {
@@ -111,7 +118,8 @@
             "description": "Default Response"
           }
         },
-        "operationId": "get_v2_trade_openapi.json"
+        "operationId": "get_v2_trade_openapi.json",
+        "security": []
       }
     },
     "/v2/trade/account": {
@@ -4772,5 +4780,12 @@
         "operationId": "get_v2_trade_combo_positions"
       }
     }
-  }
+  },
+  "security": [
+    {
+      "partnerKey": [],
+      "partnerTimestamp": [],
+      "partnerSignature": []
+    }
+  ]
 }

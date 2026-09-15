@@ -4,6 +4,9 @@ sidebarTitle: "Home"
 description: "Infrastructure layer for Prediction Markets. REST APIs to execute orders, mirror top traders via copy-trading, and generate analytics and tax statements."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Bravado gives partners and developers programmatic access to prediction market trading through a suite of REST APIs. Place sophisticated orders, mirror top traders, analyze wallet performance, and generate tax-ready statements, all from a single authenticated integration.
 
 <CardGroup cols={2}>
@@ -54,7 +57,7 @@ Bravado exposes three APIs that work together:
 
 <Steps>
   <Step title="Get your API key">
-    Contact the Bravado team to receive your `Bearer` token and onboarding credentials.
+    Create an account in [Console](https://console.bravadotrade.com/signup), then generate a public API key and secret for your product.
   </Step>
   <Step title="Verify your account">
     Call `GET /v2/trade/account` to confirm your credentials and inspect your wallet address, scopes, and rate limits.

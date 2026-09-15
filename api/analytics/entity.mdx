@@ -5,6 +5,9 @@ api: "GET /trader-analytics/entity/{owner}"
 description: "Aggregates R5/R6/R7 metrics across all controlled wallets registered under a beneficial owner."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns a multi-wallet entity rollup for a beneficial owner, aggregating R5, R6, and R7 metrics across all controlled wallets registered under the owner identifier.
 
 ```text
@@ -29,7 +32,9 @@ Returns `503` with `{"available": false}` when data is not yet available for any
 
 ```bash cURL
 curl https://partner-api.bravadotrade.com/trader-analytics/entity/owner_01HXYZ \
-  -H "Authorization: Bearer <token>"
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
 ```
 
 ```json Response (abbreviated)

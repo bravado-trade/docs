@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}/pnl"
 description: "Gap-free, cumulative-all-time PnL time series for a wallet, suitable for plotting an equity curve — including intraday (hourly) resolution."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns a **gap-free, cumulative-all-time** PnL time series for the wallet,
 suitable for plotting an equity curve directly (no client-side stitching
 needed). Every point is the wallet's running total **as of that bucket** —
@@ -157,7 +160,9 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../pnl \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=24h \
   -d interval=1h \
   -d pnl_type=overall
@@ -193,7 +198,9 @@ returns a full, gap-free series — a flat line at its historical level,
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../pnl \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=30d
 ```
 
@@ -228,7 +235,9 @@ still a full gap-filled series, never `[]`:
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../pnl \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d window=30d \
   -d series_kind=window_delta
 ```

@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 ## Overview
 
 Most trading bot tutorials show you how to place an order in a loop. That is the easy 10% of the problem, and it produces bots that work in testing and misbehave the first time something interrupts them.
@@ -51,7 +54,8 @@ This guide builds a bot around that problem. The signal is left to you, because 
 - USDC collateral, though the dry-run mode needs none
 
 ```bash
-export BRAVADO_API_KEY="your-bearer-token"
+export BRAVADO_API_KEY="your-public-key"
+export BRAVADO_API_SECRET="your-secret"
 ```
 
 ## Architecture
@@ -78,17 +82,18 @@ The reason reconcile comes first, every cycle rather than only at startup, is th
 ## Set up the client
 
 ```python
+from bravado_auth import session as http, BravadoAuth
 import os, time, uuid, requests
 from decimal import Decimal
 
 BASE = "https://partner-api.bravadotrade.com"
-H = {"Authorization": f"Bearer {os.environ['BRAVADO_API_KEY']}"}
+H = {}
 
 DRY_RUN = True          # nothing is placed until you turn this off
 
 
 def read(path, **params):
-    r = requests.get(f"{BASE}{path}", headers=H, params=params or None, timeout=15)
+    r = http.get(f"{BASE}{path}", headers=H, params=params or None, timeout=15)
     r.raise_for_status()
     return r.json()
 
@@ -97,7 +102,7 @@ def write(path, body, key):
     if DRY_RUN:
         print(f"  DRY RUN  would POST {path}  {body}")
         return {"dry_run": True}
-    r = requests.post(f"{BASE}{path}", headers={**H, "Idempotency-Key": key},
+    r = http.post(f"{BASE}{path}", headers={**H, "Idempotency-Key": key},
                       json=body, timeout=15)
     r.raise_for_status()
     return r.json()

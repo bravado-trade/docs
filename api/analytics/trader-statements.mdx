@@ -5,6 +5,9 @@ api: "GET /trader-analytics/traders/{address}/statements"
 description: "Complete §20 PMWAS statement containing all eight reports (R1–R8) for a wallet."
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Returns the complete §20 wallet statement containing all eight reports (R1–R8).
 
 ```text
@@ -96,7 +99,9 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/stat
 
 ```bash cURL
 curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../statements \
-  -H "Authorization: Bearer <token>" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d r1_limit=100 \
   -d basis=net
 ```

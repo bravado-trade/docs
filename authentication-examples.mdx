@@ -1,0 +1,125 @@
+---
+title: "Request signing examples"
+description: "Sign prepared Python and Node.js requests with HMAC."
+---
+
+Create a public key and secret in [Console](https://console.bravadotrade.com/keys). Set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET` on your server. Keep the secret out of frontend code.
+
+These helpers sign the exact body sent and canonicalize query parameters. Every call, including a retry, receives a fresh timestamp and signature. Keep the same idempotency key when retrying the same intended write. Do not reuse signed headers across different requests.
+
+## Python
+
+Install `requests` and save the following as `bravado_auth.py` beside your script. It signs the prepared request after JSON serialization and query encoding. Redirects are disabled; repeated query keys and streaming bodies are rejected.
+
+```python
+"""HMAC authentication for server-side requests examples (requires requests)."""
+import hashlib
+import hmac
+import os
+import time
+from urllib.parse import parse_qsl, quote, unquote, urlsplit
+
+import requests
+
+
+def canonical_path(url):
+    parts = urlsplit(url)
+    path = unquote(parts.path or "/")
+    if len(path) > 1 and path.endswith("/"):
+        path = path[:-1]
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    if len({k for k, _ in query}) != len(query):
+        raise ValueError("Use each query parameter once")
+    encoded = "&".join(quote(k, safe="-_.~") + "=" + quote(v, safe="-_.~")
+                       for k, v in sorted(query))
+    return path + ("?" + encoded if encoded else "")
+
+
+class BravadoAuth(requests.auth.AuthBase):
+    def __init__(self, key=None, secret=None):
+        self.key = key if key is not None else os.environ["BRAVADO_API_KEY"]
+        self.secret = secret if secret is not None else os.environ["BRAVADO_API_SECRET"]
+
+    def __call__(self, request):
+        if urlsplit(request.url).netloc != "partner-api.bravadotrade.com" or not request.url.startswith("https://"):
+            raise ValueError("Send Bravado credentials only to the HTTPS Partner API")
+        body = request.body or b""
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+            request.body = body
+            request.headers["Content-Length"] = str(len(body))
+        if not isinstance(body, bytes):
+            raise ValueError("Serialize the request body before signing")
+        timestamp = str(time.time_ns() // 1_000_000)
+        payload = "\n".join([timestamp, request.method.upper(), canonical_path(request.url),
+                              hashlib.sha256(body).hexdigest()])
+        request.headers.pop("Authorization", None)
+        request.headers.update({
+            "X-BRAVADO-API-KEY": self.key,
+            "X-BRAVADO-TIMESTAMP": timestamp,
+            "X-BRAVADO-SIGNATURE": hmac.new(self.secret.encode(), payload.encode(), hashlib.sha256).hexdigest(),
+        })
+        return request
+
+
+class BravadoSession(requests.Session):
+    def request(self, *args, **kwargs):
+        # A redirect changes the signed path and must be handled explicitly.
+        kwargs["allow_redirects"] = False
+        kwargs.setdefault("timeout", 15)
+        if "auth" not in kwargs:
+            kwargs["auth"] = BravadoAuth()
+        return super().request(*args, **kwargs)
+
+
+session = BravadoSession()
+```
+
+```python
+from bravado_auth import session as http
+
+response = http.get("https://partner-api.bravadotrade.com/v2/trade/account")
+response.raise_for_status()
+print(response.json())
+```
+
+For a master or per-user credential, pass `auth=BravadoAuth(public_key, matching_secret)` to the request. Never pair one user's public key with another user's secret.
+
+## Node.js
+
+Save this as `bravado-auth.mjs` and import `bravadoFetch` in your server code. Serialize JSON once with `JSON.stringify` and pass that string as `body`.
+
+```javascript
+import { createHash, createHmac } from 'node:crypto';
+
+const encode = value => encodeURIComponent(value).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+export function signHeaders(url, method, body, key, secret, timestamp = String(Date.now())) {
+  const u = new URL(url);
+  if (u.origin !== 'https://partner-api.bravadotrade.com') throw new Error('Use the HTTPS Partner API origin');
+  const entries = [...u.searchParams];
+  if (new Set(entries.map(([k]) => k)).size !== entries.length) throw new Error('Use each query parameter once');
+  let path = decodeURIComponent(u.pathname);
+  if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+  entries.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+  if (entries.length) path += '?' + entries.map(([k, v]) => `${encode(k)}=${encode(v)}`).join('&');
+  const hash = createHash('sha256').update(body).digest('hex');
+  const payload = [timestamp, method.toUpperCase(), path, hash].join('\n');
+  return { 'X-BRAVADO-API-KEY': key, 'X-BRAVADO-TIMESTAMP': timestamp,
+    'X-BRAVADO-SIGNATURE': createHmac('sha256', secret).update(payload).digest('hex') };
+}
+export async function bravadoFetch(url, options = {}) {
+  const body = options.body ?? '';
+  if (typeof body !== 'string') throw new Error('Serialize the body once before signing');
+  const headers = new Headers(options.headers);
+  headers.delete('Authorization');
+  const signed = signHeaders(url, options.method ?? 'GET', body, process.env.BRAVADO_API_KEY, process.env.BRAVADO_API_SECRET);
+  for (const [name, value] of Object.entries(signed)) headers.set(name, value);
+  return fetch(url, { ...options, headers, redirect: 'error' });
+}
+```
+
+## cURL and HTTP reference examples
+
+Reference pages show the three required headers using placeholders. Replace the timestamp and signature for each individual request using the [signing contract](/authentication), or use a runnable example above. Include the final query and exact body bytes in the signature; do not copy a signature from a different endpoint.
+
+MCP uses OAuth. Market-data feeds have their own authentication contracts; these HTTP helpers do not replace them.

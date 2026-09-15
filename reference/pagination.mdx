@@ -7,6 +7,9 @@ icon:
   library: "lucide"
 ---
 
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+
 Bravado uses two distinct pagination patterns depending on the nature of the data being returned. Most list endpoints use classic offset/limit pagination, which is simple to implement and supports random access. Trade history and activity timeline endpoints use cursor-based pagination, which is more efficient for large, append-only datasets and guarantees you won't miss records if new data arrives between pages.
 
 ## Offset/limit pagination
@@ -24,7 +27,9 @@ For most list endpoints, you control pagination using `limit` and `offset` query
 
 ```http
 GET /traders/0xabc.../positions?limit=100&offset=0 HTTP/1.1
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <unix-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 **Example response:**
@@ -115,7 +120,9 @@ Always pass both `cursor_ts` and `next_cursor_log_idx` together when available. 
 
 ```http
 GET /v2/trade/activity?limit=50 HTTP/1.1
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <unix-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 **Example response:**
@@ -131,7 +138,9 @@ Authorization: Bearer <token>
 
 ```http
 GET /v2/trade/activity?limit=50&cursor=eyJvZmZzZXQiOjUwfQ== HTTP/1.1
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <unix-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 When `next_cursor` is `null` or absent, you have fetched all available activity.
@@ -162,7 +171,9 @@ The PMWAS statements endpoint has a nested pagination layer for R1 disposition r
 
 ```http
 GET /traders/{address}/statements?limit=10&offset=0&r1_limit=500&r1_offset=0 HTTP/1.1
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <unix-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 Check `has_more_r1` in the response to determine whether additional R1 rows exist for the current statement page.
@@ -171,7 +182,9 @@ For direct access to R1 rows without the parent statement wrapper, use the stand
 
 ```http
 GET /traders/{address}/statements/r1?limit=500&offset=0 HTTP/1.1
-Authorization: Bearer <token>
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <unix-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
 ```
 
 ## Page size limits
