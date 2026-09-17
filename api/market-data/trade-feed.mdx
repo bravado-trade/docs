@@ -83,7 +83,7 @@ import asyncio
 URL = "wss://partner-api.bravadotrade.com/trade-feed/ws"
 
 async def main():
-    async for ws in websockets.connect(URL, ping_interval=None):
+    async for ws in websockets.connect(URL, ping_interval=20):
         try:
             async for message in ws:
                 frame = json.loads(message)
@@ -176,7 +176,7 @@ The trade object in a `trade` frame and every element of the `snapshot` array sh
 
 ## Keep-alive and reconnect
 
-The server keeps the connection healthy with its own pings; you do not need to send heartbeats, and any frame you send is ignored. If the socket drops, reconnect and you will receive a fresh `snapshot`.
+The authenticated route sends heartbeat pings; clients must respond with protocol pongs (most libraries do this automatically). For the legacy public route, send client-side protocol pings to keep idle connections alive. Neither route accepts subscription commands. If the socket drops, reconnect to receive a fresh `snapshot`; authenticated reconnects require a fresh timestamp and signature.
 
 Dedupe against trades already on screen using **`transactionHash`**, not `id`. `id` is built from a counter that lives in the serving process: it restarts from zero when the process does, and two instances give the same fill different ids. `transactionHash` identifies the fill itself.
 
