@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Usage on our pricing plans is measured in **API Credits**. Credit cost varies by product and transport. Public Market Data WebSocket routes do not consume API credits. Authenticated order-book streams use the byte-based model below for organisations enrolled in WebSocket billing. The **Trade API** and **Copytrade API** retain their existing pricing.
+Usage on our pricing plans is measured in **API Credits**. Credit cost varies by product and transport. Public Market Data WebSocket routes do not consume API credits. Authenticated order-book and trade streams use the byte-based model below for organisations enrolled in WebSocket billing. The **Trade API** and **Copytrade API** retain their existing pricing.
 
 ## Credit cost by product
 
@@ -15,6 +15,7 @@ Usage on our pricing plans is measured in **API Credits**. Credit cost varies by
 | --- | --- | --- |
 | Public Market Data | WSS `/market` | No API credits |
 | Authenticated order books | WSS `/partner` | 1 credit per 100,000 bytes for enrolled organisations |
+| Authenticated Polymarket trades | WSS `/partner/trades` | 1 credit per 100,000 bytes for enrolled organisations |
 | Trader Data API | HTTP | 1 credit / request |
 | MCP Server | HTTP | 10 credits / request |
 | Trade API | HTTP | No API credits |
@@ -28,10 +29,10 @@ Usage on our pricing plans is measured in **API Credits**. Credit cost varies by
 ## Authenticated WebSocket credits
 
 The authenticated routes are `/stream/polymarket/partner` and
-`/stream/predictfun/partner`. Use a key with `stream.read` and sign the connection
+`/stream/predictfun/partner`, plus `/stream/polymarket/partner/trades`. Use a key with `stream.read` and sign the connection
 with [HMAC](/authentication).
 
-Snapshots and order-book updates consume **1 credit per 100,000 uncompressed
+Snapshots, order-book updates and authenticated trade frames consume **1 credit per 100,000 uncompressed
 UTF-8 payload bytes**. For example, 9,414 bytes consume 0.09414 credit. Fractions
 accumulate across your organisation's keys and connections; messages are not
 rounded up individually. Pings, acknowledgements, error messages and idle time
