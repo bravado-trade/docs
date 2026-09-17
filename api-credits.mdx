@@ -7,13 +7,14 @@ icon:
   library: "lucide"
 ---
 
-Usage on our pricing plans is measured in **API Credits**. Credit cost varies by product and transport. The **Market Data** WebSocket streams are currently public and do not consume API credits, and the **Trade API** and **Copytrade API** do not consume API credits.
+Usage on our pricing plans is measured in **API Credits**. Credit cost varies by product and transport. Public Market Data WebSocket routes do not consume API credits. Authenticated order-book streams use the byte-based model below for organisations enrolled in WebSocket billing. The **Trade API** and **Copytrade API** retain their existing pricing.
 
 ## Credit cost by product
 
 | Product | Transport | API credits |
 | --- | --- | --- |
-| Market Data | WSS | Public, no API credits today |
+| Public Market Data | WSS `/market` | No API credits |
+| Authenticated order books | WSS `/partner` | 1 credit per 100,000 bytes for enrolled organisations |
 | Trader Data API | HTTP | 1 credit / request |
 | MCP Server | HTTP | 10 credits / request |
 | Trade API | HTTP | No API credits |
@@ -23,6 +24,32 @@ Usage on our pricing plans is measured in **API Credits**. Credit cost varies by
 <Note>
   **MCP requests carry a 10× multiplier.** Every call to the [MCP Server](/products/mcp-server) costs **10 API credits**, ten times a Data API request, reflecting the heavier analytics each MCP tool runs. The `run_sql` query budget is metered separately, by bytes scanned; see [MCP rate limits](/products/mcp-server#rate-limits).
 </Note>
+
+## Authenticated WebSocket credits
+
+The authenticated routes are `/stream/polymarket/partner` and
+`/stream/predictfun/partner`. Use a key with `stream.read` and sign the connection
+with [HMAC](/authentication).
+
+Snapshots and order-book updates consume **1 credit per 100,000 uncompressed
+UTF-8 payload bytes**. For example, 9,414 bytes consume 0.09414 credit. Fractions
+accumulate across your organisation's keys and connections; messages are not
+rounded up individually. Pings, acknowledgements, error messages and idle time
+consume no credits. A new snapshot requested when reconnecting counts as a new
+delivery.
+
+Your Console's **Billing** and **Usage** pages include this consumption.
+Reservations for deliveries awaiting confirmation appear separately from used
+credits. The included allowance is shared with your other metered API products.
+
+This rollout uses the included allowance for WebSocket delivery. When it runs out,
+the stream sends `CREDIT_LIMIT_REACHED` and closes with code `1008`. Upgrade your
+plan or wait for the allowance to reset before reconnecting. Automatic WebSocket
+overage spending is not enabled by this rollout.
+
+Metering starts prospectively when your organisation is enrolled. Previous
+traffic is not back-billed. Public `/market` streams, UMA and Mempool Fills are
+separate services and do not inherit this order-book byte rate.
 
 ## Related
 
