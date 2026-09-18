@@ -4,23 +4,35 @@ sidebarTitle: "Multi-venue order books"
 description: "Subscribe to live Polymarket and Predict.fun order books with a shared WebSocket message format."
 ---
 
-Connect to the public endpoint for your venue. No API key is required on these routes.
+Connect with a WebSockets API key, `stream.read` and [HMAC authentication](/authentication).
 
 | Venue | WebSocket URL |
 | --- | --- |
-| Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/market` |
-| Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/market` |
+| Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` |
+| Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` |
+
+The organisation must have access to the selected venue. Anonymous connections
+are rejected. The old `/market` routes are reserved for terminal sessions.
 
 ## Subscribe
 
 Use the venue's outcome token ID, not its event or market ID. On Predict.fun this is the outcome's `onChainId`.
 
-```javascript
+```javascript Node.js
+import WebSocket from "ws";
+import { createHash, createHmac } from "node:crypto";
 const venue = "predictfun"; // or "polymarket"
 const asset = "<OUTCOME_TOKEN_ID>";
-const ws = new WebSocket(
-  `wss://partner-api.bravadotrade.com/stream/${venue}/market`
-);
+const path = `/stream/${venue}/partner`;
+const timestamp = String(Date.now());
+const payload = [timestamp, "GET", path, createHash("sha256").update("").digest("hex")].join("\n");
+const ws = new WebSocket(`wss://partner-api.bravadotrade.com${path}`, {
+  headers: {
+    "X-Bravado-API-Key": process.env.BRAVADO_API_KEY,
+    "X-Bravado-Timestamp": timestamp,
+    "X-Bravado-Signature": createHmac("sha256", process.env.BRAVADO_API_SECRET).update(payload).digest("hex"),
+  },
+});
 ws.onopen = () => ws.send(JSON.stringify({
   op: "sub",
   streams: [`book:${asset}`]
@@ -41,7 +53,7 @@ ws.onmessage = ({ data }) => {
 };
 ```
 
-Alternatively, pass `?streams=book:<OUTCOME_TOKEN_ID>` on the connection URL. Subscribe to multiple tokens with a `streams` array. Unsubscribe with `{"op":"unsub","streams":["book:<OUTCOME_TOKEN_ID>"]}`. The public route accepts up to 120 streams per connection.
+Alternatively, pass `?streams=book:<OUTCOME_TOKEN_ID>` on the connection URL. Subscribe to multiple tokens with a `streams` array. Unsubscribe with `{"op":"unsub","streams":["book:<OUTCOME_TOKEN_ID>"]}`. The authenticated feed enforces the organisation’s shared asset allowance. Include any query parameters in the signed path.
 
 ## Read the messages
 

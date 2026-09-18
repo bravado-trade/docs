@@ -9,8 +9,8 @@ Polymarket markets do not settle themselves. When a market's event concludes, th
 
 <Info>
   The UMA REST endpoints and stream are served from `partner-api.bravadotrade.com`,
-  the same host as the rest of the Bravado API. UMA resolution is public
-  market data, so these endpoints need **no authentication** — no token, no key.
+  the same host as the rest of the Bravado API. Requests require an active paid plan,
+  a WebSockets API key with `stream.read`, and [HMAC authentication](/authentication).
   Coverage today is Polymarket.
 </Info>
 
@@ -62,7 +62,7 @@ The `answer` field classifies the oracle's `int256` price: `yes`, `no`, `50-50`,
 
 ## REST — query resolution state
 
-Base URL: `https://partner-api.bravadotrade.com`. No authentication required. JSON; ids are hex, `payout` is an integer micro-USDC string.
+Base URL: `https://partner-api.bravadotrade.com`. Sign every REST request with HMAC, including its sorted query parameters. JSON; ids are hex, `payout` is an integer micro-USDC string.
 
 ### `GET /uma/question`
 
@@ -144,37 +144,35 @@ GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100
 ## WebSocket — stream the lifecycle
 
 For push instead of poll, connect to `wss://partner-api.bravadotrade.com/uma/ws`.
-No subscription message and no authentication are needed — every Polymarket
+Authenticate the upgrade with HMAC. No subscription message is needed — every Polymarket
 proposal, dispute, and settlement is pushed to you as a `uma` frame. To follow a
 single market, filter on `question_id` (or `condition_id`) client-side.
 
-<CodeGroup>
-
-```javascript JavaScript
-const ws = new WebSocket("wss://partner-api.bravadotrade.com/uma/ws");
-ws.onmessage = (e) => {
-  const f = JSON.parse(e.data);
-  if (f.type === "uma") {
-    console.log(`${f.stage} — ${f.title} → ${f.answer}`);
-  }
-};
+```javascript Node.js
+// npm install ws
+import WebSocket from "ws";
+import { createHash, createHmac } from "node:crypto";
+const timestamp = String(Date.now());
+const payload = [timestamp, "GET", "/uma/ws", createHash("sha256").update("").digest("hex")].join("\n");
+const ws = new WebSocket("wss://partner-api.bravadotrade.com/uma/ws", {
+  headers: {
+    "X-Bravado-API-Key": process.env.BRAVADO_API_KEY,
+    "X-Bravado-Timestamp": timestamp,
+    "X-Bravado-Signature": createHmac("sha256", process.env.BRAVADO_API_SECRET).update(payload).digest("hex"),
+  },
+});
+ws.on("message", data => console.log(JSON.parse(data.toString())));
 ```
 
-```python Python
-import json, asyncio, websockets  # pip install websockets
+For browser clients, have your server sign `GET /uma/ticket` and return the ticket
+only to an authorised user. Connect to `/uma/ws?ticket=...`. Tickets expire after
+60 seconds and can be redeemed once. Each reconnect needs a new ticket. Never
+put the API secret in browser code. The Console playground handles this flow.
 
-async def main():
-    url = "wss://partner-api.bravadotrade.com/uma/ws"
-    async for ws in websockets.connect(url):
-        async for msg in ws:
-            f = json.loads(msg)
-            if f.get("type") == "uma":
-                print(f["stage"], "—", f.get("title"), "→", f["answer"])
+Successful REST reads cost one credit. Stream payloads use the authenticated
+[WebSocket credit model](/api-credits). Missing credentials are rejected; the Free
+plan cannot access UMA. A pending proposal is not a final settlement.
 
-asyncio.run(main())
-```
-
-</CodeGroup>
 
 The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
 

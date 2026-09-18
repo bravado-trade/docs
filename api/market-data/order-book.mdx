@@ -7,7 +7,16 @@ icon:
   library: "lucide"
 ---
 
-Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws` to receive a live order book for one or more outcome tokens. On connect you get a book snapshot, then incremental updates as the book changes, plus last-trade price and best bid/ask events. The feed is **public**, no API key or signature is required. Bravado multiplexes upstream: every client watching the same asset shares one upstream connection.
+<Warning>
+Anonymous connections are no longer supported. The legacy routes on this page
+are reserved for authenticated terminal sessions. For API integrations, use
+`/stream/polymarket/partner` or `/stream/predictfun/partner` with a WebSockets key,
+`stream.read` and HMAC. Copy the current signed example from
+[Console Connect](https://console.bravadotrade.com/endpoints/ws_stream?section=connect).
+</Warning>
+
+
+Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws` to receive a live order book for one or more outcome tokens. On connect you get a book snapshot, then incremental updates as the book changes, plus last-trade price and best bid/ask events. The legacy feed requires an authenticated terminal session ticket. Bravado multiplexes upstream: every client watching the same asset shares one upstream connection.
 
 <Info>
   You need an **outcome token ID** (`assetId`) to subscribe. Discover active ones from the [Live Trades](/api/market-data/trade-feed) feed, every trade frame carries the `assetId` that just traded.
@@ -17,20 +26,37 @@ Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws` to receive a l
   This page describes the Polymarket feed. For the shared Polymarket and Predict.fun interface, use [venue order books](/api/market-data/venue-order-books).
 </Info>
 
-## Connect
+## Legacy terminal connection
+
+The examples below describe the legacy wire format used by the terminal.
+New API integrations should use [authenticated venue order books](/api/market-data/venue-order-books).
+Within an authenticated terminal session, obtain a fresh ticket before each connection:
+
+```javascript
+const response = await fetch("https://partner-api.bravadotrade.com/terminal/feed-ticket", {
+  method: "POST",
+  headers: { "content-type": "application/json", "privy-id-token": identityToken },
+  body: JSON.stringify({ path: "/orderbook-feed/ws" }),
+});
+if (!response.ok) throw new Error("Sign in to connect");
+const { ticket } = await response.json();
+```
+
+`identityToken` is the current terminal session token. Tickets expire after 60 seconds,
+can be used once, and belong in the `ticket` query parameter.
 
 Pass the asset in the query string. Two modes share the same endpoint.
 
 ### Single asset
 
 ```
-wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=<TOKEN_ID>
+wss://partner-api.bravadotrade.com/orderbook-feed/ws?ticket=<TICKET>&assetId=<TOKEN_ID>
 ```
 
 ```javascript JavaScript
 const assetId = "30216744678008528463608643201923934636445750175747926295346908540738127891986";
 const ws = new WebSocket(
-  `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=${assetId}`
+  `wss://partner-api.bravadotrade.com/orderbook-feed/ws?ticket=${encodeURIComponent(ticket)}&assetId=${assetId}`
 );
 
 ws.onmessage = (event) => {
@@ -54,12 +80,12 @@ ws.onmessage = (event) => {
 Pass a comma-separated list, and add or remove assets live with in-band JSON frames over the same socket. One connection can hold up to **120** assets.
 
 ```
-wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetIds=<ID_1>,<ID_2>,<ID_3>
+wss://partner-api.bravadotrade.com/orderbook-feed/ws?ticket=<TICKET>&assetIds=<ID_1>,<ID_2>,<ID_3>
 ```
 
 ```javascript JavaScript
 const ws = new WebSocket(
-  "wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetIds=" +
+  "wss://partner-api.bravadotrade.com/orderbook-feed/ws?ticket=" + encodeURIComponent(ticket) + "&assetIds=" +
     [id1, id2].join(",")
 );
 
