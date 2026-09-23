@@ -434,12 +434,16 @@
       {
         "label": "Support",
         "href": "mailto:support@bravadotrade.com"
+      },
+      {
+        "label": "Log in",
+        "href": "https://console.bravadotrade.com/login"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Console",
-      "href": "https://console.bravadotrade.com/"
+      "label": "Create account",
+      "href": "https://console.bravadotrade.com/signup"
     }
   },
   "logo": {
