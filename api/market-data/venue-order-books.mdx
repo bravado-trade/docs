@@ -4,29 +4,45 @@ sidebarTitle: "Multi-venue order books"
 description: "Subscribe to live Polymarket and Predict.fun order books with a shared WebSocket message format."
 ---
 
-Connect to the public endpoint for your venue. No API key is required on these routes.
+Connect using a WebSockets credential with `stream.read` from an organisation with an eligible paid plan. Sign the upgrade with [HMAC](/authentication); your organisation must also have access to the venue. [Create an account](https://console.bravadotrade.com/signup) or manage access in [Console](https://console.bravadotrade.com/products/websockets).
 
 | Venue | WebSocket URL |
 | --- | --- |
-| Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/market` |
-| Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/market` |
+| Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` |
+| Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` |
 
 ## Subscribe
 
 Use the venue's outcome token ID, not its event or market ID. On Predict.fun this is the outcome's `onChainId`.
 
-```javascript
-const venue = "predictfun"; // or "polymarket"
-const asset = "<OUTCOME_TOKEN_ID>";
-const ws = new WebSocket(
-  `wss://partner-api.bravadotrade.com/stream/${venue}/market`
-);
-ws.onopen = () => ws.send(JSON.stringify({
+Install `ws` (`npm install ws`), set `BRAVADO_API_KEY`, `BRAVADO_API_SECRET` and `BRAVADO_ASSET_ID`, then run this as a Node.js `.mjs` file. Keep the secret server-side.
+
+```javascript Node.js
+import WebSocket from "ws";
+import { createHash, createHmac } from "node:crypto";
+
+const venue = "polymarket"; // or "predictfun", if enabled for your organisation
+const asset = process.env.BRAVADO_ASSET_ID;
+const key = process.env.BRAVADO_API_KEY;
+const secret = process.env.BRAVADO_API_SECRET;
+if (!asset || !key || !secret) throw new Error("Set asset ID, API key and secret");
+const path = `/stream/${venue}/partner`;
+const timestamp = String(Date.now());
+const payload = [timestamp, "GET", path, createHash("sha256").update("").digest("hex")].join("\n");
+const signature = createHmac("sha256", secret).update(payload).digest("hex");
+const ws = new WebSocket(`wss://partner-api.bravadotrade.com${path}`, {
+  headers: {
+    "X-BRAVADO-API-KEY": key,
+    "X-BRAVADO-TIMESTAMP": timestamp,
+    "X-BRAVADO-SIGNATURE": signature,
+  },
+});
+ws.on("open", () => ws.send(JSON.stringify({
   op: "sub",
-  streams: [`book:${asset}`]
-}));
-ws.onmessage = ({ data }) => {
-  const frame = JSON.parse(data);
+  streams: [`book:${asset}`],
+})));
+ws.on("message", data => {
+  const frame = JSON.parse(data.toString());
   if (frame.type === "error") {
     console.error(frame.code, frame.message);
     return;
@@ -38,10 +54,17 @@ ws.onmessage = ({ data }) => {
   } else if (frame.type === "status") {
     console.log(frame.state, frame.reason);
   }
-};
+});
+ws.on("error", error => console.error(error.message));
+const stop = setTimeout(() => ws.close(), 30_000);
+ws.once("close", () => clearTimeout(stop));
 ```
 
-Alternatively, pass `?streams=book:<OUTCOME_TOKEN_ID>` on the connection URL. Subscribe to multiple tokens with a `streams` array. Unsubscribe with `{"op":"unsub","streams":["book:<OUTCOME_TOKEN_ID>"]}`. The public route accepts up to 120 streams per connection.
+Subscribe to multiple tokens with a `streams` array. Unsubscribe with `{"op":"unsub","streams":["book:<OUTCOME_TOKEN_ID>"]}`. The authenticated route limits an organisation to 200 distinct assets across its keys and connections. An already-subscribed asset does not add another distinct asset to that quota.
+
+Data delivery consumes [WebSocket credits](/api-credits#authenticated-websocket-credits). The sample closes after 30 seconds to bound usage. Generate a fresh signature and resubscribe on every reconnect; use backoff rather than retrying authentication failures continuously. Node's `ws` responds to protocol pings automatically.
+
+The legacy `/stream/{venue}/market` and `/orderbook-feed/ws` routes have a separate Terminal access contract. Use the authenticated routes above for Console integrations and usage attribution.
 
 ## Read the messages
 

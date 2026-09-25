@@ -116,47 +116,16 @@ We are building toward historical market-data infrastructure, historical trades 
 
 | API | Base URL | What it does |
 | --- | --- | --- |
-| **Market Data** | `wss://partner-api.bravadotrade.com/trade-feed/ws`, `/orderbook-feed/ws` | Realtime trades and order books over WebSockets |
+| **Market Data** | `wss://partner-api.bravadotrade.com/stream/polymarket/partner/trades`, `/stream/{venue}/partner` | Realtime trades and order books over WebSockets |
 | **Trader Data API** | `https://partner-api.bravadotrade.com/trader-analytics` | Leaderboards, wallet PnL, trade logs, tax statements |
 | **Trade API v2** | `https://partner-api.bravadotrade.com/v2/trade` | Order execution, positions, balances, user provisioning |
 | **Copytrade API** | `https://partner-api.bravadotrade.com/v2/trade/copytrade` | Mirror fills from top traders with configurable sizing |
 
 ## Your first stream
 
-The market-data feeds are public, no key required. Connect and watch live fills across every market:
+[Create your account](https://console.bravadotrade.com/signup), then enable WebSockets on an eligible paid plan and create a WebSockets credential in the Console. Your key needs `stream.read`; keep its secret on your server.
 
-<CodeGroup>
-
-```javascript JavaScript
-const ws = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
-
-ws.onmessage = (event) => {
-  const frame = JSON.parse(event.data);
-  if (frame.type === "trade") {
-    const t = frame.trade;
-    console.log(`${t.side} ${t.size} ${t.outcome} @ ${t.price} — ${t.traderName}`);
-  }
-};
-```
-
-```python Python
-import asyncio, json, websockets  # pip install websockets
-
-async def main():
-    url = "wss://partner-api.bravadotrade.com/trade-feed/ws"
-    async with websockets.connect(url, ping_interval=None) as ws:
-        async for message in ws:
-            frame = json.loads(message)
-            if frame.get("type") == "trade":
-                t = frame["trade"]
-                print(f"{t['side']} {t['size']} {t['outcome']} @ {t['price']} — {t['traderName']}")
-
-asyncio.run(main())
-```
-
-</CodeGroup>
-
-See the [Quickstart](/quickstart) for the full five-minute walkthrough, including order books and REST enrichment.
+The [quickstart](/quickstart) walks through a signed WebSocket connection, receiving trades and checking your organisation's usage. Use [venue order books](/api/market-data/venue-order-books) for Polymarket or Predict.fun depth. Each connection requires a fresh HMAC signature; an API key alone is not sufficient.
 
 ## Use cases
 
