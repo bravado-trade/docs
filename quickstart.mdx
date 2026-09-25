@@ -1,197 +1,90 @@
 ---
-title: "Get Live Market Data in 5 Minutes"
+title: "Connect your first market-data stream"
 sidebarTitle: "Quick Start"
-description: "Connect to Bravado and receive live prediction-market data in under five minutes: stream trades, subscribe to an order book, and enrich what you see through REST."
+description: "Create a WebSockets credential, authenticate a live trade stream and check its usage in Bravado Console."
 icon:
   name: "zap"
   library: "lucide"
 ---
 
-The fastest way to see what Bravado does is to watch live prediction-market data flow. In this guide you connect to Bravado's WebSocket, receive realtime trades across every market (tens per second), subscribe to an order book, and then enrich what you see through REST. No trade required, and the market-data streams are **public**, so you can start with zero setup.
+Receive live market data using your organisation's WebSockets credential. This guide reads trades; it does not place an order.
 
-<Note>
-  **Came here to place a trade?** Jump straight to the [Execute a Trade](/quickstart-trade) quickstart. You can always come back for the data layer.
-</Note>
+## 1. Set up access
 
-<Steps>
-  <Step title="Connect to the trade feed">
-    Bravado's live trade feed is at `wss://partner-api.bravadotrade.com/trade-feed/ws`. It needs no API key. On connect you receive a `snapshot` of recent trades, then a `trade` frame for every new fill.
+1. [Create an account](https://console.bravadotrade.com/signup) or [log in](https://console.bravadotrade.com/login).
+2. Select your organisation and an eligible paid plan with WebSockets access. Free signup alone does not enable streams.
+3. Open **Endpoints → WebSockets → API keys** and create a credential with `stream.read`. Save the secret when it is shown.
+4. Set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET` in your server environment. Never put the secret in browser code, a URL or source control.
 
-    <CodeGroup>
+## 2. Connect and receive trades
 
-    ```javascript JavaScript
-    const ws = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
+Install `ws` with `npm install ws`. Save the following as `stream.mjs`, then run `node stream.mjs` with your environment variables set.
 
-    ws.onopen = () => console.log("connected");
+```javascript Node.js
+import WebSocket from "ws";
+import { createHash, createHmac } from "node:crypto";
 
-    ws.onmessage = (event) => {
-      const frame = JSON.parse(event.data);
-      if (frame.type === "snapshot") {
-        console.log(`snapshot: ${frame.trades.length} recent trades`);
-      } else if (frame.type === "trade") {
-        const t = frame.trade;
-        console.log(`${t.side} ${t.size} ${t.outcome} @ ${t.price} — ${t.traderName}`);
-      }
-    };
-    ```
+const key = process.env.BRAVADO_API_KEY;
+const secret = process.env.BRAVADO_API_SECRET;
+if (!key || !secret) throw new Error("Set BRAVADO_API_KEY and BRAVADO_API_SECRET");
 
-    ```python Python
-    import asyncio, json, websockets  # pip install websockets
+const path = "/stream/polymarket/partner/trades";
+const timestamp = String(Date.now());
+const bodyHash = createHash("sha256").update("").digest("hex");
+const payload = [timestamp, "GET", path, bodyHash].join("\n");
+const signature = createHmac("sha256", secret).update(payload).digest("hex");
+const ws = new WebSocket(`wss://partner-api.bravadotrade.com${path}`, {
+  headers: {
+    "X-BRAVADO-API-KEY": key,
+    "X-BRAVADO-TIMESTAMP": timestamp,
+    "X-BRAVADO-SIGNATURE": signature,
+  },
+});
 
-    async def main():
-        url = "wss://partner-api.bravadotrade.com/trade-feed/ws"
-        async with websockets.connect(url, ping_interval=None) as ws:
-            async for message in ws:
-                frame = json.loads(message)
-                if frame["type"] == "snapshot":
-                    print(f"snapshot: {len(frame['trades'])} recent trades")
-                elif frame["type"] == "trade":
-                    t = frame["trade"]
-                    print(f"{t['side']} {t['size']} {t['outcome']} @ {t['price']} — {t['traderName']}")
+ws.on("message", data => {
+  const frame = JSON.parse(data.toString());
+  if (frame.type === "snapshot") {
+    console.log("Recent trades:", frame.trades.length);
+  } else if (frame.type === "trade") {
+    const trade = frame.trade;
+    console.log(trade.side, trade.size, trade.price, trade.assetId);
+  } else if (frame.type === "error") {
+    console.error(frame.code, frame.message);
+  }
+});
+ws.on("error", error => console.error(error.message));
+ws.on("close", (code, reason) => console.log("Closed:", code, reason.toString()));
 
-    asyncio.run(main())
-    ```
+// End this sample after 30 seconds to bound usage.
+const stop = setTimeout(() => ws.close(), 30_000);
+ws.once("close", () => clearTimeout(stop));
+```
 
-    </CodeGroup>
+The server sends a recent-trades `snapshot`, then `trade` frames. No subscription message is needed. Node's `ws` client responds to heartbeat pings automatically. See the [trade frame reference](/api/market-data/trade-feed#frames).
 
-    You should immediately see fills scrolling past. Each `trade` frame is already enriched server-side with the trader's name and wallet, no extra lookups needed. See the [Live Trades reference](/api/market-data/trade-feed) for the full frame shape.
-  </Step>
+Generate a new timestamp and signature for every reconnect. This example ends after 30 seconds; it is not a production reconnect loop. Use backoff in your application and inspect authentication failures before retrying.
 
-  <Step title="Grab an asset ID to watch">
-    Every trade frame carries an `assetId`, the outcome token ID that just traded. That is exactly what you need to subscribe to an order book. Pull one off the feed:
+<Warning>
+  This is a live, billable connection. Snapshot and trade payloads consume [WebSocket credits](/api-credits#authenticated-websocket-credits). Closing the socket stops further delivery; data already delivered remains counted.
+</Warning>
 
-    ```javascript JavaScript
-    let assetId;
-    ws.onmessage = (event) => {
-      const frame = JSON.parse(event.data);
-      const trade = frame.type === "trade" ? frame.trade : frame.trades?.[0];
-      if (trade && !assetId) {
-        assetId = trade.assetId;
-        console.log("watching asset", assetId);
-      }
-    };
-    ```
+## 3. Check your usage
 
-    The same `assetId` links Market Data to the rest of Bravado: pass it to the order-book feed below, or to the [Trade API](/products/trade-api) as a `symbol` when you want to place an order.
-  </Step>
+Open **Usage** and **Billing** in the same Console organisation that owns the key. Messages and credits are different units: the current stream tariff is **1 credit per 100,000 delivered uncompressed UTF-8 bytes**, not one credit per message or per connection. Heartbeats and errors are not billed.
 
-  <Step title="Subscribe to an order book">
-    Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=<TOKEN_ID>`. You receive a `book` snapshot, then incremental `price_change` and `last_trade_price` updates.
+Usage is batched while connections remain open. Allow about a minute, then refresh. Home's activity window and Billing's current cycle can cover different periods. Use the same organisation and period when comparing Console and Admin.
 
-    The snapshot arrives **either as a JSON array of one book object or as a bare object** — the samples below normalise with `Array.isArray(msg) ? msg : [msg]`, and so should your parser. An asset with no book can also answer `[[]]`, an array holding an empty array, so skip entries that are not objects.
+## 4. Add order books or trader analytics
 
-    <CodeGroup>
+- Use an `assetId` from a trade with the [authenticated order-book guide](/api/market-data/venue-order-books). It supports Polymarket and Predict.fun when your organisation has access to the venue.
+- Query the trader's history with the [Trader Data API](/products/data-api), using a credential with `analytics.read` and its own HMAC signature. A WebSockets-only key does not grant Analytics access.
+- For order execution, follow the separate [Trade quickstart](/quickstart-trade).
 
-    ```javascript JavaScript
-    // Use the `assetId` you took from the trade feed in the previous step.
-    // The id must be for a LIVE market. A dead one still connects, may send an
-    // empty frame `[[]]` and no book at all, and the `no_book` frame may never
-    // arrive — the 8s timer that would emit it is cancelled by ANY upstream
-    // message, and the empty frame counts. Take the id from the trade feed.
-    const assetId = /* from the trade feed above */ "";
-    const book = new WebSocket(
-      `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=${assetId}`
-    );
+## Troubleshooting
 
-    book.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      const events = Array.isArray(msg) ? msg : [msg];
-      for (const e of events) {
-        if (!e || typeof e !== "object" || Array.isArray(e)) {
-          console.log("empty frame — no order book for this asset");
-          continue;
-        }
-        if (e.event_type === "book") {
-          console.log(`book: best bid ${e.bids.at(-1)?.price}, best ask ${e.asks[0]?.price}`);
-        } else if (e.event_type === "price_change") {
-          console.log("price_change", e.price_changes.length, "levels");
-        } else if (e.event_type === "last_trade_price") {
-          console.log("last trade", e.price);
-        }
-      }
-    };
-    ```
+- **401:** check the matching key and secret, current millisecond timestamp and exact signed path. Keep your system clock synchronized.
+- **403:** inspect the error code and confirm scope, plan and venue access. Creating an endpoint does not grant these permissions.
+- **Connected but no updates:** inspect snapshot/status/error frames and market activity; a successful handshake alone does not prove data delivery.
+- **No Console usage:** confirm you used the authenticated `/stream/.../partner` route and selected the key's organisation. Legacy Terminal URLs are not a replacement for this integration.
 
-    ```python Python
-    import asyncio, json, websockets
-
-    # Use the `assetId` you took from the trade feed in the previous step.
-    # The id must be for a LIVE market. A dead one still connects, may send an
-    # empty frame `[[]]` and no book at all, and the `no_book` frame may never
-    # arrive — the 8s timer that would emit it is cancelled by ANY upstream
-    # message, and the empty frame counts. Take the id from the trade feed.
-    ASSET = ""  # from the trade feed above
-
-    async def main():
-        url = f"wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId={ASSET}"
-        async with websockets.connect(url, ping_interval=None) as ws:
-            async for message in ws:
-                msg = json.loads(message)
-                events = msg if isinstance(msg, list) else [msg]
-                for e in events:
-                    # A dead asset answers `[[]]`, so `e` can be a list here —
-                    # `e.get(...)` on it raises AttributeError.
-                    if not isinstance(e, dict):
-                        print("empty frame — no order book for this asset")
-                        continue
-                    if e.get("event_type") == "book":
-                        print("book:", len(e["bids"]), "bids", len(e["asks"]), "asks")
-                    elif e.get("event_type") == "price_change":
-                        print("price_change:", len(e["price_changes"]), "levels")
-
-    asyncio.run(main())
-    ```
-
-    </CodeGroup>
-
-    To watch many markets at once, subscribe with `?assetIds=id1,id2,id3` and add or drop assets live with `{"type":"sub","assetIds":[...]}` frames. See the [Order Books reference](/api/market-data/order-book).
-  </Step>
-
-  <Step title="Enrich through REST">
-    Realtime frames tell you what is happening; the REST APIs tell you more about the who and the market. Two common follow-ups:
-
-    Look up a wallet you saw trading, its PnL, positions, and history come from the [Trader Data API](/products/data-api). The tax-report surface is public, so you can try it with no key:
-
-    ```bash
-    curl "https://partner-api.bravadotrade.com/trader-analytics/traders/0x9783F45CE35F794BE38cA47dD0816A5C241383B9/tax-report"
-    ```
-
-    Check feed health from a dashboard or monitor:
-
-    ```bash
-    curl https://partner-api.bravadotrade.com/trade-feed/status
-    ```
-
-    Most Trader Data and all Trade API endpoints require an API key. Create one in the [Bravado Console](https://console.bravadotrade.com/keys) and see [Authentication](/authentication).
-  </Step>
-</Steps>
-
-## Next steps
-
-You are receiving live market data. Pick your path from here.
-
-<CardGroup cols={2}>
-  <Card title="Stream more market data" icon="activity" href="/products/market-data">
-    Full trade-feed and order-book references, multi-asset subscriptions, and frame shapes.
-  </Card>
-
-  <Card title="Analyze traders" icon="chart-line" href="/products/data-api">
-    Turn a wallet from the feed into PnL, positions, cost basis, and leaderboards.
-  </Card>
-
-  <Card title="Execute trades" icon="arrow-left-right" href="/quickstart-trade">
-    Authenticate, check balances, and place an order with the Trade API.
-  </Card>
-
-  <Card title="Build copytrading" icon="users" href="/products/copytrade-api">
-    Mirror a leader wallet's fills automatically with configurable sizing.
-  </Card>
-
-  <Card title="Track market resolution" icon="gavel" href="/products/uma-api">
-    Follow how markets settle through UMA's Optimistic Oracle.
-  </Card>
-
-  <Card title="Build with AI" icon="sparkles" href="/build-with-ai">
-    Point coding agents and MCP clients at Bravado.
-  </Card>
-</CardGroup>
+Browser WebSocket clients cannot set these authentication headers. Connect from your backend and relay only the data your frontend is allowed to receive; never send the API secret to the browser.

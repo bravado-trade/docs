@@ -14,7 +14,7 @@ Trade and Analytics API requests use **HMAC-SHA256** authentication. Each creden
 | Trade API, including advanced orders, Combos and Copytrade | HMAC signature and required scopes |
 | Analytics API | HMAC signature and analytics access |
 | MCP server | OAuth 2.1; see [MCP authorization](#mcp-server-authorization) |
-| Market-data WebSockets | Feed-specific; see [trade feed](/api/market-data/trade-feed) and [order books](/api/market-data/order-book) |
+| Market-data WebSockets | HMAC-signed upgrade with `stream.read`; see [trade feed](/api/market-data/trade-feed) and [order books](/api/market-data/venue-order-books) |
 
 ## Getting your API key
 
@@ -64,6 +64,7 @@ Every Bravado API key is issued with one or more scopes. A request to an endpoin
 | `trade.withdraw` | Withdraw pUSD from the trading wallet to an external address, **not included in `trade.execute`** |
 | `trade.combos` | Access multi-leg RFQ parlays: quote, accept, and redeem combo positions, and read combo positions |
 | `trade.users` | Provision and manage partner sub-users (white-label flow) |
+| `stream.read` | Connect to authenticated trade and order-book streams, subject to organisation plan and venue access |
 | `analytics.read` | Read the [Trader Data API](/products/data-api) (`/trader-analytics/*`): leaderboards, trader profiles, PnL series, positions, trade history |
 | `mcp.read` | Use the [MCP server](/products/mcp-server)'s curated analytics tools. Granted by the **MCP Server** product, which is separate from the Data API |
 | `mcp.query` | Run read-only SQL through the MCP server's `run_sql` tool |
@@ -100,9 +101,9 @@ The flow, from the client's point of view:
 3. It opens the discovered Bravado authorization endpoint for sign-in and consent. Start setup from [MCP in the Console](https://console.bravadotrade.com/endpoints/mcp).
 4. It receives a short-lived access token plus a rotating refresh token.
 
-Tokens are scoped to `mcp.read` and `mcp.query` — the **MCP Server** product, which is separate from the Data API — and bound to the partner your portal account is linked to. They are audience-bound to the MCP server, so a token issued for it cannot be replayed against any other Bravado surface.
+Tokens are scoped to `mcp.read` and `mcp.query` — the **MCP Server** product, which is separate from the Data API — and bound to the organisation you approve in Console. They are audience-bound to the MCP server, so a token issued for it cannot be replayed against any other Bravado surface.
 
-Revoke a connection from **Settings → Connected applications** in the portal at any time. Revocation takes effect immediately for the refresh token; an access token already issued is stateless and expires within five minutes.
+Revoke a connection from [**Connected applications**](https://console.bravadotrade.com/settings/apps) in Console at any time. Revocation takes effect immediately for the refresh token; an access token already issued is stateless and expires within five minutes.
 
 ## Authentication errors
 

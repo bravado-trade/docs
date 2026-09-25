@@ -57,7 +57,7 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 
 <Info>
   The mempool feed is a **partner tier** — token-gated and provisioned during onboarding.
-  The standard [Live Trades](/api/market-data/trade-feed) feed below is public and mirrors
+  The standard [Live Trades](/api/market-data/trade-feed) feed uses a WebSockets credential and mirrors
   the venue's own push feed. See the [Mempool Fills feed](/api/market-data/mempool-feed) — contact Bravado to enable it.
 </Info>
 
@@ -72,13 +72,13 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 
 | Feed | Endpoint | Auth | Direction |
 | --- | --- | --- | --- |
-| [Live Trades](/api/market-data/trade-feed) | `wss://partner-api.bravadotrade.com/trade-feed/ws` | Public | Server → client |
+| [Live Trades](/api/market-data/trade-feed) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner/trades` | HMAC | Server → client |
 | [Mempool Fills](/api/market-data/mempool-feed) (low-latency) | `wss://stream.bravadotrade.com/ws` | Partner | Bidirectional |
-| [Polymarket order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/polymarket/market` | Public | Bidirectional |
-| [Predict.fun order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/predictfun/market` | Public | Bidirectional |
+| [Polymarket order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` | HMAC | Bidirectional |
+| [Predict.fun order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` | HMAC | Bidirectional |
 
 <Note>
-  The trade and order-book streams are **public today**, no API key or signature is required to connect. This matches the access tier of the underlying venue's public market feed. The low-latency [Mempool Fills](/api/market-data/mempool-feed) feed is a partner tier — contact Bravado during onboarding to enable it.
+  Create an account in [Console](https://console.bravadotrade.com/signup), select an eligible paid plan with WebSockets access, and create a credential with `stream.read`. Sign the connection with [HMAC](/authentication). Usage belongs to the organisation that issued the key. The low-latency [Mempool Fills](/api/market-data/mempool-feed) feed is a partner tier — contact Bravado during onboarding to enable it.
 </Note>
 
 ## Historical data and custom delivery

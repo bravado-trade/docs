@@ -7,81 +7,26 @@ icon:
   library: "lucide"
 ---
 
-Connect to `wss://partner-api.bravadotrade.com/orderbook-feed/ws` to receive a live order book for one or more outcome tokens. On connect you get a book snapshot, then incremental updates as the book changes, plus last-trade price and best bid/ask events. The feed is **public**, no API key or signature is required. Bravado multiplexes upstream: every client watching the same asset shares one upstream connection.
+For new Console integrations, use [authenticated venue order books](/api/market-data/venue-order-books). That guide includes HMAC connection code, subscriptions, limits and the shared Polymarket/Predict.fun message format.
 
-<Info>
-  You need an **outcome token ID** (`assetId`) to subscribe. Discover active ones from the [Live Trades](/api/market-data/trade-feed) feed, every trade frame carries the `assetId` that just traded.
-</Info>
+| Venue | Authenticated WebSocket |
+| --- | --- |
+| Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` |
+| Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` |
 
-<Info>
-  This page describes the Polymarket feed. For the shared Polymarket and Predict.fun interface, use [venue order books](/api/market-data/venue-order-books).
-</Info>
+Your organisation needs an eligible paid plan, venue access and a WebSockets credential with `stream.read`. Create an account in [Console](https://console.bravadotrade.com/signup) and follow the [quickstart](/quickstart).
 
-## Connect
+## Legacy Terminal frame reference
 
-Pass the asset in the query string. Two modes share the same endpoint.
+The remaining reference describes the older `/orderbook-feed/ws` payload format used by Terminal integrations. That route has a separate access contract; it is not the HMAC endpoint for new Console clients. The authenticated routes above return the unified `channel`, `venue`, `asset` and `type` envelope described in [venue order books](/api/market-data/venue-order-books#read-the-messages).
 
-### Single asset
-
-```
-wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=<TOKEN_ID>
-```
-
-```javascript JavaScript
-const assetId = "30216744678008528463608643201923934636445750175747926295346908540738127891986";
-const ws = new WebSocket(
-  `wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetId=${assetId}`
-);
-
-ws.onmessage = (event) => {
-  const msg = JSON.parse(event.data);
-  // Book snapshots arrive as an array; incremental events as objects.
-  const events = Array.isArray(msg) ? msg : [msg];
-  for (const e of events) {
-    if (e.event_type === "book") {
-      console.log("book", e.asset_id, "bids", e.bids.length, "asks", e.asks.length);
-    } else if (e.event_type === "price_change") {
-      console.log("price_change", e.price_changes);
-    } else if (e.event_type === "last_trade_price") {
-      console.log("last trade", e.price);
-    }
-  }
-};
-```
-
-### Multiple assets
-
-Pass a comma-separated list, and add or remove assets live with in-band JSON frames over the same socket. One connection can hold up to **120** assets.
-
-```
-wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetIds=<ID_1>,<ID_2>,<ID_3>
-```
-
-```javascript JavaScript
-const ws = new WebSocket(
-  "wss://partner-api.bravadotrade.com/orderbook-feed/ws?assetIds=" +
-    [id1, id2].join(",")
-);
-
-ws.onopen = () => {
-  // Add more assets after connecting
-  ws.send(JSON.stringify({ type: "sub", assetIds: [id3, id4] }));
-  // Drop an asset you no longer need
-  ws.send(JSON.stringify({ type: "unsub", assetIds: [id1] }));
-};
-```
-
-There is no per-asset envelope: a multi-asset client routes updates by `asset_id`. **Where that field lives depends on the frame.** On `book`, `last_trade_price` and `tick_size_change` it is at the top level. On `price_change` — the great majority of traffic — the top level carries `event_type`, `market`, `price_changes` and `timestamp`, and the `asset_id` sits inside **each entry of `price_changes[]`**; one frame can therefore carry entries for more than one asset.
-
-<Warning>
-  A connection with no `assetId` or `assetIds` is closed immediately with code `1008`. Always subscribe to at least one asset in the query string.
-</Warning>
+Do not apply the legacy frame parser or 120-assets-per-connection limit below to the authenticated API. Keep existing integrations on their documented protocol until you deliberately migrate both authentication and message handling.
 
 ## Frames
 
 Order-book frames are forwarded from the venue verbatim and are identified by an `event_type` field. Incremental events arrive as JSON objects.
 
-The initial `book` snapshot arrives **either as a JSON array containing one book object, or as a bare object**, and you must handle both. The array form is what we see in practice; the bare object can reach you as the replay of a cached book. Normalise with `Array.isArray(msg) ? msg : [msg]`, as the samples above do.
+The initial `book` snapshot arrives **either as a JSON array containing one book object, or as a bare object**, and you must handle both. The array form is what we see in practice; the bare object can reach you as the replay of a cached book. Normalise with `Array.isArray(msg) ? msg : [msg]`.
 
 There is a **third shape**, and it is the one that breaks parsers: an asset with no book can answer with `[[]]` — an array containing one **empty array**, no object at all. It is neither a book nor a bare object, and it does **not** produce a `no_book` frame: it is a message from the venue, so it cancels the timer described below. After normalising, skip anything that is not an object:
 

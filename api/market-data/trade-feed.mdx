@@ -13,16 +13,15 @@ WebSockets key with `stream.read` and [HMAC authentication](/authentication).
 The server sends recent history, then every new trade across Polymarket markets.
 No subscription message is needed.
 
-The legacy public `/trade-feed/ws` URL remains available. It has no verified
-organisation identity, so its messages do **not** appear in Console or Admin
-usage and do not consume organisation credits. Adding a key header to that
-public URL does not enable attribution.
+The legacy Terminal `/trade-feed/ws` route has a separate access contract. New Console integrations must use the authenticated route above; adding an API key header to a different route does not select this usage-accounted feed.
 
 <Info>
   Coverage today is Polymarket. The feed carries **every trade on every market**, not a selection of the active ones, and the rate varies with market activity — on the order of tens of trades per second (samples measured 20–50/s). Size your buffers and your UI for the whole hose, and filter client-side for the markets you care about. To follow a specific market's book instead, use the [Order Books](/api/market-data/order-book) feed.
 </Info>
 
 ## Connect with usage tracking
+
+Your organisation needs an eligible paid plan with WebSockets access. Keep the secret on your server; browser-native WebSocket clients cannot set HMAC headers.
 
 Create a WebSockets credential in [Console](https://console.bravadotrade.com/endpoints/ws_stream?section=keys).
 Save its key and secret locally as `BRAVADO_API_KEY` and `BRAVADO_API_SECRET`.
@@ -52,53 +51,6 @@ for enrolled organisations: **1 credit per 100,000 uncompressed UTF-8 bytes**.
 Heartbeats and errors are not charged. Usage updates during an open connection;
 allow about a minute for batching, then refresh Console. The authenticated route
 sends heartbeat pings; Node's `ws` client responds automatically.
-
-## Legacy public connection (no organisation tracking)
-
-<CodeGroup>
-
-```javascript JavaScript
-const ws = new WebSocket("wss://partner-api.bravadotrade.com/trade-feed/ws");
-
-ws.onmessage = (event) => {
-  const frame = JSON.parse(event.data);
-  if (frame.type === "snapshot") {
-    console.log(`Recent history: ${frame.trades.length} trades`);
-    for (const trade of frame.trades) render(trade);
-  } else if (frame.type === "trade") {
-    render(frame.trade);
-  }
-};
-
-function render(t) {
-  console.log(`${t.side} ${t.size} ${t.outcome} @ ${t.price} — ${t.traderName}`);
-}
-```
-
-```python Python
-import json
-import websockets  # pip install websockets
-import asyncio
-
-URL = "wss://partner-api.bravadotrade.com/trade-feed/ws"
-
-async def main():
-    async for ws in websockets.connect(URL, ping_interval=20):
-        try:
-            async for message in ws:
-                frame = json.loads(message)
-                if frame["type"] == "snapshot":
-                    print(f"Recent history: {len(frame['trades'])} trades")
-                elif frame["type"] == "trade":
-                    t = frame["trade"]
-                    print(f"{t['side']} {t['size']} {t['outcome']} @ {t['price']} — {t['traderName']}")
-        except websockets.ConnectionClosed:
-            continue  # reconnect
-
-asyncio.run(main())
-```
-
-</CodeGroup>
 
 ## Frames
 
@@ -176,7 +128,7 @@ The trade object in a `trade` frame and every element of the `snapshot` array sh
 
 ## Keep-alive and reconnect
 
-The authenticated route sends heartbeat pings; clients must respond with protocol pongs (most libraries do this automatically). For the legacy public route, send client-side protocol pings to keep idle connections alive. Neither route accepts subscription commands. If the socket drops, reconnect to receive a fresh `snapshot`; authenticated reconnects require a fresh timestamp and signature.
+The authenticated route sends heartbeat pings; clients must respond with protocol pongs (most libraries do this automatically). This trade route does not accept subscription commands. If the socket drops, reconnect to receive a fresh `snapshot`; authenticated reconnects require a fresh timestamp and signature.
 
 Dedupe against trades already on screen using **`transactionHash`**, not `id`. `id` is built from a counter that lives in the serving process: it restarts from zero when the process does, and two instances give the same fill different ids. `transactionHash` identifies the fill itself.
 
