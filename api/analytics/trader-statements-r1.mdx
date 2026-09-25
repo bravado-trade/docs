@@ -7,6 +7,10 @@ description: "Paginated R1 Form-8949-style disposition rows for heavy wallets."
 
 <Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
 
+<Warning>
+Statements are precomputed for a set of wallets. For any other wallet this endpoint returns `404` with `"code": "STATEMENT_NOT_AVAILABLE"`, and retrying will not change the answer. For realized, unrealized and overall PnL of any wallet, including open positions that were never closed, use [`GET /traders/{address}`](/api/analytics/trader).
+</Warning>
+
 
 Standalone paginated endpoint for R1 Form-8949-style disposition rows. Use this for heavy wallets where the full [`/statements`](/api/analytics/trader-statements) response is too large.
 

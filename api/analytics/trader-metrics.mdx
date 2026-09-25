@@ -7,6 +7,10 @@ description: "Low-latency R5/R6/R7 performance and fee metrics without the full 
 
 <Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
 
+<Warning>
+Statements are precomputed for a set of wallets. For any other wallet this endpoint returns `404` with `"code": "STATEMENT_NOT_AVAILABLE"`, and retrying will not change the answer. For realized, unrealized and overall PnL of any wallet, including open positions that were never closed, use [`GET /traders/{address}`](/api/analytics/trader).
+</Warning>
+
 
 Returns R5, R6, and R7 report metrics without assembling the full R1 disposition set. This is the lowest-latency way to retrieve performance and fee data for a wallet.
 
