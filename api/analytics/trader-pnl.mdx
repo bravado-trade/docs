@@ -71,10 +71,14 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 
 <ParamField query="basis" default="net" type="string">
   `net` (fees deducted — exact, integrated over the wallet's whole fee
-  history) or `gross`. `net` is automatically neutralized to `gross` at
-  `interval=1h`, because no fee source resolves finer than a day; check the
-  response's `fees_basis` field rather than assuming your requested `basis`
-  held.
+  history, at both `interval=1d` and `interval=1h`) or `gross`. Until
+  2026-09-29 `net` was served as `gross` at `interval=1h`; it is now netted
+  from an hourly fee rollup, so every window's final point equals the
+  profile's net number. At `interval=1h` the wallet's hourly fee total is
+  reconciled with its all-time fees on every request; in the rare case they
+  disagree (for example during the nightly fee rebuild) the response is served
+  `gross` and says so (`basis: "gross"`, `fees_basis: "unavailable_sub_day"`).
+  The response's `basis` is always the one actually applied.
 </ParamField>
 
 <ParamField query="series_kind" default="cumulative_all_time" type="string">
@@ -95,12 +99,13 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 
 <ResponseField name="fees_basis" type="string">
   Which fees were actually deducted: `all_time` (exact, `series_kind=
-  cumulative_all_time` + `basis=net` at `interval=1d`), `window_daily`
-  (`series_kind=window_delta` + `basis=net` at `interval=1d` — the window's
-  own fees, cumulative from `0`), `unavailable_sub_day` (`basis=net` was
-  neutralized to `gross` because `interval=1h` has no hourly fee source),
-  `none` (`basis=gross` was requested), or `engine_net` (predict.fun, whose
-  engine realized PnL is already fee-net).
+  cumulative_all_time` + `basis=net`, either interval), `window_daily` /
+  `window_hourly` (`series_kind=window_delta` + `basis=net` at `interval=1d` /
+  `1h` — the window's own fees, cumulative from `0`), `unavailable_sub_day`
+  (`basis=net` at `interval=1h` could not be reconciled with the wallet's
+  all-time fees, so nothing was deducted and `basis` is `gross`), `none`
+  (`basis=gross` was requested), or `engine_net` (predict.fun, whose engine
+  realized PnL is already fee-net).
 </ResponseField>
 
 <ResponseField name="series_kind" type="string">
@@ -175,7 +180,7 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../p
   "interval": "1h",
   "pnl_type": "overall",
   "basis": "net",
-  "fees_basis": "unavailable_sub_day",
+  "fees_basis": "all_time",
   "series_kind": "cumulative_all_time",
   "unrealized_marks": "day_grained_carried_forward",
   "series": [
@@ -211,7 +216,7 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../p
   "interval": "1h",
   "pnl_type": "overall",
   "basis": "net",
-  "fees_basis": "unavailable_sub_day",
+  "fees_basis": "all_time",
   "series_kind": "cumulative_all_time",
   "unrealized_marks": "day_grained_carried_forward",
   "series": [
@@ -249,7 +254,7 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../p
   "interval": "1h",
   "pnl_type": "overall",
   "basis": "net",
-  "fees_basis": "unavailable_sub_day",
+  "fees_basis": "window_hourly",
   "series_kind": "window_delta",
   "unrealized_marks": "day_grained_carried_forward",
   "series": [
