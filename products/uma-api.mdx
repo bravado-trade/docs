@@ -169,9 +169,16 @@ only to an authorised user. Connect to `/uma/ws?ticket=...`. Tickets expire afte
 60 seconds and can be redeemed once. Each reconnect needs a new ticket. Never
 put the API secret in browser code. The Console playground handles this flow.
 
-Successful REST reads cost one credit. Stream payloads use the authenticated
-[WebSocket credit model](/api-credits). Missing credentials are rejected; the Free
-plan cannot access UMA. A pending proposal is not a final settlement.
+Successful REST reads cost **1 credit per response**. Under unified billing,
+the stream costs **0.5 credit per delivered UMA data message**; heartbeats, errors,
+tickets and idle time are unbilled. Pending and confirmed updates are separate
+messages, even if your application combines them into one displayed record.
+See [UMA stream credits](/api-credits#uma-stream-credits).
+
+Missing credentials are rejected; the Free plan cannot access UMA. A pending
+proposal is not a final settlement. If the connection is interrupted, acquire a
+new ticket before reconnecting. A credit or access refusal requires resolving
+that refusal before retrying.
 
 
 The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
