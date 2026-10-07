@@ -170,7 +170,7 @@ only to an authorised user. Connect to `/uma/ws?ticket=...`. Tickets expire afte
 put the API secret in browser code. The Console playground handles this flow.
 
 Successful REST reads cost **1 credit per response**. Under unified billing,
-the stream costs **0.5 credit per delivered UMA data message**; heartbeats, errors,
+the stream costs **0.75 credit per delivered UMA data message**; heartbeats, errors,
 tickets and idle time are unbilled. Pending and confirmed updates are separate
 messages, even if your application combines them into one displayed record.
 See [UMA stream credits](/api-credits#uma-stream-credits).
