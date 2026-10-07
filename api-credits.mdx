@@ -21,7 +21,7 @@ Usage on our pricing plans is measured in **API Credits**. Credit cost varies by
 | Trade API | HTTP | No API credits |
 | Copytrade API | HTTP | No API credits |
 | UMA resolution queries | HTTP | 1 credit / successful response |
-| UMA lifecycle stream | WSS `/uma/ws` | 0.5 credit / delivered data message under unified billing |
+| UMA lifecycle stream | WSS `/uma/ws` | 0.75 credit / delivered data message under unified billing |
 
 <Note>
   **MCP requests carry a 10× multiplier.** Every call to the [MCP Server](/products/mcp-server) costs **10 API credits**, ten times a Data API request, reflecting the heavier analytics each MCP tool runs. The `run_sql` query budget is metered separately, by bytes scanned; see [MCP rate limits](/products/mcp-server#rate-limits).
@@ -55,8 +55,8 @@ separate services and do not inherit this order-book byte rate.
 
 ## UMA stream credits
 
-Under unified billing, each delivered UMA data message costs **0.5 API credit**,
-regardless of payload size. For example, 20 delivered messages cost 10 credits.
+Under unified billing, each delivered UMA data message costs **0.75 API credit**,
+regardless of payload size. For example, 20 delivered messages cost 15 credits.
 Heartbeats, error frames, connection setup, ticket issuance and idle time are
 not charged. A successful UMA REST query costs **1 credit per response**, not
 one credit per record in the response.
