@@ -1,13 +1,46 @@
 ---
-title: "Polymarket on Bravado: Coverage and Supported Features"
+title: "Polymarket API: Market Data, Trader Data and Execution"
 sidebarTitle: "Overview"
-description: "Polymarket is the largest prediction market by volume, running on Polygon. Bravado supports it across the Trade, Copytrade, Data, and UMA APIs."
+description: "Bravado's Polymarket API: live order book and trade WebSockets, historical data, wallet PnL, positions and leaderboards, order execution, copy trading, UMA resolution data and an MCP server for AI agents."
 icon: "/logo/polymarket.png"
 ---
 
 Polymarket is the largest prediction market by volume, running on Polygon. Markets are framed as questions with binary YES / NO outcomes, collateralised in USDC, and traded on a central limit order book (CLOB).
 
 Bravado supports Polymarket across every product, and gives you execution and data capabilities the native APIs do not offer.
+
+## At a glance
+
+| Question | Answer |
+| --- | --- |
+| What is it? | A Polymarket API for market data, trader data and execution, served from `https://partner-api.bravadotrade.com` and `wss://partner-api.bravadotrade.com`. |
+| Live market data | Order books and enriched trades over WebSocket; mempool-decoded fills ~1–2 s ahead of the venue feed. See [Market Data](#market-data). |
+| Historical data | Self-service wallet history (trades, positions, PnL from first trade), price and volume history; historical L2 order books and bulk datasets by scoped delivery. See [Historical data](/api/market-data/historical-data). |
+| Trader data | Wallet PnL, open and closed positions, trade logs, leaderboards, category breakdowns and tax statements via the [Trader Data API](/markets/polymarket/data-api). |
+| Execution | LIMIT, MARKET, TWAP, ICEBERG, PEGGED, stop and trailing orders, brackets, split/merge/redeem via the [Trade API](/markets/polymarket/trade-api). |
+| AI agents | Read-only [MCP server](/products/mcp-server) at `https://mcp.bravadotrade.com/mcp`. |
+| Authentication | HMAC-SHA256 signed requests with scoped API keys; OAuth 2.1 for MCP. See [Authentication](/authentication). |
+| Get access | [Create an account](https://console.bravadotrade.com/signup); plans on [bravadotrade.com/pricing](https://www.bravadotrade.com/pricing). |
+
+## Market data
+
+<CardGroup cols={2}>
+  <Card title="Live order books" icon="layers" href="/api/market-data/venue-order-books">
+    Snapshot and delta frames for any Polymarket outcome token, multiplexed over one WebSocket.
+  </Card>
+
+  <Card title="Live trades" icon="list" href="/api/market-data/trade-feed">
+    Every Polymarket fill, enriched with the trader's name and wallet.
+  </Card>
+
+  <Card title="Mempool fills" icon="zap" href="/api/market-data/mempool-feed">
+    Fills decoded from the Polygon mempool, about 1–2 seconds before the venue's own feed.
+  </Card>
+
+  <Card title="Historical data" icon="clock" href="/api/market-data/historical-data">
+    REST history for wallets, prices and volume, plus scoped historical L2 order-book delivery.
+  </Card>
+</CardGroup>
 
 ## How Polymarket works
 
@@ -39,6 +72,10 @@ Once an event concludes, the outcome is reported through UMA's Optimistic Oracle
   <Card title="UMA resolution" icon="gavel" href="/markets/polymarket/uma-resolution">
     How markets settle, and why a concluded event is not yet a redeemable one.
   </Card>
+
+  <Card title="MCP server" icon="plug" href="/products/mcp-server">
+    Read-only Polymarket trader data for AI agents over the Model Context Protocol.
+  </Card>
 </CardGroup>
 
 ## What Bravado adds over Polymarket's native APIs
@@ -68,6 +105,8 @@ These limits are enforced by Polymarket's CLOB and the underlying protocol. Reje
 
 ## Related
 
+- [Polymarket API product page](https://www.bravadotrade.com/venue/polymarket) on bravadotrade.com
+- [Market Data](/products/market-data)
 - [Trade API reference](/api/trade/overview)
 - [Data API reference](/api/analytics/overview)
 - [Error reference](/reference/errors)

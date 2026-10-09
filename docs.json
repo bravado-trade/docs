@@ -1,6 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "name": "Bravado",
+  "description": "Bravado is infrastructure for prediction markets: Polymarket and Predict.fun market data over WebSockets, historical data, wallet PnL, positions and leaderboards, order execution, copy trading, UMA resolution data and an MCP server for AI agents.",
   "theme": "mint",
   "colors": {
     "primary": "#27d79f",
@@ -476,5 +477,11 @@
       "source": "/concepts/copytrade",
       "destination": "/products/copytrade-api"
     }
-  ]
+  ],
+  "footer": {
+    "socials": {
+      "website": "https://www.bravadotrade.com",
+      "x": "https://x.com/bravadotrade"
+    }
+  }
 }

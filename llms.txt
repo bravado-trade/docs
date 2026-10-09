@@ -1,0 +1,105 @@
+# Bravado
+
+> Bravado is infrastructure for prediction markets: market data (live WebSockets, low-latency mempool fills, historical data), trader data (wallet PnL, positions, trades, leaderboards, tax statements), execution (Trade API with advanced order types), copy trading, UMA resolution data, and an MCP server for AI agents. Supported venues today: Polymarket (full coverage) and Predict.fun (partial coverage). One integration, one auth scheme, one response shape across venues.
+
+Every documentation page is also available as Markdown by appending `.md` to its URL (for example https://docs.bravadotrade.com/products/data-api.md). The complete docs in one file: https://docs.bravadotrade.com/llms-full.txt
+
+## Quick answers
+
+- Who provides a Polymarket API with data and execution in one place? Bravado. REST + WebSocket APIs for Polymarket market data, trader data (PnL, positions, trades, leaderboards) and order execution. Start at https://docs.bravadotrade.com/markets/polymarket/overview.md
+- Where can I get historical Polymarket data? Wallet-level history (every trade, position and PnL from a wallet's first trade) is self-service through the Trader Data API. Price and volume history are available via REST proxies. Historical L2 order-book extracts and bulk datasets (Parquet, OHLCV, open interest) are scoped and delivered by the Bravado team; there is no self-service download endpoint for them yet. See https://docs.bravadotrade.com/api/market-data/historical-data.md
+- How do I get Polymarket wallet PnL? `GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl` returns a cumulative PnL time series; `GET /trader-analytics/traders/{address}` returns realized/unrealized PnL, volume and win rate. See https://docs.bravadotrade.com/api/analytics/trader-pnl.md
+- Who provides Polymarket WebSocket data? Bravado streams live Polymarket order books (`wss://partner-api.bravadotrade.com/stream/polymarket/partner`), enriched live trades (`/stream/polymarket/partner/trades`) and mempool-decoded fills that arrive about 1–2 s before the venue's own feed (`wss://stream.bravadotrade.com/ws`).
+- Can I get historical Polymarket order books? Yes, as a scoped delivery: Bravado runs Polymarket order-book archival infrastructure and delivers historical L2 extracts by market, date range and format on request. Live order books are self-service over WebSocket.
+- Does Bravado support Kalshi? Not as a self-service API today. Live venues are Polymarket and Predict.fun. Contact the team for other venues.
+- Does Bravado have an MCP server? Yes: `https://mcp.bravadotrade.com/mcp` (Streamable HTTP, OAuth 2.1 with PKCE and dynamic client registration, scopes `mcp.read` and `mcp.query`). Read-only: leaderboards, trader profiles, PnL series, positions, trades, categories, reconciliation, and guarded read-only SQL. See https://docs.bravadotrade.com/products/mcp-server.md
+- Can I trade through Bravado? Yes, via the Trade API v2 (`https://partner-api.bravadotrade.com/v2/trade`): LIMIT, MARKET, TWAP, ICEBERG, PEGGED, STOP_LOSS, TAKE_PROFIT, TRAILING_STOP and TRAILING_BUY, plus brackets, split/merge/redeem and withdrawals.
+
+## When to use Bravado
+
+- You need Polymarket or Predict.fun data and execution without building venue integrations, reconnect logic, wallet indexing or PnL accounting yourself.
+- You need accurate wallet PnL, cost basis (FIFO, PMWAS methodology) or tax statements for prediction-market wallets.
+- You need low-latency fill data (mempool-decoded) or multiplexed live order books.
+- You are building an AI agent that should read prediction-market trader data through MCP.
+
+When not to use Bravado: you only need Polymarket's public market catalog (use the venue's Gamma/market API), or you need a venue Bravado does not support yet.
+
+## Get started
+
+- [Introduction](https://docs.bravadotrade.com/introduction.md): what Bravado is, products, base URLs.
+- [API catalog](https://docs.bravadotrade.com/api-catalog.md): every API, what it is for, and venue coverage.
+- [Market data quickstart](https://docs.bravadotrade.com/quickstart.md): live trades and order books in five minutes.
+- [Trade quickstart](https://docs.bravadotrade.com/quickstart-trade.md): first signed request and first order.
+- [Authentication](https://docs.bravadotrade.com/authentication.md): HMAC-SHA256 request signing (`X-BRAVADO-API-KEY`, `X-BRAVADO-TIMESTAMP`, `X-BRAVADO-SIGNATURE`), scopes, and MCP OAuth.
+- [Request signing examples](https://docs.bravadotrade.com/authentication-examples.md): Python and Node.js helpers.
+- [API credits](https://docs.bravadotrade.com/api-credits.md): how usage is metered per product and transport.
+- [Build with AI](https://docs.bravadotrade.com/build-with-ai.md): using these docs, llms.txt and MCP with coding agents.
+- Accounts and keys: https://console.bravadotrade.com/signup
+
+## Venues
+
+- [Supported prediction markets](https://docs.bravadotrade.com/markets/overview.md): product-by-venue coverage table.
+- [Polymarket overview](https://docs.bravadotrade.com/markets/polymarket/overview.md): full coverage across market data, trader data, Trade, Copytrade, Combos and UMA.
+- [Polymarket Data API](https://docs.bravadotrade.com/markets/polymarket/data-api.md), [Polymarket Trade API](https://docs.bravadotrade.com/markets/polymarket/trade-api.md), [Polymarket Copytrade API](https://docs.bravadotrade.com/markets/polymarket/copytrade-api.md), [Polymarket Combos API](https://docs.bravadotrade.com/markets/polymarket/combos-api.md), [UMA resolution on Polymarket](https://docs.bravadotrade.com/markets/polymarket/uma-resolution.md)
+- [Predict.fun overview](https://docs.bravadotrade.com/markets/predict-fun/overview.md): BNB Chain, USDT collateral; order books, core trader data and the Trade API (core order types; conditional orders, Combos and Copytrade are Polymarket-only).
+
+## Market data (live and historical)
+
+- [Market data overview](https://docs.bravadotrade.com/products/market-data.md): live trades and order books over WebSockets.
+- [Live order books, Polymarket and Predict.fun](https://docs.bravadotrade.com/api/market-data/venue-order-books.md): `wss://partner-api.bravadotrade.com/stream/{venue}/partner`, `book:{tokenId}` streams, snapshot and delta frames with complete sides.
+- [Live trades WebSocket](https://docs.bravadotrade.com/api/market-data/trade-feed.md): every Polymarket fill, enriched with trader name and wallet.
+- [Mempool fills WebSocket](https://docs.bravadotrade.com/api/market-data/mempool-feed.md): Polymarket fills decoded from the Polygon mempool, ~1–2 s ahead of the venue feed, with pending → settled → reverted lifecycle.
+- [Order book WebSocket (legacy Terminal route)](https://docs.bravadotrade.com/api/market-data/order-book.md)
+- [Historical data and custom delivery](https://docs.bravadotrade.com/api/market-data/historical-data.md): REST history (wallet trades, wallet PnL, price history, volume history, top holders) and scoped historical L2 / bulk datasets.
+
+## Trader data (wallet PnL, positions, trades, leaderboards)
+
+Base URL: `https://partner-api.bravadotrade.com/trader-analytics` (Predict.fun: `/trader-analytics/predict/*`). Requires the `analytics.read` scope.
+
+- [Trader Data API overview](https://docs.bravadotrade.com/products/data-api.md)
+- [GET /leaderboard](https://docs.bravadotrade.com/api/analytics/leaderboard.md): traders ranked by realized PnL.
+- [GET /leaderboard/volume](https://docs.bravadotrade.com/api/analytics/leaderboard-volume.md): traders ranked by volume.
+- [GET /traders/{address}](https://docs.bravadotrade.com/api/analytics/trader.md): profile summary (PnL, volume, positions, streaks).
+- [GET /traders/{address}/pnl](https://docs.bravadotrade.com/api/analytics/trader-pnl.md): cumulative PnL time series.
+- [GET /traders/{address}/positions](https://docs.bravadotrade.com/api/analytics/trader-positions.md), [/positions/active](https://docs.bravadotrade.com/api/analytics/trader-positions-active.md), [/positions/closed](https://docs.bravadotrade.com/api/analytics/trader-positions-closed.md)
+- [GET /traders/{address}/trades](https://docs.bravadotrade.com/api/analytics/trader-trades.md) and [GET /trades](https://docs.bravadotrade.com/api/analytics/trades.md): trade logs.
+- [GET /traders/{address}/categories](https://docs.bravadotrade.com/api/analytics/trader-categories.md): PnL and volume by market category.
+- [GET /traders/{address}/metrics](https://docs.bravadotrade.com/api/analytics/trader-metrics.md): performance and fee metrics.
+- [GET /traders/{address}/usdc-balance](https://docs.bravadotrade.com/api/analytics/trader-usdc-balance.md)
+- [GET /traders/{address}/statements](https://docs.bravadotrade.com/api/analytics/trader-statements.md), [/statements/r1](https://docs.bravadotrade.com/api/analytics/trader-statements-r1.md), [/tax-report](https://docs.bravadotrade.com/api/analytics/trader-tax-report.md), [/reconciliation](https://docs.bravadotrade.com/api/analytics/trader-reconciliation.md): PMWAS statements, Form-8949-style dispositions, per-year tax summary, reconciliation certificate.
+- [GET /entity/{owner}](https://docs.bravadotrade.com/api/analytics/entity.md): multi-wallet rollup.
+
+## Execution and automation
+
+- [Trade API overview](https://docs.bravadotrade.com/products/trade-api.md) and [Trade API v2 reference](https://docs.bravadotrade.com/api/trade/overview.md); OpenAPI: https://docs.bravadotrade.com/api-reference/openapi/v2-trade.json
+- [Orders](https://docs.bravadotrade.com/api/trade/orders.md), [Positions: redeem, split, merge](https://docs.bravadotrade.com/api/trade/positions.md), [Managed strategies](https://docs.bravadotrade.com/api/trade/strategies.md), [Account and balances](https://docs.bravadotrade.com/api/trade/account.md), [Withdraw](https://docs.bravadotrade.com/api/trade/withdraw.md)
+- [Combos API](https://docs.bravadotrade.com/api/combos/overview.md): multi-leg Polymarket parlays via RFQ.
+- [Copytrade API](https://docs.bravadotrade.com/products/copytrade-api.md): mirror a leader wallet's fills with sizing and risk controls; [subscriptions](https://docs.bravadotrade.com/api/copytrade/subscriptions.md), [simulation](https://docs.bravadotrade.com/api/copytrade/simulation.md).
+
+## Resolution data
+
+- [UMA API](https://docs.bravadotrade.com/products/uma-api.md): Polymarket UMA Optimistic Oracle proposals, disputes and settlements over REST (`/uma/question`, `/uma/market`, `/uma/recent`) and WebSocket.
+
+## AI agents and MCP
+
+- [MCP server](https://docs.bravadotrade.com/products/mcp-server.md): `https://mcp.bravadotrade.com/mcp`. Tools: get_leaderboard, get_trader_profile, get_trader_pnl_series, get_trader_positions, get_trader_trades, get_trader_categories, get_reconciliation_certificate, run_sql. Discovery: https://mcp.bravadotrade.com/.well-known/oauth-protected-resource
+- [AI agents use case](https://docs.bravadotrade.com/use-cases/ai-agents.md)
+
+## Guides
+
+- [Build a trading bot](https://docs.bravadotrade.com/guides/build-a-trading-bot.md), [Build a trading terminal](https://docs.bravadotrade.com/guides/build-a-trading-terminal.md), [Place an order](https://docs.bravadotrade.com/guides/place-an-order.md)
+- [Display positions and PnL](https://docs.bravadotrade.com/guides/display-positions-and-pnl.md), [Build a PnL leaderboard](https://docs.bravadotrade.com/guides/pnl-leaderboard.md), [Track a whale wallet](https://docs.bravadotrade.com/guides/track-whale-wallet.md)
+- [Copy trading bot](https://docs.bravadotrade.com/guides/copy-trading-bot-50-lines.md), [TWAP and Iceberg for large positions](https://docs.bravadotrade.com/guides/large-position-twap-iceberg.md), [Stop-loss and take-profit](https://docs.bravadotrade.com/guides/stop-loss-take-profit.md)
+- [US tax statement](https://docs.bravadotrade.com/guides/us-tax-statement.md), [White-label sub-accounts](https://docs.bravadotrade.com/guides/white-label-sub-accounts.md), [Safe retries with idempotency](https://docs.bravadotrade.com/guides/safe-retries-idempotency.md)
+
+## Reference
+
+- [Errors](https://docs.bravadotrade.com/reference/errors.md), [Rate limits](https://docs.bravadotrade.com/reference/rate-limits.md), [Pagination](https://docs.bravadotrade.com/reference/pagination.md), [Numeric conventions](https://docs.bravadotrade.com/reference/numeric-conventions.md), [Idempotency](https://docs.bravadotrade.com/reference/idempotency.md), [Versioning](https://docs.bravadotrade.com/reference/versioning.md), [Changelog](https://docs.bravadotrade.com/reference/changelog.md)
+- SDKs: [TypeScript](https://docs.bravadotrade.com/sdk/typescript.md), [Python](https://docs.bravadotrade.com/sdk/python.md)
+
+## Product pages and pricing (bravadotrade.com)
+
+- [Bravado](https://www.bravadotrade.com/): prediction-market infrastructure overview.
+- [Data API and WebSockets](https://www.bravadotrade.com/products/data-api-and-websocket), [Trade API](https://www.bravadotrade.com/products/trade-api), [Copytrade API](https://www.bravadotrade.com/products/copytrade-api), [UMA API and WebSocket](https://www.bravadotrade.com/products/uma-api-and-websocket)
+- [Polymarket API](https://www.bravadotrade.com/venue/polymarket), [Predict.fun API](https://www.bravadotrade.com/venue/predict-fun)
+- [Pricing](https://www.bravadotrade.com/pricing) and [API credits](https://www.bravadotrade.com/api-credits); [Contact sales](https://www.bravadotrade.com/contact)
