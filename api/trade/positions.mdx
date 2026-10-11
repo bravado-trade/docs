@@ -234,13 +234,13 @@ Redeems a resolved Conditional Token Framework (CTF) position and delivers the p
   Convert `payout_base_units` to a human-readable dollar amount by dividing by `1_000_000` (6 decimals). A value of `"500000000"` equals **500 pUSD**.
 </Tip>
 
-### Redeem errors on Polymarket Protocol V2 markets
+### Redeem on Polymarket Protocol V2 markets
+
+Bravado cannot redeem positions in Polymarket Protocol V2 markets yet. A redeem (and a split or merge) on a V2 market is refused with `422 MARKET_PROTOCOL_UNSUPPORTED` before anything is sent. Do not retry it.
 
 <Note>
-  **Available after the next API release**, and only once V2 trading is enabled. While V2 trading is not enabled, a redeem on a Protocol V2 market is refused with `422 MARKET_PROTOCOL_UNSUPPORTED` (also from the next API release).
+  **Available after a future API release** that adds Protocol V2 redeem. From then on, redeeming a V2 position can also return:
 </Note>
-
-Once V2 trading is enabled, redeeming a position in a Polymarket Protocol V2 market can also return:
 
 | Code | HTTP | Meaning | What to do |
 | --- | --- | --- | --- |

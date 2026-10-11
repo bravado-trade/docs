@@ -28,7 +28,6 @@ Every error the Trade API answers itself has this JSON body:
 | `request_id` | Yes | Our id for this request. Quote it in support tickets |
 | `order_id` | No | The order a failure is about, when there is one (for example `FILL_INDETERMINATE`) |
 | `retry_after_ms` | No | How long to wait before repeating, in milliseconds |
-| `reason` | No | A lower-case token that narrows the code when one code has several next steps |
 
 ## Read the headers first
 
@@ -92,8 +91,8 @@ Recommended order when handling an error:
 | `ACTIVE_LIMIT_EXCEEDED` | 409 | Too many active strategies of one kind for this user: 50 for `STOP_LOSS` and `TRAILING_BUY`, 5 for `PEGGED`, `TWAP` and `ICEBERG`. Also more than 20 bid-ladder rungs | Cancel some, or wait for them to finish |
 | `USER_PROVISIONING_PENDING` | 409 | predict.fun: the wallet is being enabled on the venue. Carries `retry_after_ms` and `Retry-After` | Wait, then repeat the same request |
 | `AUTOMATION_WALLET_MISMATCH` | 409 | Copytrade: the user's wallet setup cannot run a real copy | Not cleared by waiting. Keep the copy paused or simulated |
-| `CONDITION_NOT_RESOLVED` | 409 | Redeem of a Polymarket Protocol V2 position whose market is not resolved on chain yet. Nothing was sent. **Available after the next API release**, once V2 trading is enabled | Repeat after the market resolves, with a new `Idempotency-Key` |
-| `APPROVAL_PENDING` | 409 | Protocol V2 split, merge or redeem: the wallet's one-time approval is still confirming. The operation itself was not sent. Carries `retry_after_ms` and `Retry-After` (about 30 s). **Available after the next API release**, once V2 trading is enabled | Wait, then repeat with a **new** `Idempotency-Key` |
+| `CONDITION_NOT_RESOLVED` | 409 | Redeem of a Polymarket Protocol V2 position whose market is not resolved on chain yet. Nothing was sent. **Available after a future API release** that adds Protocol V2 redeem | Repeat after the market resolves, with a new `Idempotency-Key` |
+| `APPROVAL_PENDING` | 409 | Protocol V2 split, merge or redeem: the wallet's one-time approval is still confirming. The operation itself was not sent. Carries `retry_after_ms` and `Retry-After` (about 30 s). **Available after a future API release** that adds Protocol V2 split, merge and redeem | Wait, then repeat with a **new** `Idempotency-Key` |
 | `QUOTE_EXPIRED` | 410 | A combo was accepted after its quote expired | Request a new quote |
 
 ## Order rejections
@@ -107,7 +106,7 @@ Recommended order when handling an error:
 | `NO_ORDERBOOK` | 422 | The venue has no order book for that token id | Check the token id. Not retryable |
 | `ICEBERG_NOT_PLACEABLE` | 422 | The iceberg's first clip would be rejected (collateral, minimum size, or a buy that crosses the book) | Fix the parameter the message names |
 | `SLIPPAGE_EXCEEDED` | 422 | A market order filled nothing within `slippage_bps` of the touch. Nothing traded | Re-read the book; change size, `slippage_bps`, or use a `LIMIT` |
-| `MARKET_PROTOCOL_UNSUPPORTED` | 422 | The market is a Polymarket Protocol V2 market, which Bravado cannot trade yet. Refused before anything is signed or stored. **Available after the next API release** | Not retryable. Skip the market |
+| `MARKET_PROTOCOL_UNSUPPORTED` | 422 | The market is a Polymarket Protocol V2 market, which Bravado cannot trade yet. Refused before anything is signed or stored. Also returned for split, merge and redeem on a V2 market | Not retryable. Skip the market |
 | `RATE_LIMITED` | 429 | Your key's rate limit is exhausted | Wait `Retry-After` seconds. See [rate limits](/reference/rate-limits) |
 
 ## Server and dependency errors
@@ -129,33 +128,6 @@ Recommended order when handling an error:
 | `ORDER_TYPE_UNAVAILABLE` | 503 | That order type is switched off on our side | Not cleared by waiting. Ask Bravado |
 | `PRICE_SOURCE_UNAVAILABLE` | 503 | We could not obtain a price right now | Retry shortly. Nothing was placed |
 | `PARTNER_API_DISABLED` | 503 | The OpenAPI spec could not be built on that instance | Ours to fix. Quote `request_id` |
-
-## Polymarket Perps
-
-These codes are returned by `/v2/trade/perps/*`, which is available only where perps are enabled for your account.
-
-| Code | HTTP | Meaning |
-| --- | --- | --- |
-| `GEO_BLOCKED` | 403 | The attested jurisdiction is not allowed by the venue |
-| `INSTRUMENT_NOT_ALLOWED` | 403 | The instrument is outside your allowlist |
-| `REDUCE_ONLY_MODE` | 403 | Only closing orders are accepted for your account |
-| `OPERATION_DISABLED` | 403 | Your perps policy does not allow this operation (deposits or withdrawals) |
-| `LEVERAGE_CAP_EXCEEDED` | 409 | The leverage is above your cap |
-| `ACCOUNT_IN_LIQUIDATION` | 409 | The account is in liquidation; opens are refused |
-| `POSITION_OR_ORDERS_EXIST` | 409 | The margin mode cannot change while a position or orders exist |
-| `ORDER_TERMINAL` | 409 | The order is already filled or cancelled |
-| `ORDER_IN_FLIGHT` | 409 | The order is changing at the venue. Carries `Retry-After` |
-| `MODIFY_REJECTED` | 409 | The venue refused the modify; `reason` says why |
-| `INSUFFICIENT_MARGIN` | 422 | The venue refused for margin |
-| `INVALID_LEVERAGE` | 422 | The venue refused the leverage for the position's risk tier |
-| `MODIFY_WOULD_CROSS` | 422 | The modified price would cross the book |
-| `REDUCE_ONLY_VIOLATION` | 422 | A reduce-only order would increase or flip the position |
-| `PERPS_HALTED` | 503 | Bravado has halted perps: opens and leverage increases are refused |
-| `VENUE_CANCEL_ONLY` | 503 | The venue is in cancel-only mode. Carries `Retry-After` |
-| `LOCAL_RATE_BUDGET_EXCEEDED` | 503 | Our shared venue budget refused before sending. Carries `Retry-After` |
-| `CLOCK_SKEW_REFUSED` | 503 | Our clock disagrees with the venue's, so nothing was signed. Carries `Retry-After` |
-| `PERPS_CAPABILITY_UNAVAILABLE` | 503 | This feature is not available yet; `reason` names it. Carries `Retry-After` |
-| `VENUE_RATE_LIMITED` | 503 or 429 | The venue throttled the request (503 per IP, 429 per account). Carries `Retry-After` |
 
 ## Related
 

@@ -27,6 +27,26 @@ There are two equivalent ways to choose the venue. Both reach the same handlers 
 1. **Field (recommended).** Add `"venue": "predictfun"` to the request body, or `?venue=predictfun` on `GET` and `DELETE` routes. Omitting it always means `polymarket`, so existing integrations are unaffected.
 2. **Path alias.** `/v2/trade/{venue}/...` mirrors the venue-aware routes with the venue in the path, for example `POST /v2/trade/predictfun/order` or `GET /v2/trade/predictfun/positions`. The path wins over any `venue` in the body. Sign the exact path you call. An unknown venue segment returns `404`.
 
+   The aliases take the same request and return the same response as the canonical route, so they have no pages of their own in the [API reference](/api/trade/overview). The full list:
+
+   | Alias | Canonical route |
+   | --- | --- |
+   | `GET /v2/trade/{venue}/account` | `GET /v2/trade/account` |
+   | `GET /v2/trade/{venue}/activity` | `GET /v2/trade/activity` |
+   | `GET /v2/trade/{venue}/balances` | `GET /v2/trade/balances` |
+   | `GET /v2/trade/{venue}/balances/withdrawable` | `GET /v2/trade/balances/withdrawable` |
+   | `POST /v2/trade/{venue}/order` | `POST /v2/trade/order` |
+   | `POST /v2/trade/{venue}/order/batch` | `POST /v2/trade/order/batch` |
+   | `GET /v2/trade/{venue}/orders/open` | `GET /v2/trade/orders/open` |
+   | `DELETE /v2/trade/{venue}/orders/{order_id}` | `DELETE /v2/trade/orders/{order_id}` |
+   | `POST /v2/trade/{venue}/orders/cancel-batch` | `POST /v2/trade/orders/cancel-batch` |
+   | `POST /v2/trade/{venue}/orders/cancel-all` | `POST /v2/trade/orders/cancel-all` |
+   | `GET /v2/trade/{venue}/positions` | `GET /v2/trade/positions` |
+   | `POST /v2/trade/{venue}/positions/redeem` | `POST /v2/trade/positions/redeem` |
+   | `POST /v2/trade/{venue}/positions/split` | `POST /v2/trade/positions/split` |
+   | `POST /v2/trade/{venue}/positions/merge` | `POST /v2/trade/positions/merge` |
+   | `POST /v2/trade/{venue}/withdraw` | `POST /v2/trade/withdraw` |
+
 Notes:
 
 - Venue-neutral routes (users, combos, copytrade, health) have no path alias.
