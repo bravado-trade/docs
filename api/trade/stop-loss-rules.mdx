@@ -1,0 +1,123 @@
+---
+title: "Stop-Loss and Take-Profit Rules: How Exits Behave"
+sidebarTitle: "Stop-loss and take-profit rules"
+description: "The exact rules Bravado applies to STOP_LOSS, TRAILING_STOP and TAKE_PROFIT orders: status before trigger, cancellation, all-or-nothing execution, bracket legs, oversized stops and resolved markets."
+icon:
+  name: "shield-alert"
+  library: "lucide"
+---
+
+This page states how stop-losses and take-profits behave today, rule by rule. It is the reference to design against. For a walkthrough with examples, see the [stop-loss and take-profit guide](/guides/stop-loss-take-profit).
+
+<Note>
+  Stop-losses, trailing stops, trailing buys and take-profits are available on **Polymarket only**. On predict.fun they return `400 VENUE_CAPABILITY_UNSUPPORTED`. See [Venues](/api/trade/venues).
+</Note>
+
+## Summary
+
+| Rule | What happens |
+| --- | --- |
+| Status before trigger | `PENDING` in the create response, `ACTIVE` in `GET /v2/trade/strategies` |
+| Cancel | Only while the stop has not triggered |
+| Trigger | Stop-loss: best **bid** at or below your `price`. Trailing stop: best bid at or below the high-water mark (the highest bid seen) minus your offset |
+| Execution | One all-or-nothing market sell (fill-or-kill) of the stop's full size. It never rests on the book, so it never appears in `GET /v2/trade/orders/open` |
+| Take-profit and stop-loss on the same position | **Not linked.** One filling does not cancel the other |
+| Your own market sell through Bravado | Shrinks or cancels your other untriggered stops on that token by the amount that filled |
+| A take-profit or limit sell that fills on the book | Does **not** change your stops |
+| Stop larger than what you hold | Retried once at your balance if the shortfall is 0.1% or less; otherwise it fails, is retried, and ends in `ERROR` |
+| Market resolves before the trigger | The stop ends `COMPLETED` with `filled_size: null`. Nothing was sold |
+
+## Status before the trigger
+
+When you create a `STOP_LOSS` or `TRAILING_STOP` (standalone, or as the `stop_loss` leg of a bracket), the response carries `status: "PENDING"`. `PENDING` means accepted and armed. It is not an error, and it is not a rejection.
+
+The same record appears in `GET /v2/trade/strategies` with `status: "ACTIVE"`. The list uses one vocabulary for every strategy type, so the stop's internal states are mapped:
+
+| Internal state | Status in `GET /v2/trade/strategies` |
+| --- | --- |
+| `PENDING` (armed, waiting for the price) | `ACTIVE` |
+| `TRIGGERED` / `SUBMITTED` (the sell is being sent) | `ACTIVE` |
+| `EXECUTED` (sold) | `COMPLETED` |
+| `CLOSED` (market resolved first, nothing sold) | `COMPLETED` |
+| `CANCELED` | `CANCELED` |
+| `FAILED` | `ERROR` |
+
+Two consequences:
+
+- `COMPLETED` does not by itself mean the stop sold. A stop that sold has a non-null `executed_price`, and usually a `filled_size`. A stop closed because its market resolved has `executed_price: null` and `filled_size: null`.
+- A trailing buy (`TRAILING_BUY`) follows the same mapping: `PENDING` at creation, `ACTIVE` in the list.
+
+See [Order and strategy states](/api/trade/order-states) for every status value the API returns.
+
+## Cancelling
+
+`DELETE /v2/trade/strategies/{record_id}` cancels a stop only while it is still armed (internally `PENDING`).
+
+Once the trigger fires, the stop is being executed and can no longer be cancelled. The cancel request then fails with an error whose message starts with `cancelStrategy: stop-loss already triggered` (today it arrives as `502 UPSTREAM_TIMEOUT`, so read the `X-Bravado-Error-Code` header and the message, not just the status). There is no resulting order for you to cancel either: the sell is fill-or-kill and never rests.
+
+Cancelling a record that is already `COMPLETED`, `CANCELED` or `ERROR` returns its current status without error.
+
+## How a stop executes
+
+When the trigger fires, Bravado sends **one market sell for the stop's full size**, as a **fill-or-kill** order:
+
+- It fills completely, at whatever price the book needs to fill the whole size, or it does not fill at all. It is never partially filled.
+- It never rests on the book, so a stop never shows up in `GET /v2/trade/orders/open`. Track it in `GET /v2/trade/strategies` only, before and after it fires.
+- There is no price floor on the sell. In a thin book a stop can fill well below its trigger.
+- If the sell is rejected (for example, the book cannot absorb the full size), the attempt fails and is retried. See [When a stop fails](#when-a-stop-fails).
+
+After it sells, the record is `COMPLETED` with `executed_price` (the average price the sell got) and `filled_size`. `price` stays the trigger level you armed it at: do not show `price` as the exit price.
+
+## Take-profit and stop-loss are not linked
+
+A bracket (`take_profit` plus `stop_loss` on a `LIMIT` or `MARKET` buy) creates **two independent records**: a resting limit sell for the take-profit, and an armed stop-loss. Bravado does not link them. **When one fills, the other is not cancelled.** There is no one-cancels-the-other (OCO) behaviour today.
+
+Both legs are created in the same request, right after the entry order is accepted, sized to the entry (or to the size you pass for the leg). They are not created later "when the entry fills". Each leg can fail on its own while the entry succeeds; check `brackets.take_profit.error` and `brackets.stop_loss.error` on every response.
+
+What this means in practice:
+
+- **Take-profit fills first.** Your shares are sold, but the stop-loss stays armed at its full size. If the price later falls to the trigger, the stop's sell is rejected for insufficient shares and the stop ends in `ERROR`. Cancel the stop yourself when the take-profit fills.
+- **Stop-loss fires first.** The take-profit limit sell keeps resting on the book with no shares behind it. Cancel it yourself with `DELETE /v2/trade/orders/{order_id}`.
+
+## What a sell does to your stops
+
+When a **market sell** is executed through Bravado for a token (through this API, the Bravado app, or a stop-loss of yours firing), Bravado adjusts your other **armed** stop-losses on that token by the number of shares that **filled**:
+
+- Nothing filled: the stops are untouched.
+- `F` shares filled: each armed stop's size becomes its size minus `F`. If that leaves 0.01 shares or less, the stop is cancelled.
+- Stops that have already triggered are left alone.
+
+This assumes the stop covered the shares being sold. A stop armed for **part** of a position can be cancelled when more than its size is sold, even though shares remain (for example: 500 armed of 1,000 held, then a sale of 600 cancels the stop). After a partial sale, re-arm the stop for what you still hold.
+
+**A take-profit or limit sell that fills on the book does not adjust your stops.** Only market sells executed through Bravado do. After a take-profit or limit sell fills, resize or cancel your stops yourself.
+
+## A stop larger than what you hold
+
+Bravado does not check your share balance when you create a stop-loss. A stop for more shares than you hold is accepted. When it triggers:
+
+1. The sell for the stop's full size is rejected by the venue for insufficient balance.
+2. If the shortfall is **0.1% of the order or less** (rounding-sized, for example dust left by a redeem), Bravado immediately re-sends the sell once at your actual balance. If that fills, the stop completes normally.
+3. If the shortfall is larger, or the re-sent sell is also rejected, the attempt fails. Bravado never sells more than you hold.
+
+## When a stop fails
+
+A failed attempt puts the stop in `ERROR`, with the venue's reason in `last_error`. It is retried about every 10 seconds, for **3 attempts in total**. While a retry is running the stop shows `ACTIVE` again. After the last failed attempt it stays in `ERROR` for good, and **the position is no longer protected**.
+
+`ERROR` on a stop-loss is therefore not always final, and there is no field that says how many attempts remain.
+
+<Warning>
+  `DELETE /v2/trade/strategies/{record_id}` on a stop in `ERROR` answers with `status: "ERROR"` and does **not** cancel it. If attempts remain, the stop can still sell on a later attempt, within roughly 30 seconds of the first failure. Wait for that window to pass before you arm a replacement, or the two can both sell.
+</Warning>
+
+## When the market resolves first
+
+If a market resolves before the stop triggers, Bravado closes the stop. It appears as `COMPLETED` with `filled_size: null` and `executed_price: null`. Nothing was sold. Whether your shares paid out depends on the resolution: redeem them as usual (see [Positions](/api/trade/positions)).
+
+A stop only protects against price movement while there is a bid to sell into. It does not protect against resolution.
+
+## Related
+
+- [Stop-loss and take-profit guide](/guides/stop-loss-take-profit)
+- [Order and strategy states](/api/trade/order-states)
+- [Track order and strategy state](/guides/track-order-and-strategy-state)
+- [Error codes](/reference/error-codes)

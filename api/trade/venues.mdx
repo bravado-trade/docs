@@ -1,0 +1,126 @@
+---
+title: "Venues: Trading Polymarket and Predict.fun Through One API"
+sidebarTitle: "Venues"
+description: "Which prediction-market venues the Bravado Trade API v2 trades, how to select one, what each venue supports, and the funding and withdrawal rules that differ between them."
+icon:
+  name: "network"
+  library: "lucide"
+---
+
+The Trade API v2 is venue-aware: the same endpoints, credentials, HMAC signing and idempotency rules trade on more than one prediction market. This is the "Venues section" that the `venue` field descriptions in the [Trade API reference](/api/trade/overview) refer to.
+
+## Supported venues
+
+| `venue` | Chain | Collateral | Account that holds the collateral | Availability |
+| --- | --- | --- | --- | --- |
+| `polymarket` (default) | Polygon (chain id 137) | pUSD, 6 decimals | The user's Safe proxy (`safe_address`) | Generally available |
+| `predictfun` | BNB Chain (chain id 56) | USDT-BEP20, 18 decimals | The user's EOA, directly | Limited availability. Entitlement required |
+
+<Warning>
+  **predict.fun is not at feature parity with Polymarket.** Most routes accept `venue: "predictfun"`, but several order types and whole product families do not exist there. Read [What each venue supports](#what-each-venue-supports) before designing against it.
+</Warning>
+
+## Selecting a venue
+
+There are two equivalent ways to choose the venue. Both reach the same handlers and enforce the same checks.
+
+1. **Field (recommended).** Add `"venue": "predictfun"` to the request body, or `?venue=predictfun` on `GET` and `DELETE` routes. Omitting it always means `polymarket`, so existing integrations are unaffected.
+2. **Path alias.** `/v2/trade/{venue}/...` mirrors the venue-aware routes with the venue in the path, for example `POST /v2/trade/predictfun/order` or `GET /v2/trade/predictfun/positions`. The path wins over any `venue` in the body. Sign the exact path you call. An unknown venue segment returns `404`.
+
+Notes:
+
+- Venue-neutral routes (users, combos, copytrade, health) have no path alias.
+- **`/strategies` has no path alias.** `GET /v2/trade/{venue}/strategies` returns `404`. Use `GET /v2/trade/strategies`; each row carries its own `venue`.
+- `GET /v2/trade/orders/open` defaults to `polymarket`. When you check whether an order exists before retrying, query the venue you ordered on. An empty list from the wrong venue looks exactly like "nothing was submitted".
+- Venues are a **v2** feature. `/v1/trade/*` is Polymarket only and ignores `venue`.
+
+## Entitlement
+
+Venues are enabled per partner. A request for a venue your account is not entitled to returns `403 VENUE_NOT_ENABLED`. A venue that is switched off on our side returns `503 VENUE_UNAVAILABLE`. Ask your Bravado contact to enable a venue.
+
+## Account and deposit addresses
+
+`GET /v2/trade/account` returns a `venues[]` array, one self-contained entry per venue you can trade:
+
+| Field | Meaning |
+| --- | --- |
+| `chain` | `{ name, chain_id }` of the addresses in this entry |
+| `trading_address` | The address that trades on this venue, or `null` if not derived yet |
+| `address_type` | `safe_proxy` (a contract) or `eoa` (a key pair) |
+| `deposit.address` | Where to send funds for this venue, on this entry's chain |
+| `deposit.assets[]` | `symbol`, `contract` (`null` for the chain's native coin), `decimals`, `role` (`collateral` or `gas`), `suggested_minimum` |
+| `onboarding_status` | Readiness to trade on that venue |
+
+Build deposit flows from `venues[]`. The legacy `wallet` block is Polymarket-shaped; on predict.fun its `safe_address` is always `null`.
+
+<Warning>
+  **Never send predict.fun funds to `safe_address`.** `safe_address` is a Polymarket contract on Polygon. predict.fun collateral is USDT-BEP20 on BNB Chain and goes to the user's EOA. Bravado does not support recovery of funds sent for one venue on another venue's chain, and recovery may be impossible. Always pair an address with its chain.
+</Warning>
+
+On predict.fun, `deposit.assets[]` lists two assets: USDT-BEP20 (`collateral`) and BNB (`gas`). That wallet pays for its own approvals and orders, so including a small amount of BNB in the first deposit lets it act without waiting for a top-up.
+
+## Balances
+
+- `GET /v2/trade/balances` keeps the field name `pusd` on every venue. On predict.fun it carries **USDT on BNB Chain**. Read `collateral` and `chain` in the same response to know what the number is. `usdc_e` is `"0"` on predict.fun because the concept does not apply there.
+- `GET /v2/trade/balances/withdrawable` is venue-aware. On predict.fun it lists USDT (`collateral`) and BNB (`gas`). `balance` is the total held, not the spendable amount. Pass `include_locked=true` to measure `locked_in_open_orders`; without it that field is `null`, meaning not measured, never zero. Today `include_locked` is supported on predict.fun only; on Polymarket it returns `400 VENUE_CAPABILITY_UNSUPPORTED`.
+
+## What each venue supports
+
+| Capability | Polymarket | predict.fun |
+| --- | --- | --- |
+| `LIMIT` | Yes | Yes. The response does not say whether it matched: `status`, `filled_size` and `remaining_size` are `""` (unknown) |
+| `expiration` (GTD) on `LIMIT` | Yes | Yes |
+| `time_in_force` `IOC` / `FOK` on `LIMIT` | Yes | No |
+| `MARKET` | Yes, bounded by `slippage_bps` | Yes, signed at the touch: it fills at the touch or the venue cancels it. `slippage_bps` does not widen it. May answer `pending` |
+| `TWAP`, `ICEBERG`, `PEGGED` | Yes | Yes |
+| Bid ladder (`POST /v2/trade/order/batch`) | Yes | Yes. Each rung reports `""` like a `LIMIT` |
+| `TAKE_PROFIT`, `STOP_LOSS`, `TRAILING_STOP`, `TRAILING_BUY`, brackets | Yes | No |
+| Cancel (single, batch, all), open orders | Yes | Yes |
+| Positions | Yes | Yes. `status=closed` returns an empty list; `realized_pnl` is always `"0"`; `mergeable` is always `false`. These are placeholders, not values |
+| Activity | Yes | Fills only. Redeems, splits, merges, deposits and withdrawals do not appear |
+| Redeem, merge | Yes | Yes |
+| Split | Yes | Yes, except on neg-risk markets (`400 VENUE_CAPABILITY_UNSUPPORTED`) |
+| Withdraw | Yes | Yes. See the warning below |
+| Combos, copytrade, builder codes | Yes | No |
+
+Anything marked "No" returns `400 VENUE_CAPABILITY_UNSUPPORTED`. It is the same answer every time, so do not retry it.
+
+### predict.fun specifics
+
+- **Minimum order value is \$0.90.** An `ICEBERG` clip below it is raised to it, so a clip can be larger than the `clip_size` you sent.
+- **The price tick is per market:** `0.01` on some markets and `0.001` on others. A `LIMIT` price is snapped to the market's tick in the direction that protects you (a buy down, a sell up). `POST /v2/trade/quote` with `venue: "predictfun"` reports the tick.
+- **Fees** are charged by the venue in shares on buys: a 10-share fill at a 2% fee credits about 9.8 shares.
+- **Order ids are numeric strings** (Polymarket's are `0x` hashes).
+- **A user's first order** enables the wallet on chain before placing. It can answer `409 USER_PROVISIONING_PENDING`: wait, then repeat. `GET /v2/trade/account?venue=predictfun` reporting `onboarding_status: "ready"` is the all-clear.
+- **Do not cancel a strategy's clip yourself.** The venue exposes no final state for a closed order, so a clip that disappears is read as filled. Cancelling a clip through the API also cancels the strategy that owned it. Cancel the strategy with `DELETE /v2/trade/strategies/{record_id}`.
+- **A `422 MARKET_REJECTED` whose message is a timeout, a transport error or a venue 5xx** may hide an order that was accepted. Check `GET /v2/trade/orders/open?venue=predictfun` before placing again.
+
+### Withdrawals on predict.fun
+
+A withdraw moves funds and cannot be undone. Treat every outcome that is not a clean `4xx` the same way:
+
+| Outcome | What to do |
+| --- | --- |
+| `STATE_CONFIRMED` with `transaction_hash` | Done |
+| `STATE_PENDING` with `transaction_hash` | Submitted. Check the receipt for that hash on BNB Chain. Do not retry |
+| Any `5xx` or timeout | **Do not retry with any key.** Check the destination address on chain, then contact Bravado with the `request_id` |
+
+Retrying an uncertain withdraw with a new `Idempotency-Key` sends the money a second time. The activity feed never shows withdrawals on predict.fun, so its silence is not evidence that nothing was sent.
+
+## Venue error codes
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `VENUE_NOT_ENABLED` | 403 | Your account is not entitled to this venue |
+| `VENUE_CAPABILITY_UNSUPPORTED` | 400 | Unknown venue, or something the venue does not offer |
+| `VENUE_UNAVAILABLE` | 503 | The venue is switched off on our side |
+| `USER_PROVISIONING_PENDING` | 409 | predict.fun: the wallet is being enabled. Wait and repeat |
+
+See [Error codes](/reference/error-codes) for the full catalogue.
+
+## Related
+
+- [Trade API on Predict.fun](/markets/predict-fun/trade-api)
+- [Trade API on Polymarket](/markets/polymarket/trade-api)
+- [Order and strategy states](/api/trade/order-states)
+- [Error codes](/reference/error-codes)

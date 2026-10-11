@@ -468,7 +468,7 @@ def flatten(win: dict):
 
 Cancel-all clears CLOB orders only. A `PEGGED` order left running past the close belongs to a market that no longer exists in any useful sense.
 
-After settlement, winning shares are redeemable but **not redeemed automatically**. Call `POST /v2/trade/positions/redeem` once `position.redeemable` is `true`. Running 288 windows a day, unredeemed winners are the most common form of capital sitting idle in this strategy.
+After settlement, winning shares are redeemable. Unless Bravado has enabled [automatic redemption](/api/trade/positions#automatic-redemption) for your account, they are **not redeemed for you**: call `POST /v2/trade/positions/redeem` once `position.redeemable` is `true`. Running 288 windows a day, unredeemed winners are the most common form of capital sitting idle in this strategy.
 
 ## Confirming what you do not need
 
@@ -614,7 +614,7 @@ What is left is an execution problem with an unusually explicit cost. You know t
   </Accordion>
 
   <Accordion title="Do I need to redeem winners manually?">
-    Yes. Redemption is not automatic. Check `position.redeemable` and call `POST /v2/trade/positions/redeem`. At 288 windows a day this adds up quickly if you skip it.
+    Yes, by default. Automatic redemption is a per-partner setting Bravado enables on request, and it covers only users provisioned after it was enabled. Otherwise, check `position.redeemable` and call `POST /v2/trade/positions/redeem`. At 288 windows a day this adds up quickly if you skip it.
   </Accordion>
 
   <Accordion title="Does the 15-minute series behave the same as the 5-minute one?">

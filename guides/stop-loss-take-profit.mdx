@@ -24,11 +24,13 @@ Polymarket's native API has none of these order types. This guide covers all fou
 
 ## TL;DR
 
-- `STOP_LOSS` returns a **`record_id`** and lives on `/v2/trade/strategies` until it triggers, then becomes a CLOB order.
+- `STOP_LOSS` returns a **`record_id`** and lives on `/v2/trade/strategies`, before and after it triggers. When it fires it sells its full size in one all-or-nothing market order that never rests on the book.
 - `TAKE_PROFIT` returns an **`order_id`** and rests on the book immediately, earning the spread while it waits.
 - `TRAILING_STOP` follows the high-water mark. `trailing_offset` is a **decimal probability**; `trailing_offset_pct` is a percent. Mixing them up is rejected.
 - **Brackets are best-effort.** A `200` does not mean both legs were placed. Check `brackets.*.error`.
-- An exit cannot sell more shares than you hold.
+- **Take-profit and stop-loss are not linked.** When one fills, cancel the other yourself.
+- An exit never sells more shares than you hold.
+- The exact rules are on [Stop-loss and take-profit rules](/api/trade/stop-loss-rules).
 - No exit protects against resolution. Review open exits as an event approaches.
 
 ## What you will do
@@ -59,10 +61,10 @@ export BASE="https://partner-api.bravadotrade.com"
 
 | Type | Fires when | Returns | Rests on the book? |
 | --- | --- | --- | --- |
-| `STOP_LOSS` | Price falls to your level | `record_id` | Not until triggered |
+| `STOP_LOSS` | Best bid falls to your level | `record_id` | Never. It sells all at once when triggered |
 | `TAKE_PROFIT` | Price rises to your target | `order_id` | Immediately |
-| `TRAILING_STOP` | Price reverses from its peak | `record_id` | Not until triggered |
-| Bracket | Attached to an entry, both legs | With the entry | Both, once entry fills |
+| `TRAILING_STOP` | Best bid reverses from its peak by your offset | `record_id` | Never. It sells all at once when triggered |
+| Bracket | Attached to a buy entry, both legs | With the entry | The take-profit leg rests; the stop-loss leg waits |
 
 ### Why stop-loss and take-profit differ
 
@@ -72,7 +74,7 @@ A **take-profit** is a sell *above* the current price. That can rest on the book
 
 A **stop-loss** is a sell *below* the current price. If it rested on the book it would fill immediately, which is the exact opposite of a stop. So Bravado holds it off-book, watches the price, and places a real order only when the trigger hits.
 
-Hence one returns an `order_id` and the other a `record_id`, and they appear on different endpoints until the stop fires.
+Hence one returns an `order_id` and the other a `record_id`, and they appear on different endpoints.
 
 ## Stop-loss
 
@@ -93,13 +95,13 @@ curl -X POST $BASE/v2/trade/order \
 ```
 
 ```json
-{ "record_id": "rec_stop_abc123", "status": "ACTIVE", "type": "STOP_LOSS" }
+{ "type": "STOP_LOSS", "record_id": "3f6c…", "order_id": null, "status": "PENDING" }
 ```
 
-Before it triggers: `GET /v2/trade/strategies` only. After: `GET /v2/trade/orders/open` with `is_stop_loss: true`.
+`PENDING` means armed. Track the stop on `GET /v2/trade/strategies`, where it shows `ACTIVE` while armed and `COMPLETED` once it has sold. It never appears on `GET /v2/trade/orders/open`: when the trigger hits, Bravado sends one fill-or-kill market sell for the full size, which fills completely or not at all.
 
 <Warning>
-  A stop-loss can only be cancelled **pre-trigger**. Once it fires the strategy completes and you are cancelling the resulting order instead, with `DELETE /v2/trade/orders/{order_id}`. A client that only knows how to cancel strategies will fail here.
+  A stop-loss can only be cancelled **before it triggers**. Once it fires it is being executed, and there is no resting order to cancel either. See [Stop-loss and take-profit rules](/api/trade/stop-loss-rules#cancelling).
 </Warning>
 
 ## Take-profit
@@ -178,7 +180,11 @@ Rather than placing exits after a fill, attach them to the entry:
 }
 ```
 
-When the entry fills, both legs are submitted automatically. This closes the window where you hold an unprotected position between the fill landing and your exit order arriving, which on a fast-moving market is exactly when you need the protection.
+Both legs are created in the same request, right after the entry is accepted, so there is no window where you wait to send your exits yourself. Brackets attach to a `LIMIT` or `MARKET` **buy** only.
+
+<Warning>
+  **The two legs are not linked.** If the take-profit fills, the stop-loss stays armed at full size, and later fails for lack of shares when it triggers. If the stop-loss fires, the take-profit keeps resting with no shares behind it. Cancel the other leg yourself when one fills.
+</Warning>
 
 ### Legs fail independently
 
@@ -188,12 +194,12 @@ When the entry fills, both legs are submitted automatically. This closes the win
 
 ```json
 {
-  "order_id": "abc123",
-  "status": "filled",
-  "warnings": ["take_profit leg could not be placed: insufficient liquidity"],
+  "order_id": "0xabc…",
+  "status": "matched",
+  "warnings": ["take_profit not placed: insufficient liquidity"],
   "brackets": {
     "take_profit": { "error": "insufficient liquidity" },
-    "stop_loss":   { "order_id": "def456" }
+    "stop_loss":   { "id": "3f6c…", "status": "PENDING" }
   }
 }
 ```
@@ -213,13 +219,13 @@ The most common cause is a market minimum: a bracket leg below 5 shares is rejec
 
 ## Size against what you hold
 
-An exit cannot sell shares you do not have:
+A take-profit for more shares than you hold is refused when you place it (`422 INSUFFICIENT_BALANCE`):
 
 ```text
 "Not enough shares to place this sell — holding X…"
 ```
 
-Read the position first, and note the unit difference: a market buy is usually expressed in dollars, but an exit is always in shares.
+A stop-loss is **not** checked when you create it. An oversized stop is accepted and then fails when it triggers, leaving the position unprotected (a shortfall of 0.1% or less is sold at your actual balance instead). Read the position first, and note the unit difference: a market buy is usually expressed in dollars, but an exit is always in shares.
 
 ```python
 pos = read("/v2/trade/positions")["positions"]
@@ -245,7 +251,7 @@ A stop-loss protects against **price movement**. It does nothing about **resolut
 | Risk | Stop helps? |
 | --- | --- |
 | Price drifts down over hours | Yes |
-| Price gaps through your stop | Partially, it fills at the next available price |
+| Price gaps through your stop | Partially. The stop sells its full size at whatever price the book needs, or nothing if the book cannot absorb it, and then retries |
 | Market resolves against you | **No** |
 | Liquidity disappears near resolution | **No** |
 
@@ -267,7 +273,11 @@ Beyond that, two habits. Check `brackets.*.error` on every bracketed entry, beca
   </Accordion>
 
   <Accordion title="I cannot cancel my stop-loss.">
-    It has probably triggered. Post-trigger it is a CLOB order, so cancel it with `DELETE /v2/trade/orders/{order_id}`. Look for it on open orders with `is_stop_loss: true`.
+    It has probably triggered. A triggered stop is being executed as an all-or-nothing market sell and can no longer be cancelled; it never rests on the book, so there is no order to cancel either. Check its status on `GET /v2/trade/strategies`.
+  </Accordion>
+
+  <Accordion title="My take-profit filled. Is my stop-loss cancelled?">
+    No. The two legs are independent. Cancel the stop-loss yourself with `DELETE /v2/trade/strategies/{record_id}`.
   </Accordion>
 
   <Accordion title="My trailing stop was rejected.">
@@ -289,6 +299,7 @@ Beyond that, two habits. Check `brackets.*.error` on every bracketed entry, beca
 
 ## Resources
 
+- [Stop-loss and take-profit rules](/api/trade/stop-loss-rules), the exact behaviour
 - [Place an order](/guides/place-an-order), all eight order types
 - [Track order and strategy state](/guides/track-order-and-strategy-state), where exits appear
 - [Build a trading bot](/guides/build-a-trading-bot), automating exits

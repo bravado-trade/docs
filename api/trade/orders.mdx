@@ -151,15 +151,15 @@ Places a single order. The `type` field selects the execution strategy; some fie
 </ResponseField>
 
 <ResponseField name="order_id" type="string">
-  CLOB order ID. Present for `LIMIT`, `MARKET`, `TAKE_PROFIT`, and triggered stops. Absent for managed strategies, use `record_id` instead.
+  CLOB order ID. Present for `LIMIT`, `MARKET` and `TAKE_PROFIT`. `null` for managed strategies; use `record_id` instead.
 </ResponseField>
 
 <ResponseField name="record_id" type="string">
-  Strategy record ID. Present for `PEGGED`, `TWAP`, `ICEBERG`, `STOP_LOSS`, and `TRAILING_STOP` orders.
+  Strategy record ID. Present for `PEGGED`, `TWAP`, `ICEBERG`, `STOP_LOSS`, `TRAILING_STOP` and `TRAILING_BUY` orders; `null` otherwise.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  `OPEN` | `FILLED` | `PARTIALLY_FILLED` | `CANCELED` | `ACTIVE` (strategies).
+  Depends on `type`. `LIMIT` / `TAKE_PROFIT`: the venue's word at acceptance, passed through (`live`, `matched`, `delayed`, `unmatched` on Polymarket; `""` on predict.fun). `MARKET`: `matched`, `partially_filled`, or `pending` (predict.fun). `TWAP` / `ICEBERG` / `PEGGED`: `ACTIVE`. `STOP_LOSS` / `TRAILING_STOP` / `TRAILING_BUY`: `PENDING`. `""` means unknown, not missing. See [Order and strategy states](/api/trade/order-states).
 </ResponseField>
 
 <ResponseField name="side" type="string">
@@ -175,11 +175,11 @@ Places a single order. The `type` field selects the execution strategy; some fie
 </ResponseField>
 
 <ResponseField name="filled_size" type="string">
-  Shares filled at time of response.
+  Shares filled at time of response. `""` means the venue did not say (unknown), never zero.
 </ResponseField>
 
 <ResponseField name="remaining_size" type="string">
-  Shares still resting on the book.
+  Shares still resting on the book. `""` means unknown.
 </ResponseField>
 
 <ResponseField name="matched_amount" type="string">
@@ -190,12 +190,12 @@ Places a single order. The `type` field selects the execution strategy; some fie
   Builder code credited for this order (may differ from submission if overridden by partner config).
 </ResponseField>
 
-<ResponseField name="created_at" type="string">
-  ISO 8601 timestamp of order creation.
+<ResponseField name="created_at" type="number">
+  Unix timestamp, in seconds, of order creation.
 </ResponseField>
 
 <ResponseField name="brackets" type="object">
-  Present when bracket orders were attached. Contains `take_profit` and/or `stop_loss` sub-objects each with `order_id` and `record_id`.
+  Present when bracket legs were requested on a buy. `take_profit` carries `order_id` and the venue `status`; `stop_loss` carries `id` (its `record_id`) and `status: "PENDING"`. A leg that failed carries only `error`. The legs are not linked: see [Stop-loss and take-profit rules](/api/trade/stop-loss-rules).
 </ResponseField>
 
 <ResponseField name="warnings" type="array">
@@ -263,15 +263,15 @@ Places a single order. The `type` field selects the execution strategy; some fie
   "type": "LIMIT",
   "order_id": "0xorder123...abc",
   "record_id": null,
-  "status": "OPEN",
+  "status": "live",
   "side": "buy",
   "price": "0.65",
   "size": "200",
   "filled_size": "0",
   "remaining_size": "200",
-  "matched_amount": "0",
+  "matched_amount": null,
   "builder_code_used": "bravado",
-  "created_at": "2025-01-15T12:34:56Z",
+  "created_at": 1736944496,
   "brackets": null,
   "warnings": [],
   "message": "Order placed successfully"
@@ -331,7 +331,7 @@ Places up to 20 limit orders atomically at distinct price levels. All orders sha
       Total size for this rung.
     </ResponseField>
     <ResponseField name="status" type="string">
-      `OPEN` | `FILLED` | `PARTIALLY_FILLED`.
+      Same as a `LIMIT`: the venue's word at acceptance (`live`, `matched`, `delayed`, `unmatched` on Polymarket; `""` on predict.fun).
     </ResponseField>
     <ResponseField name="filled_size" type="string">
       Shares immediately filled (if any resting liquidity was crossed).
@@ -365,21 +365,21 @@ Places up to 20 limit orders atomically at distinct price levels. All orders sha
       "order_id": "0xorderA...001",
       "price": "0.60",
       "size": "150",
-      "status": "OPEN",
+      "status": "live",
       "filled_size": "0"
     },
     {
       "order_id": "0xorderB...002",
       "price": "0.55",
       "size": "200",
-      "status": "OPEN",
+      "status": "live",
       "filled_size": "0"
     },
     {
       "order_id": "0xorderC...003",
       "price": "0.50",
       "size": "300",
-      "status": "OPEN",
+      "status": "live",
       "filled_size": "0"
     }
   ]
@@ -416,7 +416,7 @@ Returns all currently open CLOB orders on the account. Optionally filter to a si
       `"buy"` or `"sell"`.
     </ResponseField>
     <ResponseField name="status" type="string">
-      `OPEN` or `PARTIALLY_FILLED`.
+      The venue's own status string, passed through unchanged (lower-cased on predict.fun). Use `size_matched` to see partial fills.
     </ResponseField>
     <ResponseField name="price" type="string">
       Limit price as a decimal probability.
@@ -431,19 +431,19 @@ Returns all currently open CLOB orders on the account. Optionally filter to a si
       Shares still resting on the book.
     </ResponseField>
     <ResponseField name="order_type" type="string">
-      `LIMIT` | `TAKE_PROFIT` | `STOP_LOSS` | `ICEBERG_SLICE`.
+      The venue's order type, passed through (for example the time in force). It is not a Bravado order type: use the `is_*` flags and `parent_strategy_id` to see what placed the order.
     </ResponseField>
     <ResponseField name="expiration" type="string">
-      Unix timestamp after which the order auto-cancels, or `null` for GTC.
+      Unix timestamp after which the order auto-cancels, or `"0"` for GTC.
     </ResponseField>
-    <ResponseField name="created_at" type="string">
-      ISO 8601 creation timestamp.
+    <ResponseField name="created_at" type="number">
+      Unix timestamp, in seconds.
     </ResponseField>
     <ResponseField name="is_take_profit" type="boolean">
       `true` when this order was placed as a bracket take-profit.
     </ResponseField>
     <ResponseField name="is_stop_loss" type="boolean">
-      `true` when this order was placed by a triggered stop-loss strategy.
+      `true` when this order was placed by a triggered stop-loss. In practice a stop's sell is fill-or-kill and never rests, so it does not appear here.
     </ResponseField>
     <ResponseField name="is_pegged" type="boolean">
       `true` when this order is being managed by a pegged strategy.
@@ -542,7 +542,7 @@ Cancels up to 50 orders in a single request. Useful for clearing a subset of a l
 
 ## POST /v2/trade/orders/cancel-all
 
-Cancels every open CLOB order on the account. No request body is required. This does **not** cancel managed strategy records (TWAP, Iceberg, Pegged, Stops), use `DELETE /v2/trade/strategies/{id}` for those.
+Cancels every open CLOB order on the account. No request body is required. A TWAP, Iceberg or Pegged strategy whose clip was resting at that moment is cancelled with it (otherwise it would post the next clip and undo your cancel). Strategies with nothing on the book at that instant, including every stop-loss and trailing order, keep running: use `DELETE /v2/trade/strategies/{id}` for those.
 
 **Required headers**
 
@@ -566,5 +566,5 @@ Cancels every open CLOB order on the account. No request body is required. This 
 </ResponseField>
 
 <Warning>
-  `cancel-all` removes resting bracket orders (take-profits and stop-loss CLOB orders) as well as plain limit orders. If you only want to remove non-bracket orders, use `cancel-batch` with a filtered list.
+  `cancel-all` removes resting take-profit orders (including bracket take-profits) as well as plain limit orders. It does not cancel armed stop-losses, which are not orders on the book. If you only want to remove some orders, use `cancel-batch` with a filtered list.
 </Warning>

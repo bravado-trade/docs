@@ -1,0 +1,165 @@
+---
+title: "Trade API Error Codes: Full Catalogue and Error Headers"
+sidebarTitle: "Error codes"
+description: "Every error code the Bravado Trade API (/v1/trade and /v2/trade) returns, its HTTP status, what to do about it, and the response headers that carry the code when the body does not reach you."
+icon:
+  name: "octagon-alert"
+  library: "lucide"
+---
+
+This page is the catalogue of error codes for the Trade API (`/v1/trade/*` and `/v2/trade/*`). For HTTP status basics and other Bravado APIs, see the [error reference](/reference/errors).
+
+## Error body
+
+Every error the Trade API answers itself has this JSON body:
+
+```json
+{
+  "error": "Insufficient pUSD balance",
+  "code": "INSUFFICIENT_BALANCE",
+  "request_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+| Field | Always present | Meaning |
+| --- | --- | --- |
+| `error` | Yes | Human-readable message. Wording can change; do not parse it |
+| `code` | Yes | Machine-readable code from the tables below. Stable: branch on this |
+| `request_id` | Yes | Our id for this request. Quote it in support tickets |
+| `order_id` | No | The order a failure is about, when there is one (for example `FILL_INDETERMINATE`) |
+| `retry_after_ms` | No | How long to wait before repeating, in milliseconds |
+| `reason` | No | A lower-case token that narrows the code when one code has several next steps |
+
+## Read the headers first
+
+<Warning>
+  **On a `5xx`, the JSON body may never reach you.** Our hosting edge can replace the body of any `5xx` response with its own HTML error page. Headers survive. A client that insists on parsing JSON throws exactly on the responses that matter most, such as `FILL_INDETERMINATE` and `UPSTREAM_TIMEOUT`.
+</Warning>
+
+Every error answered by a Trade API route carries these response headers:
+
+| Header | When | Meaning |
+| --- | --- | --- |
+| `X-Bravado-Error-Code` | Every error response | The same value as `code` in the body |
+| `X-Request-Id` | Every response to a Trade API request | The same value as `request_id`. It is ours: an `X-Request-Id` you send is ignored |
+| `X-Bravado-Order-Id` | When the failure is about an order | The same value as `order_id`. Look up this order before doing anything else |
+| `X-Bravado-Retry: no` | `FILL_INDETERMINATE` | An order already exists at the venue. Retrying places a second one |
+| `Retry-After` | When the error carries `retry_after_ms`, and on `RATE_LIMITED` / `OVERLOADED` | Seconds to wait before repeating |
+
+Recommended order when handling an error:
+
+1. Read the code from `X-Bravado-Error-Code`.
+2. If it is absent, fall back to the HTTP status. The header is missing only when the request never reached a Trade API route: a URL outside `/v1/trade` or `/v2/trade` (check the path first), a refused CORS preflight, a request refused below the HTTP layer, or a reply from the platform edge itself.
+3. Parse the JSON body only if it is JSON, and treat it as extra detail.
+
+**A code is not permission to retry.** It tells you which failure you hit, not whether money moved. In particular, `UPSTREAM_TIMEOUT` outside the single-order paths does not prove nothing was submitted. Check `GET /v2/trade/orders/open` for the venue you ordered on before you retry, and retry with a new `Idempotency-Key`. See [Safe retries](/guides/safe-retries-idempotency).
+
+## Request, authentication and access
+
+| Code | HTTP | Meaning | What to do |
+| --- | --- | --- | --- |
+| `MISSING_AUTH_HEADERS` | 400 | One of the three HMAC headers is missing | Client bug. Check header names and casing |
+| `MISSING_IDEMPOTENCY_KEY` | 400 | A write route was called without `Idempotency-Key` | Send one on every mutating request |
+| `INVALID_BODY` | 400 | The request failed validation. A body over 256 KiB arrives with this code and status `413` | Read the message and fix the field. Retrying the same request returns the same error |
+| `INVALID_SIZE` | 400 | `size` is not a positive decimal, or is below the venue minimum | Fix the value |
+| `INVALID_PRICE` | 400 | `price` is not a decimal probability in the allowed range | Send a decimal such as `0.62`, not cents |
+| `UNSUPPORTED_FEATURE` | 400 | Unknown or unsupported `type`, or `expiration` on a type other than `LIMIT` / `ICEBERG` | Fix the request |
+| `PASSIVE_REQUIRES_CEILING` | 400 | A passive `PEGGED` or `TWAP` needs a price ceiling here | Send `price_ceiling` |
+| `VENUE_CAPABILITY_UNSUPPORTED` | 400 | Unknown venue, or something the venue does not offer (for example stop-loss or combos on predict.fun) | See [Venues](/api/trade/venues). Not retryable |
+| `PROFILE_NAME_RESERVED` | 400 | The `display_name` is reserved | Choose another name |
+| `MISSING_PARTNER_USER_ID` | 400 | A user-scoped route was called without `X-Partner-User-Id` | Send the header |
+| `UNKNOWN_PARTNER_USER_ID` | 400 | The `X-Partner-User-Id` has no user under your account | Provision it with `POST /v2/trade/users` first |
+| `STALE_TIMESTAMP` | 401 | The signature timestamp is more than 5 minutes from our clock | Sync your clock (NTP) |
+| `INVALID_KEY` | 401 | The API key was not found | Check the key and environment |
+| `KEY_DISABLED` | 401 | The key was revoked or expired | Use or request another key |
+| `INVALID_SIGNATURE` | 401 | The HMAC signature does not match | See [authentication](/authentication) |
+| `IP_NOT_ALLOWED` | 401 | The source IP is outside your key's allowlist | Tell us your new egress IP |
+| `INSUFFICIENT_SCOPE` | 403 | The route needs a scope your key does not have | Use a key with that scope |
+| `PARTNER_SUSPENDED` | 403 | Your partner account is suspended | Contact Bravado |
+| `BINDING_DISABLED` | 403 | The user binding is disabled | Contact Bravado |
+| `VENUE_NOT_ENABLED` | 403 | Your account is not entitled to that venue | Ask Bravado to enable it. Not retryable |
+| `BINDING_NOT_FOUND` | 404 | A profile read or write named a user with no binding under your account | Provision the user first |
+| `NOT_FOUND` | 404 | Unknown or foreign resource, for example a strategy `record_id` that is not yours | Check the id |
+
+## Conflicts and state
+
+| Code | HTTP | Meaning | What to do |
+| --- | --- | --- | --- |
+| `IDEMPOTENCY_MISMATCH` | 409 | The key was reused with a different body, method or path | Use a new key |
+| `IDEMPOTENCY_IN_FLIGHT` | 409 | The first request with this key has not finished | Wait, then repeat |
+| `PARTNER_USER_IDENTITY_CONFLICT` | 409 | This `partner_user_id` is already bound to a different user or email | Not retryable as-is. Use the original email or a new id |
+| `NOTIONAL_CAP_EXCEEDED` | 409 | The order's USD value is over your notional cap | Smaller order, or ask for a cap change |
+| `ACTIVE_LIMIT_EXCEEDED` | 409 | Too many active strategies of one kind for this user: 50 for `STOP_LOSS` and `TRAILING_BUY`, 5 for `PEGGED`, `TWAP` and `ICEBERG`. Also more than 20 bid-ladder rungs | Cancel some, or wait for them to finish |
+| `USER_PROVISIONING_PENDING` | 409 | predict.fun: the wallet is being enabled on the venue. Carries `retry_after_ms` and `Retry-After` | Wait, then repeat the same request |
+| `AUTOMATION_WALLET_MISMATCH` | 409 | Copytrade: the user's wallet setup cannot run a real copy | Not cleared by waiting. Keep the copy paused or simulated |
+| `CONDITION_NOT_RESOLVED` | 409 | Redeem of a Polymarket Protocol V2 position whose market is not resolved on chain yet. Nothing was sent. **Available after the next API release**, once V2 trading is enabled | Repeat after the market resolves, with a new `Idempotency-Key` |
+| `APPROVAL_PENDING` | 409 | Protocol V2 split, merge or redeem: the wallet's one-time approval is still confirming. The operation itself was not sent. Carries `retry_after_ms` and `Retry-After` (about 30 s). **Available after the next API release**, once V2 trading is enabled | Wait, then repeat with a **new** `Idempotency-Key` |
+| `QUOTE_EXPIRED` | 410 | A combo was accepted after its quote expired | Request a new quote |
+
+## Order rejections
+
+| Code | HTTP | Meaning | What to do |
+| --- | --- | --- | --- |
+| `INSUFFICIENT_BALANCE` | 422 | Not enough collateral for a buy, or not enough shares for a sell | Fund the account or reduce the size |
+| `MARKET_REJECTED` | 422 | The venue rejected the order. Read the message (often a price band). On predict.fun, if the message is a timeout, transport error or venue 5xx, the order may exist | On predict.fun check `GET /v2/trade/orders/open?venue=predictfun` before placing again |
+| `MARKET_POST_ONLY` | 422 | The market only accepts resting orders right now | Place a `LIMIT` instead |
+| `NO_LIQUIDITY` | 422 | We could not read a usable price to bound the order, so we refused before signing | Place a `LIMIT`, or retry |
+| `NO_ORDERBOOK` | 422 | The venue has no order book for that token id | Check the token id. Not retryable |
+| `ICEBERG_NOT_PLACEABLE` | 422 | The iceberg's first clip would be rejected (collateral, minimum size, or a buy that crosses the book) | Fix the parameter the message names |
+| `SLIPPAGE_EXCEEDED` | 422 | A market order filled nothing within `slippage_bps` of the touch. Nothing traded | Re-read the book; change size, `slippage_bps`, or use a `LIMIT` |
+| `MARKET_PROTOCOL_UNSUPPORTED` | 422 | The market is a Polymarket Protocol V2 market, which Bravado cannot trade yet. Refused before anything is signed or stored. **Available after the next API release** | Not retryable. Skip the market |
+| `RATE_LIMITED` | 429 | Your key's rate limit is exhausted | Wait `Retry-After` seconds. See [rate limits](/reference/rate-limits) |
+
+## Server and dependency errors
+
+<Note>
+  The body of these responses may be replaced by our hosting edge. Read `X-Bravado-Error-Code` and `X-Request-Id` from the headers.
+</Note>
+
+| Code | HTTP | Meaning | What to do |
+| --- | --- | --- | --- |
+| `INTERNAL_ERROR` | 500 | Server bug | Quote `request_id` to Bravado |
+| `FILL_INDETERMINATE` | 502 | The venue accepted your market order and we could not learn whether it filled. Carries `X-Bravado-Retry: no` | **Do not retry.** Look up the order in `X-Bravado-Order-Id` (it can be absent if the venue never returned an id) and its fills |
+| `IDEMPOTENCY_INDETERMINATE` | 502 | We failed mid-request and cannot tell how far it got | Check `GET /v2/trade/orders/open`. On `/withdraw`, do not retry with any key: reconcile on chain |
+| `UPSTREAM_TIMEOUT` | 502 | The venue or the chain did not answer in time, or answered with a 5xx, 408 or 429 | On `POST /v2/trade/order` and the single-order v1 routes, the order was **not** submitted and a retry is clean. Everywhere else, check open orders first. On `/withdraw`, never retry |
+| `RUNNER_UNHEALTHY` | 502 | The background runner behind a managed order (TWAP, ICEBERG, PEGGED, STOP_LOSS, TRAILING_BUY) is not reporting | Retry later. Nothing was created |
+| `USER_PROVISIONING_FAILED` | 502 | We could not finish setting up the user's wallet or venue account | Repeat the request. If it persists, quote `request_id` |
+| `OVERLOADED` | 503 | This server instance is saturated and shed your request before it ran. Carries `Retry-After` | Wait `Retry-After` seconds and repeat |
+| `VENUE_UNAVAILABLE` | 503 | The venue is switched off on our side. On predict.fun orders with `retry_after_ms`, we could not read the chain to check readiness | Not cleared by waiting, except the predict.fun readiness case |
+| `ORDER_TYPE_UNAVAILABLE` | 503 | That order type is switched off on our side | Not cleared by waiting. Ask Bravado |
+| `PRICE_SOURCE_UNAVAILABLE` | 503 | We could not obtain a price right now | Retry shortly. Nothing was placed |
+| `PARTNER_API_DISABLED` | 503 | The OpenAPI spec could not be built on that instance | Ours to fix. Quote `request_id` |
+
+## Polymarket Perps
+
+These codes are returned by `/v2/trade/perps/*`, which is available only where perps are enabled for your account.
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `GEO_BLOCKED` | 403 | The attested jurisdiction is not allowed by the venue |
+| `INSTRUMENT_NOT_ALLOWED` | 403 | The instrument is outside your allowlist |
+| `REDUCE_ONLY_MODE` | 403 | Only closing orders are accepted for your account |
+| `OPERATION_DISABLED` | 403 | Your perps policy does not allow this operation (deposits or withdrawals) |
+| `LEVERAGE_CAP_EXCEEDED` | 409 | The leverage is above your cap |
+| `ACCOUNT_IN_LIQUIDATION` | 409 | The account is in liquidation; opens are refused |
+| `POSITION_OR_ORDERS_EXIST` | 409 | The margin mode cannot change while a position or orders exist |
+| `ORDER_TERMINAL` | 409 | The order is already filled or cancelled |
+| `ORDER_IN_FLIGHT` | 409 | The order is changing at the venue. Carries `Retry-After` |
+| `MODIFY_REJECTED` | 409 | The venue refused the modify; `reason` says why |
+| `INSUFFICIENT_MARGIN` | 422 | The venue refused for margin |
+| `INVALID_LEVERAGE` | 422 | The venue refused the leverage for the position's risk tier |
+| `MODIFY_WOULD_CROSS` | 422 | The modified price would cross the book |
+| `REDUCE_ONLY_VIOLATION` | 422 | A reduce-only order would increase or flip the position |
+| `PERPS_HALTED` | 503 | Bravado has halted perps: opens and leverage increases are refused |
+| `VENUE_CANCEL_ONLY` | 503 | The venue is in cancel-only mode. Carries `Retry-After` |
+| `LOCAL_RATE_BUDGET_EXCEEDED` | 503 | Our shared venue budget refused before sending. Carries `Retry-After` |
+| `CLOCK_SKEW_REFUSED` | 503 | Our clock disagrees with the venue's, so nothing was signed. Carries `Retry-After` |
+| `PERPS_CAPABILITY_UNAVAILABLE` | 503 | This feature is not available yet; `reason` names it. Carries `Retry-After` |
+| `VENUE_RATE_LIMITED` | 503 or 429 | The venue throttled the request (503 per IP, 429 per account). Carries `Retry-After` |
+
+## Related
+
+- [Error reference](/reference/errors)
+- [Safe retries and idempotency](/guides/safe-retries-idempotency)
+- [Order and strategy states](/api/trade/order-states)
+- [Venues](/api/trade/venues)

@@ -173,7 +173,7 @@ Redeems a resolved Conditional Token Framework (CTF) position and delivers the p
 </ParamField>
 
 <ParamField body="amount" type="string">
-  Number of shares to redeem as a decimal string. Omit to redeem your entire position.
+  Number of shares to redeem as a decimal string. Omit to redeem your entire position. **Required** when `neg_risk_market` is `true`.
 </ParamField>
 
 ### Response
@@ -183,7 +183,7 @@ Redeems a resolved Conditional Token Framework (CTF) position and delivers the p
 </ResponseField>
 
 <ResponseField name="state" type="string">
-  `STATE_CONFIRMED` once the transaction is included in a block.
+  `STATE_CONFIRMED` once the transaction is mined. `STATE_PENDING` when the transaction was sent but the receipt was not read within the request; reconcile with `transaction_hash`. `STATE_NOTHING_TO_REDEEM` when there was nothing to redeem (for example, already redeemed): nothing was sent and `transaction_hash` is empty. See [Order and strategy states](/api/trade/order-states#on-chain-operations).
 </ResponseField>
 
 <ResponseField name="condition_id" type="string">
@@ -199,7 +199,7 @@ Redeems a resolved Conditional Token Framework (CTF) position and delivers the p
 </ResponseField>
 
 <ResponseField name="payout_base_units" type="string">
-  pUSD payout in 6-decimal base units as a string (e.g. `"500000000"` = 500 pUSD). Returns `"0"` for a losing position.
+  Payout in 6-decimal base units as a string (e.g. `"500000000"` = 500 pUSD), in the venue's collateral. `"0"` means a losing or already-redeemed position **only** when `state` is `STATE_CONFIRMED`. On `STATE_PENDING` it is `"0"` because the receipt was not read yet.
 </ResponseField>
 
 ### Example
@@ -233,6 +233,36 @@ Redeems a resolved Conditional Token Framework (CTF) position and delivers the p
 <Tip>
   Convert `payout_base_units` to a human-readable dollar amount by dividing by `1_000_000` (6 decimals). A value of `"500000000"` equals **500 pUSD**.
 </Tip>
+
+### Redeem errors on Polymarket Protocol V2 markets
+
+<Note>
+  **Available after the next API release**, and only once V2 trading is enabled. While V2 trading is not enabled, a redeem on a Protocol V2 market is refused with `422 MARKET_PROTOCOL_UNSUPPORTED` (also from the next API release).
+</Note>
+
+Once V2 trading is enabled, redeeming a position in a Polymarket Protocol V2 market can also return:
+
+| Code | HTTP | Meaning | What to do |
+| --- | --- | --- | --- |
+| `CONDITION_NOT_RESOLVED` | 409 | The market is not resolved on chain yet. Nothing was sent | Repeat after the market resolves, with a new `Idempotency-Key`. Not a retry loop |
+| `APPROVAL_PENDING` | 409 | The wallet's one-time approval for Polymarket's V2 router is still confirming. The redeem was not sent. Carries `retry_after_ms` and `Retry-After` (about 30 seconds) | Wait, then repeat with a **new** `Idempotency-Key` |
+| `INVALID_BODY` | 400 | The `condition_id` is not a valid V2 condition id | Fix the id |
+
+See [Error codes](/reference/error-codes) for the full catalogue.
+
+### Automatic redemption
+
+Redemption is manual by default: call this endpoint once `redeemable` is `true`.
+
+Bravado can also redeem winning positions automatically. This is a **per-partner setting** that Bravado enables on request:
+
+- When it is on for your account, every user you provision **after** it was enabled is created with automatic redemption on. A background job then redeems their resolved winning positions to collateral on its own, on a periodic cycle. Redeemed funds appear in the user's collateral balance.
+- **Users provisioned before the setting was enabled are not updated.** Ask Bravado to apply it to your existing users when you turn it on.
+- **Combo positions are not redeemed automatically.** Redeem them with `POST /v2/trade/combo/redeem`.
+- Positions in Polymarket Protocol V2 markets are not redeemed automatically until V2 support is enabled.
+- The manual endpoint keeps working for auto-redeemed users. Calling it on a position that was already redeemed is a safe no-op that pays `"0"`.
+
+There is no field in the API today that tells you whether a given user has automatic redemption on. Ask your Bravado contact.
 
 ---
 
