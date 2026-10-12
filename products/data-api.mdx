@@ -74,7 +74,7 @@ For similar-wallet discovery, clusters, per-market intelligence or additional st
 
 <CardGroup cols={2}>
   <Card title="Realized PnL">
-    Cashflow-based net profit after fees, computed over the full position lifecycle including trades, splits, merges, redemptions, and market resolutions. Splits and merges are correctly excluded from volume inflation.
+    FIFO-realized net profit over the full position lifecycle including trades, splits, merges and market resolutions. Fees are already inside proceeds and cost basis (the figure is never reduced by fees a second time). A gain is realized when the market resolves or the position is sold; a later redemption only collects the cash. Splits and merges are correctly excluded from volume inflation.
   </Card>
 
   <Card title="Unrealized PnL">
@@ -198,7 +198,7 @@ The response includes:
 
 | Field | Description |
 | --- | --- |
-| `realized_pnl` | Net closed-position profit after fees |
+| `realized_pnl` | Net closed-position profit; fees are inside the figure (basis `net`), not subtracted again |
 | `unrealized_pnl` | Mark-to-market open position value minus cost |
 | `volume` | USDC notional traded in the window |
 | `trade_count` | Number of individual fills |
@@ -227,11 +227,11 @@ Additional per-wallet endpoints:
 Bravado generates formal accounting documents for tax reporting and financial reconciliation. Each statement type covers a specific aspect of wallet activity.
 
 <Accordion title="Dispositions (Form 8949-style)">
-  Lists every closed position as a disposition row with acquisition date, disposal date, proceeds, cost basis, gain/loss, and holding-period term (`SHORT` for positions held ≤ 365 days, `LONG` for positions held \> 365 days). Formatted to mirror IRS Form 8949 for US taxpayers.
+  Lists every disposition as a row with disposal date, proceeds, cost basis and gain/loss, formatted to mirror IRS Form 8949 for US taxpayers. For wallets in the PMWAS batch each row also carries the acquisition date and the holding-period term (`SHORT` for positions held ≤ 365 days, `LONG` for positions held \> 365 days). For every other wallet the trading engine records no acquisition date per lot, so `date_acquired` and `term` are `UNKNOWN` (never guessed) and the response says so under `disclosure`; a combo row whose acquisition date is not recorded is `UNKNOWN` too. A redemption of a position that already resolved is a cash event, not a disposition: it is reported per year as `redemption_cash`. The row count is `total_rows` (`X-Total-Rows` on the CSV); pages never stand for the whole period.
 </Accordion>
 
 <Accordion title="Income">
-  Itemizes non-trade income received by the wallet: liquidity rewards, maker rebates, and referral bonuses. Each line includes the on-chain transaction hash and USDC amount.
+  Itemizes non-trade income received by the wallet: liquidity rewards, maker rebates and other program rewards, with count and fair-market value per kind. For wallets in the PMWAS batch this is attributed to tax years; for every other wallet only the all-time total (`income_all_time`) is available, per-year income is `null` (listed in `not_computed`) and is not included in `net_taxable_uusdc`.
 </Accordion>
 
 <Accordion title="Open positions">

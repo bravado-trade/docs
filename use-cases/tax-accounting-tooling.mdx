@@ -12,7 +12,7 @@ icon:
 
 ## The problem
 
-Prediction-market gains and losses need to be reported to tax authorities in most jurisdictions. On Polymarket, that means reconstructing every disposition (sale, merge, redemption) with cost basis and proceeds, over an entire tax year, and producing a document a preparer can hand to the tax authority. Wallet-level exports from Polymarket's UI do not contain the required fields.
+Prediction-market gains and losses need to be reported to tax authorities in most jurisdictions. On Polymarket, that means reconstructing every disposition (sale, merge, market resolution) with cost basis and proceeds; collecting the cash from a position that already resolved (a redemption) is a cash event, not a second disposition, over an entire tax year, and producing a document a preparer can hand to the tax authority. Wallet-level exports from Polymarket's UI do not contain the required fields.
 
 ## What Bravado provides
 
@@ -20,6 +20,16 @@ Prediction-market gains and losses need to be reported to tax authorities in mos
 - **R1 statements** via `GET /traders/{address}/statements/r1` for standalone access to disposition rows without the parent wrapper.
 - **Reconciliation statements** via `GET /traders/{address}/reconciliation` cross-checking Bravado's computed balance against on-chain state.
 - **PMWAS methodology** documented in [PnL methodology](/products/data-api) so a preparer can verify the numbers.
+
+## What each response states it cannot compute
+
+Every tax-report response names its source in `disclosure`. Wallets in the PMWAS batch carry per-lot acquisition dates, `SHORT`/`LONG` terms and per-year income and flows. For every other wallet (`disclosure.source: "engine-fallback"`):
+
+- `date_acquired` and `term` are `"UNKNOWN"` on every 8949 row, and `short_term` / `long_term` are `null`: no holding period is claimed that cannot be computed.
+- `income_total_uusdc`, `deposits_uusdc` and `withdrawals_uusdc` are `null` and listed in `not_computed`, never `0`. All-time program income is `income_all_time` and is not in `net_taxable_uusdc`.
+- Fees are inside proceeds and cost basis: `fees_uusdc` is a memo and `fees_deducted_from_net_taxable` is `false`.
+- A redemption of an already-resolved position is a cash event reported as `years[].redemption_cash`, not a disposition row.
+- `total_rows` (and `X-Total-Rows` on the CSV) is the number of rows in the whole period; a CSV without `limit` streams all of them.
 
 ## APIs used
 
@@ -68,7 +78,7 @@ to_csv(rows, "client_2025_dispositions.csv")
 print(f"Exported {len(rows)} dispositions")
 ```
 
-Each row has enough detail to file a Form 8949-style report.
+Each row of a PMWAS-batch wallet has enough detail to file a Form 8949-style report; for other wallets use the tax-report 8949 rows, whose acquisition date and term are `UNKNOWN` (see above).
 
 ## Product patterns
 
