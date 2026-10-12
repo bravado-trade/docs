@@ -1,0 +1,137 @@
+---
+title: "Order and Strategy States: Every Status the Trade API Returns"
+sidebarTitle: "Order and strategy states"
+description: "The exact status strings each Bravado Trade API v2 endpoint returns for orders, managed strategies, redeems and transfers, and what each one means."
+icon:
+  name: "list-checks"
+  library: "lucide"
+---
+
+Status fields in the Trade API are plain strings, not a closed enum in the OpenAPI spec. This page lists the values each endpoint actually returns today. Where a value comes straight from the venue, it is marked as such: treat those as open-ended and do not fail on a word you have not seen.
+
+<Note>
+  An empty string `""` in a status or size field is a value, not a missing field. It means the venue did not tell us. Test for `=== ""`, never for truthiness, and never read it as zero.
+</Note>
+
+## `POST /v2/trade/order`
+
+What `status` holds depends on the order `type`.
+
+### `LIMIT` and `TAKE_PROFIT`
+
+`status` is the **venue's own word** for the order at the moment it was accepted, passed through unchanged.
+
+| `status` | Venue | Meaning |
+| --- | --- | --- |
+| `live` | Polymarket | Resting on the book. Nothing crossed on entry |
+| `matched` | Polymarket | Crossed the book on entry, fully or in part. `filled_size` says how much, or is `""` when the venue did not say |
+| `delayed` | Polymarket | Accepted and held by the venue for matching. Fill fields are `""` (unknown) |
+| `unmatched` | Polymarket | Accepted, nothing crossed |
+| `""` | predict.fun | Accepted. The venue's acceptance does not say whether it matched |
+
+Polymarket may return other words; they are passed through as sent.
+
+### `MARKET`
+
+A market order never rests. `status` says how much of the request filled.
+
+| `status` | Venue | Meaning |
+| --- | --- | --- |
+| `matched` | Both | Filled in full (within one lot of the request) |
+| `partially_filled` | Both | Filled, but at least 0.01 shares (sell) or \$0.01 (buy) short of the request. The rest was cancelled. **This is a success**: shares moved |
+| `pending` | predict.fun | The venue had not reported the fill when we answered. Fill fields are `""`. Do not place the order again; reconcile from positions or activity a few seconds later |
+
+A market order with nothing filled is not a `200`: it is `422 SLIPPAGE_EXCEEDED` on Polymarket. Any other venue word is passed through unchanged.
+
+### Managed strategies
+
+These types return a `record_id` instead of an `order_id`:
+
+| `type` | `status` in the create response |
+| --- | --- |
+| `TWAP`, `ICEBERG`, `PEGGED` | `ACTIVE` |
+| `STOP_LOSS`, `TRAILING_STOP`, `TRAILING_BUY` | `PENDING` |
+
+`PENDING` means armed and waiting for its trigger. The same record shows `ACTIVE` in `GET /v2/trade/strategies` (see below).
+
+### Brackets
+
+When you attach `take_profit` and `stop_loss` to a `LIMIT` or `MARKET` buy, the response carries a `brackets` object:
+
+```json
+{
+  "brackets": {
+    "take_profit": { "order_id": "0x…", "status": "live" },
+    "stop_loss":   { "id": "3f6c…", "status": "PENDING" }
+  }
+}
+```
+
+- `take_profit` is a resting limit sell: `order_id` plus the venue word, as for `LIMIT`.
+- `stop_loss` is a strategy record: `id` (its `record_id`) plus `PENDING`.
+- A leg that could not be placed has only `error`, and a matching line in `warnings`. The entry is not rolled back.
+
+## `POST /v2/trade/order/batch`
+
+Each rung is a `LIMIT`, so each rung's `status` follows the `LIMIT` table above.
+
+## `GET /v2/trade/orders/open`
+
+`status` on each open order is the **venue's own word**, passed through. Bravado does not normalise it. On predict.fun it is lower-cased.
+
+`order_type` is also the venue's (for example the time in force), not a Bravado order type. To know what placed an order, read the flags `is_take_profit`, `is_pegged`, `is_twap`, `is_iceberg` and `parent_strategy_id`.
+
+A stop-loss never appears here: its sell is fill-or-kill and never rests. See [Stop-loss and take-profit rules](/api/trade/stop-loss-rules).
+
+## `GET /v2/trade/strategies`
+
+Every strategy row has one of five statuses:
+
+| `status` | Meaning |
+| --- | --- |
+| `ACTIVE` | Running, or armed and waiting for its trigger |
+| `PAUSED` | `PEGGED` only. Temporarily not quoting; `last_error` says why |
+| `COMPLETED` | Finished. See the per-type notes below: it does not always mean fully filled |
+| `CANCELED` | Cancelled. Note the spelling: one `L` |
+| `ERROR` | Stopped by a failure; `last_error` holds the reason |
+
+The `status` query filter accepts exactly these five values, upper-case.
+
+What each status covers, per type:
+
+| Type | `COMPLETED` means | Notes |
+| --- | --- | --- |
+| `TWAP` | The run ended | A TWAP that reached its end time with a partial fill is also `COMPLETED`. Compare `filled_size` with `total_size`. If it ends with nothing filled, or the runner hits an error, it is `ERROR` |
+| `ICEBERG` | The size was worked to the end | An iceberg that reaches `expires_at` becomes `CANCELED`, the same as a cancel by you |
+| `PEGGED` | The budget was spent | An expired pegged order becomes `CANCELED`. `total_size` and `filled_size` are in **USD**, not shares |
+| `STOP_LOSS`, `TRAILING_STOP` | Sold, **or** the market resolved before the trigger and nothing was sold | A stop that sold has `executed_price` set. `ERROR` can be followed by a retry; see [When a stop fails](/api/trade/stop-loss-rules#when-a-stop-fails) |
+| `TRAILING_BUY` | Bought, or the market resolved first | `total_size` is the USD budget |
+
+For stops and trailing buys, the engine's internal states map onto these five: `PENDING`, `TRIGGERED` and `SUBMITTED` show as `ACTIVE`; `EXECUTED` and `CLOSED` as `COMPLETED`; `FAILED` as `ERROR`.
+
+## `DELETE /v2/trade/strategies/{record_id}`
+
+Returns `{ "id", "type", "status" }`:
+
+- `CANCELED` when the strategy was cancelled.
+- The current status (`COMPLETED`, `CANCELED` or `ERROR`) when it had already ended. Nothing is cancelled in that case.
+
+## On-chain operations
+
+`state` on redeem, split, merge and withdraw responses:
+
+| `state` | Meaning |
+| --- | --- |
+| `STATE_CONFIRMED` | The transaction was mined. On redeem, `payout_base_units` is the real payout (`"0"` for a losing or already-redeemed position) |
+| `STATE_PENDING` | The transaction was sent, but the request ran out of time before the receipt was read. Reconcile with `transaction_hash`. On redeem, `payout_base_units` is `"0"` because the receipt was never read, not because the position lost |
+| `STATE_NOTHING_TO_REDEEM` | Redeem only, Polymarket: there was nothing to redeem (for example, already redeemed). Nothing was sent; `transaction_hash` is empty and the payout is `"0"` |
+
+## Combos
+
+See [Combos: quote, accept, redeem](/api/combos/quote-accept-redeem) for combo order and position states.
+
+## Related
+
+- [Stop-loss and take-profit rules](/api/trade/stop-loss-rules)
+- [Track order and strategy state](/guides/track-order-and-strategy-state)
+- [Error codes](/reference/error-codes)

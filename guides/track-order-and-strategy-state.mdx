@@ -18,6 +18,8 @@ Orders live in **two** systems. Some rest on Polymarket's central limit order bo
 
 Once that model is clear, a whole class of bugs stops happening: orders that look missing, cancel-all buttons that do not cancel everything, and strategies churned into oblivion because `PENDING` was read as failure.
 
+For the exact status strings each endpoint returns, see [Order and strategy states](/api/trade/order-states).
+
 <Note>
   Read time: about 12 minutes. Useful before you build any UI or bot that displays order state.
 </Note>
@@ -25,11 +27,11 @@ Once that model is clear, a whole class of bugs stops happening: orders that loo
 ## TL;DR
 
 - `LIMIT`, `MARKET`, `TAKE_PROFIT` return an **`order_id`** and live on `GET /v2/trade/orders/open`.
-- `TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP`, and pre-trigger `STOP_LOSS` return a **`record_id`** and live on `GET /v2/trade/strategies`.
+- `TWAP`, `ICEBERG`, `PEGGED`, `STOP_LOSS`, `TRAILING_STOP` and `TRAILING_BUY` return a **`record_id`** and live on `GET /v2/trade/strategies`.
 - **Iceberg appears in both at once**: parent strategy plus the currently resting slice.
-- **Stop-loss migrates** from strategies to open orders when it triggers.
-- `PENDING` is accepted-and-waiting, **not** rejected.
-- `cancel-all` clears CLOB orders only. Strategies keep running.
+- **A stop-loss never appears on open orders.** It stays on strategies before and after it fires, because its sell is all-or-nothing and never rests.
+- `PENDING` (in a create response) is accepted-and-waiting, **not** rejected. The list shows the same record as `ACTIVE`.
+- `cancel-all` cancels open orders, and any strategy whose clip was resting at that moment. Strategies with nothing on the book keep running.
 
 ## What you will do
 
@@ -69,7 +71,7 @@ That distinction explains everything else:
 | | CLOB order | Managed strategy |
 | --- | --- | --- |
 | What it is | A resting instruction on the venue | A process on Bravado |
-| Types | `LIMIT`, `MARKET`, `TAKE_PROFIT` | `TWAP`, `ICEBERG`, `PEGGED`, `TRAILING_STOP`, pre-trigger `STOP_LOSS` |
+| Types | `LIMIT`, `MARKET`, `TAKE_PROFIT` | `TWAP`, `ICEBERG`, `PEGGED`, `STOP_LOSS`, `TRAILING_STOP`, `TRAILING_BUY` |
 | Identifier | `order_id` | `record_id` |
 | Listed on | `/v2/trade/orders/open` | `/v2/trade/strategies` |
 | Cancel with | `DELETE /v2/trade/orders/{order_id}` | `DELETE /v2/trade/strategies/{id}` |
@@ -91,7 +93,7 @@ def working():
 
     return (
         [{"kind": "order",    "id": o["order_id"],  **o} for o in orders] +
-        [{"kind": "strategy", "id": s["record_id"], **s} for s in strategies]
+        [{"kind": "strategy", **s} for s in strategies]   # a strategy row's `id` is its record_id
     )
 ```
 
@@ -102,11 +104,11 @@ Render them as one list if that suits your UI. Just fetch from both, and keep `k
 | Placed as | Returns | Appears on |
 | --- | --- | --- |
 | `LIMIT` | `order_id` | Open orders |
-| `MARKET` | `order_id` | Open orders, briefly |
+| `MARKET` | `order_id` | Never. It fills or is cancelled at once; check activity |
 | `TAKE_PROFIT` | `order_id` | Open orders, `is_take_profit: true` |
-| `STOP_LOSS` before trigger | `record_id` | Strategies **only** |
-| `STOP_LOSS` after trigger | `record_id` | Open orders, `is_stop_loss: true` |
+| `STOP_LOSS` | `record_id` | Strategies **only**, before and after it triggers |
 | `TRAILING_STOP` | `record_id` | Strategies |
+| `TRAILING_BUY` | `record_id` | Strategies |
 | `TWAP` | `record_id` | Strategies |
 | `PEGGED` | `record_id` | Strategies |
 | `ICEBERG` parent | `record_id` | Strategies |
@@ -118,26 +120,29 @@ The parent is a strategy holding 5,000 shares of intent. The slice currently on 
 
 If your UI lists them side by side without indicating the relationship, users will believe they have two orders and try to cancel both. Group the slice under its parent, or hide slices whose parent you are already showing.
 
-### Stop-loss moves between lists
+### Stop-loss stays on strategies
 
 Pre-trigger, a stop-loss cannot rest on the book: a sell below the current market would fill instantly, which is the opposite of a stop. So Bravado holds it as a strategy and watches.
 
-When the trigger price hits, Bravado places a real CLOB order. At that moment the item stops being purely a strategy and starts appearing in open orders with `is_stop_loss: true`.
+When the trigger price hits, Bravado sends one fill-or-kill market sell for the stop's full size. It fills completely or not at all, so it never rests and never shows up in open orders. The stop's row on strategies moves to `COMPLETED` (with `executed_price` set) once it has sold.
 
-A client watching only strategies will think it vanished. One watching only orders will not see it until it fires.
+`COMPLETED` with `executed_price: null` means the market resolved before the trigger and nothing was sold. See [Stop-loss and take-profit rules](/api/trade/stop-loss-rules).
 
 ## PENDING is not a failure
 
 <Warning>
-  A strategy in `PENDING` has been **accepted** and is waiting for its entry conditions. Rendering it as an error, or cancelling and re-placing on `PENDING`, churns fees and guarantees the strategy never does the job it was created for.
+  A stop-loss, trailing stop or trailing buy answers `PENDING` when you create it: it has been **accepted** and is waiting for its trigger. Rendering it as an error, or cancelling and re-placing on `PENDING`, churns fees and guarantees the strategy never does the job it was created for.
 </Warning>
+
+`GET /v2/trade/strategies` uses five statuses for every type: `ACTIVE`, `PAUSED`, `COMPLETED`, `CANCELED` (one `L`) and `ERROR`. An armed stop shows `ACTIVE` there.
 
 ```typescript
 const label = {
-  PENDING:   "Waiting for conditions",
   ACTIVE:    "Working",
+  PAUSED:    "Paused",
   COMPLETED: "Finished",
-  CANCELLED: "Cancelled",
+  CANCELED:  "Cancelled",
+  ERROR:     "Stopped by an error",
 }[strategy.status] ?? strategy.status;
 ```
 
@@ -164,7 +169,7 @@ curl -X DELETE $BASE/v2/trade/strategies/{record_id} \
 ### Cancel-all does not cancel everything
 
 <Warning>
-  `POST /v2/trade/orders/cancel-all` clears **CLOB orders only**. Running strategies continue afterwards. A flatten-everything button wired to that endpoint alone leaves a TWAP quietly executing, and the user believes they are flat.
+  `POST /v2/trade/orders/cancel-all` cancels open orders, and also cancels a TWAP, iceberg or pegged strategy whose clip was resting at that moment. Strategies with nothing on the book at that instant (stops, trailing orders, a TWAP between clips) keep running. A flatten-everything button wired to that endpoint alone can leave a strategy quietly executing while the user believes they are flat.
 </Warning>
 
 ```python
@@ -172,14 +177,14 @@ def cancel_everything():
     write("POST", "/v2/trade/orders/cancel-all")
 
     for s in read("/v2/trade/strategies")["strategies"]:
-        if s["status"] in ("ACTIVE", "PENDING"):
-            write("DELETE", f"/v2/trade/strategies/{s['record_id']}")
+        if s["status"] in ("ACTIVE", "PAUSED"):
+            write("DELETE", f"/v2/trade/strategies/{s['id']}")
 ```
 
 Two further points:
 
 - **Cancelling a strategy stops future execution, not past.** Whatever already filled is a position you hold. Read `filled_size` before deciding what happens next.
-- **A stop-loss can only be cancelled pre-trigger.** Once it fires, the strategy completes and you are cancelling the resulting *order* instead, via `DELETE /v2/trade/orders/{order_id}`.
+- **A stop-loss can only be cancelled before it triggers.** Once it fires it is being executed, and there is no resting order to cancel.
 
 ## Read warnings, not just status codes
 
@@ -187,12 +192,12 @@ Order responses carry `warnings[]` even on success:
 
 ```json
 {
-  "order_id": "abc123",
-  "status": "filled",
-  "warnings": ["take_profit leg could not be placed: insufficient liquidity"],
+  "order_id": "0xabc…",
+  "status": "matched",
+  "warnings": ["take_profit not placed: insufficient liquidity"],
   "brackets": {
     "take_profit": { "error": "insufficient liquidity" },
-    "stop_loss":   { "order_id": "def456" }
+    "stop_loss":   { "id": "3f6c…", "status": "PENDING" }
   }
 }
 ```
@@ -225,16 +230,16 @@ If you take one habit away, make it **fetching both endpoints**. Almost every "o
     The parent strategy and the currently resting slice are both real. One is your full intent, the other is the 100 shares visible to the market right now.
   </Accordion>
 
-  <Accordion title="My stop-loss vanished from strategies.">
-    It triggered. Look for it on `/v2/trade/orders/open` with `is_stop_loss: true`. To cancel it now, cancel the order rather than the strategy.
+  <Accordion title="My stop-loss is not on open orders.">
+    It never is. A stop-loss lives on `/v2/trade/strategies` for its whole life. When it fires it sells in one all-or-nothing market order that never rests, and its row moves to `COMPLETED`.
   </Accordion>
 
   <Accordion title="Should I show PENDING as an error?">
-    No. It means accepted and waiting for entry conditions. Treating it as failure and re-placing is how people accidentally run three copies of the same strategy.
+    No. It means accepted and waiting for its trigger. Treating it as failure and re-placing is how people accidentally run three copies of the same strategy.
   </Accordion>
 
   <Accordion title="I cancelled everything but a strategy kept filling.">
-    `cancel-all` covers CLOB orders only. Iterate `/v2/trade/strategies` and cancel each `ACTIVE` or `PENDING` record individually.
+    `cancel-all` only reaches strategies whose clip was resting at that moment. Iterate `/v2/trade/strategies` and cancel each `ACTIVE` or `PAUSED` record individually by its `id`.
   </Accordion>
 
   <Accordion title="Do cancels need an idempotency key?">
@@ -248,5 +253,6 @@ If you take one habit away, make it **fetching both endpoints**. Almost every "o
 - [Execute a large position](/guides/large-position-twap-iceberg), TWAP and Iceberg lifecycle
 - [Stop-loss and take-profit](/guides/stop-loss-take-profit), why exits differ
 - [Build a trading terminal](/guides/build-a-trading-terminal), rendering both lists
+- [Order and strategy states](/api/trade/order-states), every status value
 - [Strategy endpoints](/api/trade/strategies), reference
 - [Order endpoints](/api/trade/orders), reference

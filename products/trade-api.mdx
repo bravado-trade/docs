@@ -304,7 +304,7 @@ Call `GET /v2/trade/balances` to retrieve your current balance of both tokens al
 
 ## Redeeming resolved positions
 
-When a Polymarket market resolves, the winning outcome token is redeemable for $1 per share. Redemption is **not automatic**. You must call the redeem endpoint to receive your payout.
+When a Polymarket market resolves, the winning outcome token is redeemable for $1 per share. By default, redemption is manual: call the redeem endpoint to receive your payout.
 
 ```bash
 POST /v2/trade/positions/redeem
@@ -312,11 +312,15 @@ POST /v2/trade/positions/redeem
 
 ```json
 {
-  "token_id": "71321045679252212594626385532706912750332728571942532289631379312455583992646"
+  "condition_id": "0x…",
+  "outcome_index": 0,
+  "neg_risk_market": false
 }
 ```
 
-The endpoint is synchronous and returns `payout_base_units`, the raw on-chain payout amount. Check `position.redeemable === true` before calling to avoid a no-op transaction.
+The endpoint is synchronous and returns `payout_base_units`, the raw on-chain payout amount, with a `state`. Check `position.redeemable === true` before calling.
+
+Automatic redemption is available as a per-partner setting that Bravado enables on request. It applies to users provisioned after it is enabled, and it does not cover combo positions. See [Automatic redemption](/api/trade/positions#automatic-redemption).
 
 <Note>
   Losing positions pay out **$0 per share**. This is the expected behavior of prediction markets, not a bug. Your `realized_pnl` on a losing position will be negative and equal to your total cost basis.

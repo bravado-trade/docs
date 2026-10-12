@@ -115,7 +115,10 @@
                   "api/trade/positions",
                   "api/trade/strategies",
                   "api/trade/account",
-                  "api/trade/withdraw"
+                  "api/trade/withdraw",
+                  "api/trade/order-states",
+                  "api/trade/stop-loss-rules",
+                  "api/trade/venues"
                 ]
               },
               {
@@ -199,7 +202,9 @@
           {
             "group": "Trade API",
             "pages": [
-              "api/trade/overview"
+              "api/trade/overview",
+              "api/trade/venues",
+              "reference/error-codes"
             ],
             "openapi": "api-reference/openapi/v2-trade.json"
           },
@@ -296,7 +301,10 @@
                   "api/trade/positions",
                   "api/trade/strategies",
                   "api/trade/account",
-                  "api/trade/withdraw"
+                  "api/trade/withdraw",
+                  "api/trade/order-states",
+                  "api/trade/stop-loss-rules",
+                  "api/trade/venues"
                 ]
               },
               {
@@ -416,6 +424,7 @@
             "group": "Resources",
             "pages": [
               "reference/errors",
+              "reference/error-codes",
               "reference/rate-limits",
               "reference/pagination",
               "reference/numeric-conventions",

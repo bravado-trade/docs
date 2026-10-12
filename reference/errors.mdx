@@ -10,17 +10,29 @@ icon:
 <Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
 
 
-Bravado uses standard HTTP status codes to indicate the success or failure of every request. When a request fails, the response body always contains a JSON object with a single `error` field describing what went wrong. Successful responses never include an `error` key, but may include a `warnings` array. Always check for warnings on mutation requests.
+Bravado uses standard HTTP status codes to indicate the success or failure of every request. When a request fails, the response body is a JSON object with an `error` field describing what went wrong. Successful responses never include an `error` key, but may include a `warnings` array. Always check for warnings on mutation requests.
 
 ## Error response format
 
-Every non-2xx response from the Bravado API follows this shape:
+The **Trade API** (`/v1/trade/*`, `/v2/trade/*`) answers every error with a machine-readable `code` and a `request_id` next to the message, and repeats the code in the `X-Bravado-Error-Code` response header:
+
+```json
+{
+  "error": "Insufficient pUSD balance",
+  "code": "INSUFFICIENT_BALANCE",
+  "request_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+Branch on `code`, not on the `error` text, whose wording can change. On a `5xx` our hosting edge can replace the body with an HTML page, so read the code from the `X-Bravado-Error-Code` header and quote `X-Request-Id` in tickets. See [Error codes](/reference/error-codes) for every code, the full list of error headers, and what to do about each.
+
+Other Bravado APIs return at least an `error` string:
 
 ```json
 {"error": "invalid window"}
 ```
 
-The `error` value is a human-readable string. Your code should branch on the HTTP status code first, then inspect the `error` string for fine-grained handling.
+There, branch on the HTTP status code first, then inspect the body.
 
 ## HTTP status codes
 
@@ -74,21 +86,22 @@ The table above covers status codes. These are the specific `error` string value
 A `200 OK` response does not always mean everything succeeded completely. Bravado may return partial results with warnings attached.
 
 - **Order placement responses** can include a top-level `warnings` array describing non-fatal issues (e.g. a bracket leg that was skipped due to market conditions).
-- **Bracket orders** surface leg-level failures in `bracket.take_profit.error` and `bracket.stop_loss.error`. A `200` with one of these fields set means the primary order was placed but the bracket leg was not.
+- **Bracket orders** surface leg-level failures in `brackets.take_profit.error` and `brackets.stop_loss.error`. A `200` with one of these fields set means the primary order was placed but the bracket leg was not.
 
 ```json
 {
-  "order_id": "abc123",
-  "warnings": ["take_profit leg could not be placed: insufficient liquidity"],
-  "bracket": {
+  "order_id": "0xabc…",
+  "status": "matched",
+  "warnings": ["take_profit not placed: insufficient liquidity"],
+  "brackets": {
     "take_profit": { "error": "insufficient liquidity" },
-    "stop_loss":   { "order_id": "def456" }
+    "stop_loss":   { "id": "3f6c…", "status": "PENDING" }
   }
 }
 ```
 
 <Note>
-  Always check `warnings[]` and `bracket.*.error` on every order placement response, even when the HTTP status is `200`.
+  Always check `warnings[]` and `brackets.*.error` on every order placement response, even when the HTTP status is `200`.
 </Note>
 
 ## 429 Too Many Requests
