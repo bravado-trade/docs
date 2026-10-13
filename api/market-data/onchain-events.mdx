@@ -51,6 +51,41 @@ cannot be confused with the new schema. A revoked or expired credential loses
 access. The candidate uses a maximum 30-second revocation recheck interval;
 expiry has a deadline timer.
 
+## Capabilities and API reference
+
+Use the same signed request format as the other Bravado market-data endpoints:
+`GET /v1/polymarket/onchain/capabilities`. The response reports your current plan
+access, independent stream/history permissions for all four families, the effective
+bytes tariff, canonical endpoint paths and whether recent replay is enabled.
+An unknown tariff or an unavailable capability is not permission to assume free access.
+
+The Console reads this contract through its server-side organisation scope; API
+secrets are never returned to your browser. Changing keys refreshes permissions
+and stops the previous connection.
+
+The API candidate publishes its market-data OpenAPI contract at
+`/stream/openapi.json` and the interactive reference at `/docs/market-data`.
+Internal ingestion and Console administration routes are excluded. On-chain
+customer routes are omitted when the corresponding release flags are disabled.
+
+## Recent replay
+
+When capabilities report replay available, add `"replay": 100` to the subscription
+message or `replay=100` to the initial connection query. The candidate retains the
+latest **500 transitions across all families**, reconstructed from its local durable
+journal on restart. The requested count is applied to transitions matching your
+subscriptions; overlapping subscriptions do not duplicate a transition.
+
+Replay frames carry `replay: true`. A nonbillable `replay_end` control reports
+`requested`, `delivered`, `retained_transitions`, `earliest_cursor` and
+`barrier_cursor`. The replay/live barrier prevents a new live publication from
+being interleaved with that replay. A queue overflow closes the connection.
+
+This bounded replay does not certify recovery of every missed event. Fewer matching
+transitions than requested may be available. Use the historical endpoint for older
+windows, subject to its separate permission and coverage status. An unsupported
+replay request fails explicitly instead of silently appearing to recover a gap.
+
 ## Streams
 
 | Stream | Filter |
@@ -101,14 +136,20 @@ carries `venue_membership`; `unknown` is not certified Polymarket membership.
 
 The occurrence identity includes the block hash. A reorg produces an explicit
 `reorged` transition with `removed: true`. Re-inclusion has a new occurrence ID.
-A finalization transition confirms the canonical occurrence.
+A finalization transition confirms the canonical occurrence. Free live corrections
+carry identity and state only, with `delivery_kind: "correction"`; they omit the
+economic payload and raw ABI fields. Merge them into a previously received event
+by `event_id`, applying a newer `event_version`. If you did not receive the initial
+event, keep its economic fields unknown and retrieve them through granted history.
+Requested replay supplies the full selected event shape and remains billable,
+including replayed finalization or reorg transitions.
 
 Deduplicate by `(event_id, event_version)`, never by `(tx_hash, status)` for these
 families. Overlapping firehose, wallet and market subscriptions deliver an occurrence once
 per connection. The `stream` label uses the first matching route in deterministic
 order: firehose, condition, wallet, then group/token.
-Recent durable replay and historical queries remain release-gated; do not infer
-that a reconnect currently recovers every missed event.
+Recent replay and historical queries remain release-gated; neither implies complete
+reconnect recovery or certified historical coverage.
 
 ## Compact frame examples
 
@@ -425,8 +466,9 @@ subscription is required. The access response must expose the effective tariff;
 unknown tariff is not free usage.
 
 Requested replay and historical downloads are billable deliveries. Controls,
-heartbeats, finalization/correction frames and internal receipt retries are not
-charged. A generated but undelivered export is not a delivered-data charge.
+heartbeats, **live identity-only** finalization/correction frames and internal receipt
+retries are not charged. Requested replayed transitions are delivered data and are
+charged even when their event status is finalized or reorged. A generated but undelivered export is not a delivered-data charge.
 Family-level attribution and real invoice acceptance remain release gates.
 
 ## Coverage and availability
