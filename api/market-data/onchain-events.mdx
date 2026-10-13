@@ -41,7 +41,9 @@ The candidate does not yet cover every native combo operation. Historical combo
 signatures differ from current signatures; additional combo split, merge and
 conversion events require further decoder
 acceptance. Missing events from these operations must not be interpreted as zero
-activity. Full native lifecycle coverage is not certified.
+activity. Additional native position-migration, compression, extract/inject and
+wrap/unwrap declarations also require an explicit coverage decision and decoder
+acceptance. Full native lifecycle coverage is not certified.
 
 The candidate decoder also supports `MigrationResolved` on the binary and
 NegRisk modules. These frames use `type: "resolution"` and
