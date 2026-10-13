@@ -68,6 +68,7 @@
               "products/market-data",
               "api/market-data/trade-feed",
               "api/market-data/mempool-feed",
+              "api/market-data/onchain-events",
               "api/market-data/order-book",
               "api/market-data/venue-order-books",
               "api/market-data/historical-data"
@@ -191,6 +192,7 @@
               "products/market-data",
               "api/market-data/trade-feed",
               "api/market-data/mempool-feed",
+              "api/market-data/onchain-events",
               "api/market-data/order-book",
               "api/market-data/venue-order-books",
               "api/market-data/historical-data"
@@ -257,6 +259,7 @@
                   "products/market-data",
                   "api/market-data/trade-feed",
                   "api/market-data/mempool-feed",
+              "api/market-data/onchain-events",
                   "api/market-data/order-book",
                   "api/market-data/venue-order-books",
                   "api/market-data/historical-data"

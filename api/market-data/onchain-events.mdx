@@ -1,0 +1,442 @@
+---
+title: "On-chain Events"
+sidebarTitle: "On-chain events"
+description: "Versioned Polymarket position and settlement events with separate family permissions."
+---
+
+<Warning>
+  This page describes the release candidate. Self-service activation, recent replay,
+  historical delivery and coverage certification are not generally available yet.
+  A captured range is not automatically an audited range.
+</Warning>
+
+## Access
+
+On-chain Events uses your organisation's **WebSockets key**, an active Build plan
+or above, and explicit grants for the event families you select. Book and fills
+access does not grant these families. API secrets remain in your backend.
+
+The Console candidate provides **On-chain Events → Activate access → Connect**.
+An owner or administrator enables new organisation families. Developers may
+configure keys within the organisation's enabled families. Billing membership
+does not grant credential access.
+
+| Family | Events |
+| --- | --- |
+| `collateral` | Splits, merges, redemptions and NegRisk conversions |
+| `resolutions` | Condition payout vectors |
+| `conditions` | CTF preparation and supported native preparation events |
+| `token_registrations` | CTF exchange token registration |
+
+Stream and historical grants are independent. Coverage is declared separately
+for CTF and Protocol V2. Native Protocol V2 does not emit a CTF preparation event
+for every condition.
+
+## Candidate connection contract
+
+The API candidate accepts a signed `GET /mempool/token?families=...` request and
+returns a short-lived grant. Use the edge address configured for the same
+environment, at `/ws/onchain`. Reconnecting requires a fresh grant. Never reuse
+production destinations as a staging fallback.
+
+```json
+{
+  "type": "sub",
+  "streams": ["collateral:polymarket:*", "resolutions:polymarket:*"]
+}
+```
+
+The versioned socket is separate from legacy `/ws` so legacy collateral frames
+cannot be confused with the new schema. A revoked or expired credential loses
+access. The candidate uses a maximum 30-second revocation recheck interval;
+expiry has a deadline timer.
+
+## Streams
+
+| Stream | Filter |
+| --- | --- |
+| `collateral:polymarket:*` | All supported collateral operations |
+| `collateral:polymarket:wallet:<address>` | Actor recorded in the event |
+| `collateral:polymarket:market:<conditionId>` | One condition |
+| `collateral:polymarket:negrisk-market:<marketId>` | One CTF NegRisk group |
+| `resolutions:polymarket:*` | Supported resolutions |
+| `resolutions:polymarket:market:<conditionId>` | One condition |
+| `conditions:polymarket:*` | Supported preparation events |
+| `conditions:polymarket:market:<conditionId>` | One condition |
+| `registrations:polymarket:*` | Supported exchange registrations |
+| `registrations:polymarket:market:<conditionId>` | One condition |
+| `registrations:polymarket:token:<decimalId>` | One registered token |
+
+Native condition IDs are kept at their ABI width in payloads. The existing
+32-byte channel boundary right-pads native IDs with zero bytes. A condition
+filter does not include group-level converts without that condition ID.
+
+## Interpret amounts and identity
+
+Amounts, token IDs, payout numerators and masks are exact decimal strings.
+Keep them as strings or integers; do not parse them as floating-point numbers.
+
+- Split and merge amounts describe the operation, not exchange volume.
+- Redemption `amount` is the **payout**, including zero. Native redemption also
+  preserves `position_amount`; the two quantities are different.
+- Convert preserves `neg_risk_market_id` for CTF NegRisk, or `native_event_id`
+  and `condition_index` for Protocol V2. Neither is a CTF condition ID.
+- CTF resolution payout is numerator divided by `payout_denominator`. Native
+  module results use their verified denominator, not an assumed binary winner.
+- `wallet` is the on-chain initiator/stakeholder/redeemer. Native frames also
+  preserve recipients. It is not automatically the owner EOA or transaction sender.
+- Asset address and verified decimals are explicit. Parent-position units
+  must not be labelled as dollars. Missing metadata stays unknown.
+
+These lifecycle logs alone do not reconstruct wallet balances. Transfers and
+fills also change balances, and related adapter/CTF logs must not be summed as
+independent economic flows.
+
+## Provenance and corrections
+
+Schema version 2 carries `event_id`, `event_version`, chain, contract/ABI version,
+block hash, transaction, log index and decoded payload. Full mode also includes
+raw topics/data; compact mode omits those raw fields. It also
+carries `venue_membership`; `unknown` is not certified Polymarket membership.
+
+The occurrence identity includes the block hash. A reorg produces an explicit
+`reorged` transition with `removed: true`. Re-inclusion has a new occurrence ID.
+A finalization transition confirms the canonical occurrence.
+
+Deduplicate by `(event_id, event_version)`, never by `(tx_hash, status)` for these
+families. Overlapping firehose, wallet and market subscriptions deliver an occurrence once
+per connection. The `stream` label uses the first matching route in deterministic
+order: firehose, condition, wallet, then group/token.
+Recent durable replay and historical queries remain release-gated; do not infer
+that a reconnect currently recovers every missed event.
+
+## Compact frame examples
+
+<Warning>
+These seven examples are synthetic fixtures with invented addresses, IDs and
+blocks. They document the candidate compact wire shape; they are not production
+observations or audited economic flows. Full mode adds raw ABI topics/data.
+</Warning>
+
+<AccordionGroup>
+
+<Accordion title="Split">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 0,
+  "status": "mined",
+  "removed": false,
+  "type": "collateral",
+  "stream": "collateral:polymarket:*",
+  "cursor": "1:0",
+  "payload": {
+    "wallet": "0x000000000000000000000000000000000000000a",
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "asset_address": "0x00000000000000000000000000000000000000c8",
+    "asset_decimals": 6,
+    "amount_unit": "collateral_base_units",
+    "parent_collection_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "partition": [
+      "1",
+      "2"
+    ],
+    "amount": "1000000",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:0",
+  "kind": "split",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="Merge">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 1,
+  "status": "mined",
+  "removed": false,
+  "type": "collateral",
+  "stream": "collateral:polymarket:*",
+  "cursor": "2:0",
+  "payload": {
+    "wallet": "0x000000000000000000000000000000000000000a",
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "asset_address": "0x00000000000000000000000000000000000000c8",
+    "asset_decimals": 6,
+    "amount_unit": "collateral_base_units",
+    "parent_collection_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "partition": [
+      "1",
+      "2"
+    ],
+    "amount": "1000000",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:1",
+  "kind": "merge",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="Redemption with zero payout">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 2,
+  "status": "mined",
+  "removed": false,
+  "type": "collateral",
+  "stream": "collateral:polymarket:*",
+  "cursor": "3:0",
+  "payload": {
+    "wallet": "0x000000000000000000000000000000000000000a",
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "asset_address": "0x00000000000000000000000000000000000000c8",
+    "asset_decimals": 6,
+    "amount_unit": "collateral_base_units",
+    "parent_collection_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "index_sets": [
+      "1",
+      "2"
+    ],
+    "amount": "500000",
+    "payout": "500000",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:2",
+  "kind": "redeem",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="NegRisk convert">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000065",
+  "contract_version": "fixture-negrisk",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 3,
+  "status": "mined",
+  "removed": false,
+  "type": "collateral",
+  "stream": "collateral:polymarket:*",
+  "cursor": "4:0",
+  "payload": {
+    "wallet": "0x000000000000000000000000000000000000000a",
+    "neg_risk_market_id": "0x0000000000000000000000000000000000000000000000000000000000000fa0",
+    "neg_risk": true,
+    "index_set": "3",
+    "amount": "1000000",
+    "amount_unit": "position_base_units"
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:3",
+  "kind": "convert",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="Condition resolution">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 4,
+  "status": "mined",
+  "removed": false,
+  "type": "resolution",
+  "stream": "resolutions:polymarket:*",
+  "cursor": "5:0",
+  "payload": {
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "question_id": "0x0000000000000000000000000000000000000000000000000000000000001388",
+    "oracle": "0x000000000000000000000000000000000000012c",
+    "outcome_slot_count": 2,
+    "payouts": [
+      "0",
+      "1"
+    ],
+    "payout_denominator": "1",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:4",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="New condition">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 5,
+  "status": "mined",
+  "removed": false,
+  "type": "condition",
+  "stream": "conditions:polymarket:*",
+  "cursor": "6:0",
+  "payload": {
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "question_id": "0x0000000000000000000000000000000000000000000000000000000000001388",
+    "oracle": "0x000000000000000000000000000000000000012c",
+    "outcome_slot_count": 2,
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:5",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="Token registration">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000190",
+  "contract_version": "fixture-exchange",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 6,
+  "status": "mined",
+  "removed": false,
+  "type": "token_registration",
+  "stream": "registrations:polymarket:*",
+  "cursor": "7:0",
+  "payload": {
+    "token0": "123456789012345678901234567890",
+    "token1": "987654321098765432109876543210",
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "exchange_address": "0x0000000000000000000000000000000000000190",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:6",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+</AccordionGroup>
+
+## Historical REST candidate
+
+The candidate route is `GET /v1/polymarket/onchain/events`, using the existing
+signed partner request format and independent history grants. Supply UTC `from`
+and `to` values and selected `families`. Windows are `[from,to)`, limited to 31
+days; `limit` defaults to 500 and cannot exceed 1,000. Optional `wallet`,
+`condition_id` and `neg_risk_market_id` filters combine with AND.
+
+`consistency=finalized` is the default. Pagination uses an opaque signed cursor
+bound to your organisation, filters and insertion snapshot. While certification
+is pending, requests must explicitly use `allow_partial=true`; otherwise the
+candidate returns `HISTORY_AUDIT_PENDING`. A partial result always reports
+`coverage.complete=false`. It is not evidence of deployment-to-present coverage.
+
+Historical delivery uses the same bytes tariff and existing credit balance.
+Export jobs, complete-range certificates and durable replay are separate release
+gates; this route does not imply those capabilities are available.
+
+## Usage and price
+
+The selected initial tariff is **one credit per 20,000 uncompressed UTF-8 bytes
+of delivered data**. It uses your existing credit balance. No separate monthly
+subscription is required. The access response must expose the effective tariff;
+unknown tariff is not free usage.
+
+Requested replay and historical downloads are billable deliveries. Controls,
+heartbeats, finalization/correction frames and internal receipt retries are not
+charged. A generated but undelivered export is not a delivered-data charge.
+Family-level attribution and real invoice acceptance remain release gates.
+
+## Coverage and availability
+
+The historical goal is deployment-to-present coverage for the supported
+contracts and versions. Until backfill and independent reconciliation finish,
+no complete-history claim is made. A quiet event family can be healthy; evaluate
+block/index watermarks and coverage rather than the time of the last redemption.
+
+General availability requires an independently reconciled finalized test day,
+stream-consumer comparison, recovery tests, price/usage reconciliation and a
+real self-service signup journey. Release-candidate UI and local fixture tests
+are not evidence that these criteria passed in production.
