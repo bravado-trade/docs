@@ -515,6 +515,12 @@ contracts and versions. Until backfill and independent reconciliation finish,
 no complete-history claim is made. A quiet event family can be healthy; evaluate
 block/index watermarks and coverage rather than the time of the last redemption.
 
+The capture candidate pins proxy ABI epochs by block and global log index. An
+uncertified upgrade halts the dataset checkpoint instead of extending the old ABI.
+A failed capture refuses new on-chain connections and closes existing sessions
+with `CAPTURE_UNAVAILABLE` during its bounded access recheck. Legacy fill access
+is a separate flow.
+
 General availability requires an independently reconciled finalized test day,
 stream-consumer comparison, recovery tests, price/usage reconciliation and a
 real self-service signup journey. Release-candidate UI and local fixture tests
