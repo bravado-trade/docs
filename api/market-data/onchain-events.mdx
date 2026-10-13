@@ -40,9 +40,10 @@ for every condition.
 The candidate covers historical and current declarations for combo condition/event
 splits and merges, event conversion, and YES-basket conversion/merge. The four
 inspected implementation epochs use 14 distinct signatures for these operations.
-Additional native position-migration, compression, extract/inject and
-wrap/unwrap declarations also require an explicit coverage decision and decoder
-acceptance. Full native lifecycle coverage is not certified.
+The candidate additionally decodes inspected position-migration, compression,
+extract/inject, wrap/unwrap, bridge, migration-registration and result-reporting
+declarations. This completes software support for the selected implementation ABI
+inventory; full native lifecycle coverage over a historical range is not certified.
 
 Combo transformations use the existing `collateral` family with `kind` equal to
 `split`, `merge` or `convert`. `payload.operation` distinguishes
@@ -74,6 +75,38 @@ their sum. `payouts` preserves the normalized native numerators with
 or collateral amounts. Distinct logs for the same condition retain distinct
 event IDs; do not count multiple resolution logs as multiple market settlements.
 Software acceptance does not certify the historical completeness of these frames.
+
+## Additional native lifecycle operations
+
+These operations share the existing family grants; they do not create new token
+types or change the byte tariff.
+
+| Family | Operation | Quantity semantics |
+| --- | --- | --- |
+| `collateral` | `compress` | `amount` is input positions; `output_position_amount` is output positions; `collateral_amount` is collateral base units. Keep all three separate. |
+| `collateral` | `extract`, `inject`, `wrap`, `unwrap` | Position base units. Reduced/residual condition IDs or input/output position IDs preserve the transformation direction. |
+| `collateral` | `migrate_position` | Position base units with condition ID, position ID and outcome index; not a new trade. |
+| `collateral` | `bridge_mint` | Recipient, position ID and minted position units. Does not certify the remote chain or a funding transfer. |
+| `collateral` | `bridge_burn` | Parallel `position_ids` and `position_amounts` arrays. Empty arrays remain explicit; no source wallet is inferred. |
+| `collateral` | `legacy_collateral_settlement` | Actual `asset_address`, vault `recipient` and collateral base units. Decimals are included only when verified for that token. |
+| `conditions` | `migration_registered` | Native and legacy condition IDs; no financial quantity. |
+| `resolutions` | `result_reported` | Resolver and normalized payout numerators. A report log and a final condition-resolution log remain separate occurrences. |
+| `resolutions` | `derived_no_available`, `synthetic_yes_available` | Result availability with event/condition identifiers carried by the log; no payout vector is fabricated. |
+
+The decoder uses 18 additional exact signatures from 52 inspected declarations,
+including historical recipient-less forms. Historical combo ABIs declare bridge
+events that the current combo ABI does not; implementation/ABI guards preserve
+that distinction. Bridge arrays are canonical, paired and bounded to 256 entries.
+Malformed, mismatched, oversized or unrecognized-epoch input halts capture.
+
+Condition filtering matches explicit condition attribution. A log carrying only
+position IDs does not acquire an inferred Polymarket market identity. Such logs
+remain in the firehose and, where an actor/recipient is declared, wallet output;
+complete per-market coverage also requires a verified position-to-market registry.
+Likewise, logs without a declared wallet cannot be presented as wallet flows.
+Administrative role/ownership/initialization events are outside these lifecycle
+families; ERC1155 transfers are not implicitly included. Do not interpret absence
+from a filtered response as proof of no activity.
 
 ## Candidate connection contract
 
