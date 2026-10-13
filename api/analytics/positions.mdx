@@ -17,7 +17,7 @@ Returns position **state** across all wallets Bravado indexes, not just one wall
 GET https://partner-api.bravadotrade.com/trader-analytics/positions
 ```
 
-For a single wallet's presentation-ready open and closed lists, [`/traders/{address}/positions`](/api/analytics/trader-positions) remains available.
+This endpoint is the canonical, integer-exact positions surface: amounts are computed from integer micro-units, cost basis comes from the position's lot records only (a position with no lot record has a `null` cost, never an estimate), and marks are resolution-aware. The per-wallet [`/traders/{address}/positions`](/api/analytics/trader-positions) endpoints use a different calculation path (floating-point arithmetic, a fills-based cost fallback, and a separate treatment of some accounting-cohort wallets), so their figures can legitimately differ from this endpoint's. Do not expect the two to match to the last digit; use this endpoint as the source of record.
 
 <Warning>
 A request must be **bounded**. Send at least one of `wallet`, `token_id`, `condition_id`, `market_id` or `updated_after`. A request with none of them (for example `status=open` alone) returns `400` with `"code": "unbounded_scan"`.
@@ -149,7 +149,7 @@ Money and share fields are exact decimal **strings** with 6 decimal places, comp
 
 ### Marks and unknown values
 
-Marks are computed **live on every request**, in this order: the market's resolution payout, then a fresh quote, then the last real trade, then **unknown**. They are never stored on the position, so a price tick does not change `last_updated_at`.
+Marks are computed **live on every request** (responses are not cached), in this order: the market's resolution payout, then a fresh quote, then the last real trade, then **unknown**. They are never stored on the position, so a price tick does not change `last_updated_at`.
 
 - When no defensible mark exists, `mark_source` is `unknown` and `current_price`, `current_value` and `unrealized_pnl` are JSON `null`. The keys are always present. Unknown is never reported as `0`.
 - When the cost basis cannot be determined, `cost_basis` and `avg_entry_price` are `null`.
