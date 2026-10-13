@@ -471,7 +471,14 @@ Requested replay and historical downloads are billable deliveries. Controls,
 heartbeats, **live identity-only** finalization/correction frames and internal receipt
 retries are not charged. Requested replayed transitions are delivered data and are
 charged even when their event status is finalized or reorged. A generated but undelivered export is not a delivered-data charge.
-Family-level attribution and real invoice acceptance remain release gates.
+The candidate ledger records each streamed family separately: collateral, resolutions,
+new conditions and token registrations. Console Usage shows delivered credits by
+product. Failed or ambiguous writes retain their reservation for reconciliation;
+they do not automatically become a charge or a zero-byte settlement. Repeating an
+identical delivery receipt does not add consumption.
+
+These paths have finite acceptance tests; production invoice acceptance and the
+customer browser journey remain release gates.
 
 ## Storage and recovery
 
