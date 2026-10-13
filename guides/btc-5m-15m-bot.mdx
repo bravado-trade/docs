@@ -324,12 +324,13 @@ def load_window(duration_sec: int, window_start: int) -> dict | None:
     if not cfg.get("twapEnabled"):
         return None                      # pre-TWAP or unmigrated series
 
-    up, down = json.loads(m["clobTokenIds"])
+    ids = outcome_ids(m)
     return {
         "slug": m["slug"],
         "condition_id": m["conditionId"],
-        "up": up,
-        "down": down,
+        "protocol": m.get("version", "v1"),
+        "up": ids["Up"],
+        "down": ids["Down"],
         "lookback": int(cfg["twapLookbackSeconds"]),
         "opens_at": window_start,
         "closes_at": window_start + duration_sec,
@@ -337,6 +338,15 @@ def load_window(duration_sec: int, window_start: int) -> dict | None:
         "min_size": Decimal(str(m["orderMinSize"])),
         "accepting": bool(m.get("acceptingOrders")),
     }
+
+
+def outcome_ids(m: dict) -> dict[str, str]:
+    """Map each outcome name to the id you pass as `symbol`."""
+    if m.get("version") == "v2":
+        ids = m["positionIds"]                # a JSON array of decimal strings
+    else:
+        ids = json.loads(m["clobTokenIds"])   # v1: a JSON-encoded string
+    return dict(zip(json.loads(m["outcomes"]), ids))
 
 
 def book(token_id: str) -> tuple[Decimal | None, Decimal | None]:
@@ -347,6 +357,8 @@ def book(token_id: str) -> tuple[Decimal | None, Decimal | None]:
 ```
 
 Note the `twapEnabled` guard. It is the cheapest possible protection against pointing a TWAP-aware bot at a series that does not settle on TWAP.
+
+Note also how the outcome ids are read. Gamma tags every market with a `version`, `"v1"` or `"v2"`, and the field that holds the ids depends on it. A v1 market carries them in `clobTokenIds`, a JSON-encoded string you decode first. A [Protocol V2](https://docs.polymarket.com/protocol-v2-migration) market carries them in `positionIds`, an array of decimal strings. Some v1 markets carry `positionIds` too, so branch on `version`, never on which field happens to be present. Pairing the ids with `outcomes` by name means you never depend on their order.
 
 ### Pricing the window
 
@@ -397,6 +409,20 @@ def taker_fee_per_share(price: Decimal) -> Decimal:
     return TAKER_RATE * price * (1 - price)
 
 
+class MarketNotTradable(Exception):
+    """Bravado refused the market itself. The same request gets the same answer."""
+
+
+def error_code(r) -> str | None:
+    code = r.headers.get("X-Bravado-Error-Code")
+    if code:
+        return code
+    try:
+        return r.json().get("code")
+    except ValueError:
+        return None
+
+
 def place(payload: dict, key: str) -> dict:
     if DRY_RUN:
         print(f"  DRY RUN  {payload}")
@@ -404,11 +430,25 @@ def place(payload: dict, key: str) -> dict:
     r = http.post(f"{BASE}/v2/trade/order",
                       headers={**H, "Idempotency-Key": key},
                       json=payload, timeout=10)
+    if r.status_code == 422 and error_code(r) == "MARKET_PROTOCOL_UNSUPPORTED":
+        # Protocol V2 market. Nothing was signed or stored, and a retry
+        # gets the same 422 until Bravado ships V2 support.
+        raise MarketNotTradable(payload["symbol"])
     r.raise_for_status()
     return r.json()
 
 
 def trade_window(win: dict, fair: Decimal, size: Decimal):
+    if win.get("skip"):
+        return
+    try:
+        return _trade_window(win, fair, size)
+    except MarketNotTradable:
+        print(f"  SKIP  {win['slug']} ({win['protocol']}): not tradable through Bravado yet")
+        win["skip"] = True              # stop quoting this window, do not retry
+
+
+def _trade_window(win: dict, fair: Decimal, size: Decimal):
     token = win["up"]
     bid, ask = book(token)
     if bid is None or ask is None:
@@ -443,6 +483,10 @@ def trade_window(win: dict, fair: Decimal, size: Decimal):
         "time_in_force": "GTC",
     }, key)
 ```
+
+<Warning>
+  **New windows are moving to Polymarket Protocol V2.** From about **2 November 2026**, every new Polymarket market is a [Protocol V2](https://docs.polymarket.com/protocol-v2-migration) market, and that includes each new BTC 5-minute and 15-minute window. A small canary set of V2 markets runs before that date. Bravado cannot trade V2 markets yet. The Trade API, on both `/v1/trade` and `/v2/trade`, answers an order on one with `422` and code `MARKET_PROTOCOL_UNSUPPORTED`, refused before anything is signed or stored. Skip that window and move on. **Do not retry**: the same request gets the same answer until V2 trading support ships. Markets on protocol v1 are unaffected. Keep the 422 as your signal rather than filtering on `version: "v2"` up front, so the bot picks V2 windows up on its own the day they become tradable.
+</Warning>
 
 <Warning>
   Generate the idempotency key **outside** any retry loop. Inside it, every attempt carries a fresh key and every one that lands creates its own position. In a series that opens a new market every five minutes, a duplicate is not a one-off, it compounds 288 times a day. See [Safe retries](/guides/safe-retries-idempotency).
@@ -613,6 +657,10 @@ What is left is an execution problem with an unusually explicit cost. You know t
     No, and the name collision is a coincidence worth naming out loud. Bravado's `TWAP` order type spreads your execution over time to reduce market impact. The market's TWAP settlement is how the outcome is computed. In a 300-second window with a minimum `interval_sec` of 10, a TWAP order gives you a slowly-accumulated position in a market that will have resolved before it finishes.
   </Accordion>
 
+  <Accordion title="Why does an order on a new window return 422 MARKET_PROTOCOL_UNSUPPORTED?">
+    Because that window is a Polymarket Protocol V2 market, and every new market is one from about 2 November 2026. Bravado cannot trade V2 markets yet, so it refuses the order before signing or storing anything. Skip the window and do not retry: the answer stays the same until V2 trading support ships. Windows on protocol v1 trade as before.
+  </Accordion>
+
   <Accordion title="Do I need to redeem winners manually?">
     Yes. Redemption is not automatic. Check `position.redeemable` and call `POST /v2/trade/positions/redeem`. At 288 windows a day this adds up quickly if you skip it.
   </Accordion>
@@ -632,3 +680,4 @@ What is left is an execution problem with an unusually explicit cost. You know t
 - [Bravado Console](https://console.bravadotrade.com/keys), create and manage API keys and scopes
 - [Chainlink TWAP prices](https://docs.polymarket.com/market-data/chainlink-twap), the settlement feed
 - [Geographic restrictions](https://docs.polymarket.com/api-reference/geoblock), eligibility and server regions
+- [Protocol V2 migration](https://docs.polymarket.com/protocol-v2-migration), Polymarket's guide to V2 markets
