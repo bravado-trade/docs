@@ -73,7 +73,9 @@ customer routes are omitted when the corresponding release flags are disabled.
 When capabilities report replay available, add `"replay": 100` to the subscription
 message or `replay=100` to the initial connection query. The candidate retains the
 latest **500 transitions across all families**, reconstructed from its local durable
-journal on restart. The requested count is applied to transitions matching your
+retained journal on restart. Verified local-cache retirement can leave fewer than
+500 transitions available after a restart; the current implementation does not
+load old bucket objects into the live replay buffer. The requested count is applied to transitions matching your
 subscriptions; overlapping subscriptions do not duplicate a transition.
 
 Replay frames carry `replay: true`. A nonbillable `replay_end` control reports
@@ -470,6 +472,23 @@ heartbeats, **live identity-only** finalization/correction frames and internal r
 retries are not charged. Requested replayed transitions are delivered data and are
 charged even when their event status is finalized or reorged. A generated but undelivered export is not a delivered-data charge.
 Family-level attribution and real invoice acceptance remain release gates.
+
+## Storage and recovery
+
+Local capture files are a cache of the durable archive. The retention candidate
+removes only closed segments after byte-for-byte bucket verification, committed
+API index confirmation and recorded finality. It preserves bucket objects and the
+occurrence index; it does not shorten the historical API's coverage by deleting
+historical records.
+
+Cache retirement is separate from coverage certification. It cannot prove that
+every contract, event family or block was captured. A lost or lagging index can be
+rebuilt from verified archive manifests with a finite repair budget; the same
+source identity and contiguous cursors are required. Older missing data is never
+silently replaced by a new starting cursor.
+
+These operations remain under release acceptance. Their internal credentials and
+storage permissions are not granted to a customer WebSockets key.
 
 ## Coverage and availability
 
