@@ -39,9 +39,20 @@ for every condition.
 
 The candidate does not yet cover every native combo operation. Historical combo
 signatures differ from current signatures; additional combo split, merge and
-conversion events, plus migration-resolution events, require further decoder
+conversion events require further decoder
 acceptance. Missing events from these operations must not be interpreted as zero
 activity. Full native lifecycle coverage is not certified.
+
+The candidate decoder also supports `MigrationResolved` on the binary and
+NegRisk modules. These frames use `type: "resolution"` and
+`kind: "migration_resolved"`. `condition_id` identifies the native condition;
+`legacy_condition_id` identifies its linked CTF condition. `legacy_payouts`
+preserves the two original payout numerators and `legacy_payout_denominator`
+their sum. `payouts` preserves the normalized native numerators with
+`payout_denominator: "1000000"`. These are resolution ratios, not trade volume
+or collateral amounts. Distinct logs for the same condition retain distinct
+event IDs; do not count multiple resolution logs as multiple market settlements.
+Software acceptance does not certify the historical completeness of these frames.
 
 ## Candidate connection contract
 
