@@ -37,13 +37,32 @@ Stream and historical grants are independent. Coverage is declared separately
 for CTF and Protocol V2. Native Protocol V2 does not emit a CTF preparation event
 for every condition.
 
-The candidate does not yet cover every native combo operation. Historical combo
-signatures differ from current signatures; additional combo split, merge and
-conversion events require further decoder
-acceptance. Missing events from these operations must not be interpreted as zero
-activity. Additional native position-migration, compression, extract/inject and
+The candidate covers historical and current declarations for combo condition/event
+splits and merges, event conversion, and YES-basket conversion/merge. The four
+inspected implementation epochs use 14 distinct signatures for these operations.
+Additional native position-migration, compression, extract/inject and
 wrap/unwrap declarations also require an explicit coverage decision and decoder
 acceptance. Full native lifecycle coverage is not certified.
+
+Combo transformations use the existing `collateral` family with `kind` equal to
+`split`, `merge` or `convert`. `payload.operation` distinguishes
+`split_on_condition`, `merge_on_condition`, `split_on_event`, `merge_on_event`,
+`convert_on_event`, `convert_to_yes_basket` and `merge_from_yes_basket`.
+Their `amount_unit` is `position_base_units`: transforming an existing position
+does not represent a new collateral deposit, trade volume or fee revenue.
+`condition_id` is the parent/full condition carried by the log;
+`parent_condition_id`, child YES/NO condition IDs and `native_event_id` are
+preserved where declared. Market filtering matches that primary condition;
+it does not expand the event into underlying legs or child-market activity.
+
+Current declarations carry a recipient, two recipients or an ordered `recipients`
+array. Arrays preserve repeated addresses and their original order. Historical
+declarations without recipient fields leave them absent. The candidate limits
+recipient arrays to 256 entries; an oversized or malformed event halts capture
+without advancing its checkpoint. This is a decoder limit, not an asserted
+protocol maximum. With a pinned implementation, a signature not declared for
+that implementation is rejected. These are software guarantees; the deployment
+registry, historical range and on-chain occurrences still require certification.
 
 The candidate decoder also supports `MigrationResolved` on the binary and
 NegRisk modules. These frames use `type: "resolution"` and
