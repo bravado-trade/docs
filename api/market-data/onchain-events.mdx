@@ -533,8 +533,29 @@ candidate returns `HISTORY_AUDIT_PENDING`. A partial result always reports
 `coverage.complete=false`. It is not evidence of deployment-to-present coverage.
 
 Historical delivery uses the same bytes tariff and existing credit balance.
-Export jobs, complete-range certificates and durable replay are separate release
-gates; this route does not imply those capabilities are available.
+Set `format=ndjson` to download one page as `application/x-ndjson`. The first
+line is `export_metadata` with `next_cursor`, coverage and billing; following
+lines contain the decoded events. The page has at most 1,000 events, default
+500. Every line ends with a newline. Follow the signed cursor with the same
+filters until `next_cursor` is null. Changing the presentation between JSON and
+NDJSON preserves the same filter-bound cursor; changing the filters or organisation
+is rejected. Metadata and newline bytes are included in the delivered-byte charge.
+
+Console provides the same download through a session-checked HMAC bridge, with
+100 events per page. Your API secret stays on the server. Select UTC start and
+exclusive end dates and the event families. Each download is a billable request;
+API delivery to Console is accounted even if your browser subsequently fails to
+save the file. This is a paginated download, not a background export job.
+
+Example first line (cursor abbreviated; use the actual signed cursor):
+
+```json
+{"type":"export_metadata","schema_version":1,"next_cursor":"opaque-signed-cursor","coverage":{"complete":false,"audit_state":"pending","gaps":null,"snapshot":"2026-10-14T00:00:00.000Z"},"billing":{"bytes_per_credit":20000,"price_version":"returned-by-capabilities","unit":"uncompressed UTF-8 response bytes"}}
+```
+
+Background export jobs, complete-range certificates and durable archive-backed
+WebSocket replay remain separate release gates. Download availability does not
+certify dataset completeness.
 
 ## Usage and price
 
