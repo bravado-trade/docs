@@ -527,7 +527,10 @@ days; `limit` defaults to 500 and cannot exceed 1,000. Optional `wallet`,
 `condition_id` and `neg_risk_market_id` filters combine with AND.
 
 `consistency=finalized` is the default. Pagination uses an opaque signed cursor
-bound to your organisation, filters and insertion snapshot. While certification
+bound to your organisation, filters and insertion snapshot. Pages follow UTC block
+timestamp, block number, transaction index and log index, with occurrence ID as
+a deterministic tie-breaker. Identifiers are not used as a substitute for execution
+order inside a block. While certification
 is pending, requests must explicitly use `allow_partial=true`; otherwise the
 candidate returns `HISTORY_AUDIT_PENDING`. A partial result always reports
 `coverage.complete=false`. It is not evidence of deployment-to-present coverage.
