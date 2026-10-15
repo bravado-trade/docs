@@ -79,7 +79,19 @@ Software acceptance does not certify the historical completeness of these frames
 ## Additional native lifecycle operations
 
 These operations share the existing family grants; they do not create new token
-types or change the byte tariff.
+types or change the byte tariff. The operation names below identify
+`payload.operation`, rather than always matching the top-level `kind`:
+
+- Compression, extract/inject and wrap/unwrap use `kind: "convert"`.
+- Bridge mint/burn use `kind: "bridge"`.
+- Position migration uses `kind: "migrate"` and `operation: "migrate_position"`.
+- Legacy collateral settlement uses `kind: "settle"` and
+  `operation: "legacy_collateral_settlement"`.
+- The preparation and result-availability operations below use their operation
+  name as `kind`.
+
+Use both fields when classifying transformations. A conversion frame does not,
+by itself, prove a NegRisk conversion or a collateral deposit.
 
 | Family | Operation | Quantity semantics |
 | --- | --- | --- |
