@@ -1,0 +1,235 @@
+---
+title: "GET /positions: Positions Across All Wallets"
+sidebarTitle: "/positions"
+api: "GET /trader-analytics/positions"
+description: "Position state across every indexed wallet: one wallet, all holders of a market or token, or an incremental state sync. Live marks, honest unknowns, cursor pagination."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+Returns position **state** across all wallets Bravado indexes, not just one wallet at a time. Use it to answer three questions:
+
+- What does this wallet hold? Pass `wallet`.
+- Who holds this market or token? Pass `market_id`, `condition_id` or `token_id`.
+- What changed since I last looked? Pass `updated_after` and follow the cursor.
+
+```text
+GET https://partner-api.bravadotrade.com/trader-analytics/positions
+```
+
+This endpoint is the canonical, integer-exact positions surface: amounts are computed from integer micro-units, cost basis comes from the position's lot records only (a position with no lot record has a `null` cost, never an estimate), and marks are resolution-aware. The per-wallet [`/traders/{address}/positions`](/api/analytics/trader-positions) endpoints use a different calculation path (floating-point arithmetic, a fills-based cost fallback, and a separate treatment of some accounting-cohort wallets), so their figures can legitimately differ from this endpoint's. Do not expect the two to match to the last digit; use this endpoint as the source of record.
+
+<Warning>
+A request must be **bounded**. Send at least one of `wallet`, `token_id`, `condition_id`, `market_id` or `updated_after`. A request with none of them (for example `status=open` alone) returns `400` with `"code": "unbounded_scan"`.
+</Warning>
+
+### Query parameters
+
+<ParamField query="venue" type="string" default="polymarket">
+  `polymarket` or `predictfun`. Selects one venue per request; results are never merged across venues. `kalshi` returns `501` and any other value returns `400`, both with `"code": "venue_not_captured"`. See [venue semantics](#venue-semantics).
+</ParamField>
+
+<ParamField query="wallet" type="string">
+  Wallet address: `0x` followed by 40 hex characters.
+</ParamField>
+
+<ParamField query="market_id" type="string">
+  Venue market id. Returns every holder of every outcome token of the market.
+</ParamField>
+
+<ParamField query="condition_id" type="string">
+  Condition id: `0x` followed by 64 hex characters.
+</ParamField>
+
+<ParamField query="token_id" type="string">
+  Outcome token id as a decimal integer string (a 256-bit value; never send it as a JSON number).
+</ParamField>
+
+<ParamField query="status" type="string">
+  `open` or `closed`. With `status=open` and no `updated_after`, open positions are listed only if their live value is at least $1 or their mark is unknown, matching the `active_positions` count on the [trader profile](/api/analytics/trader). Unpriced positions are never dropped as worthless.
+</ParamField>
+
+<ParamField query="min_timestamp" type="integer">
+  Unix **milliseconds**. Only positions whose `last_updated_at` is at or after this time.
+</ParamField>
+
+<ParamField query="max_timestamp" type="integer">
+  Unix **milliseconds**. Only positions whose `last_updated_at` is at or before this time.
+</ParamField>
+
+<ParamField query="min_block" type="integer">
+  Only positions whose latest on-chain activity is at or after this block.
+</ParamField>
+
+<ParamField query="max_block" type="integer">
+  Only positions whose latest on-chain activity is at or before this block.
+</ParamField>
+
+<ParamField query="min_position_value" type="string">
+  USDC decimal with at most 6 decimal places (for example `"25"` or `"12.5"`). Applied to the **live** `current_value`. Positions whose mark is unknown cannot pass a value floor and are excluded; they are counted in `unpriced_positions`. Replaces the $1 `status=open` admission.
+</ParamField>
+
+<ParamField query="updated_after" type="integer">
+  Unix **milliseconds**, exclusive. Returns positions whose state changed after this time. See [state sync](#sync-position-state-with-updated_after).
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Page size, 1 to 1000. Values outside the range return `400`.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  The opaque `next_cursor` from the previous page. Send it unchanged with the **same** filters. A cursor replayed with different filters, or against a different ordering, returns `400` with `"code": "cursor_mismatch"`.
+</ParamField>
+
+`min_timestamp`, `max_timestamp`, `min_block` and `max_block` all describe the position's **latest activity**: its most recent economic event (a fill, split, merge, redemption or settlement). Unknown query parameters and repeated parameters return `400`.
+
+### Response
+
+```json Response
+{
+  "data": [
+    {
+      "venue": "polymarket",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "market_id": "540816",
+      "condition_id": "0x2222222222222222222222222222222222222222222222222222222222222222",
+      "token_id": "1606938044258990275541962092341162602522202993782792835301377",
+      "outcome": "Yes",
+      "shares": "250.000000",
+      "avg_entry_price": "0.420000",
+      "cost_basis": "105.000000",
+      "current_price": "0.610000",
+      "current_value": "152.500000",
+      "realized_pnl": "-3.250000",
+      "unrealized_pnl": "47.500000",
+      "status": "open",
+      "last_updated_at": 1780001000000,
+      "mark_source": "quote",
+      "mark_ts": 1780000990,
+      "open_value_source": "book"
+    }
+  ],
+  "next_cursor": "AQEBq83vEjRWeJD_nNuTfHcEQw",
+  "served_at": 1780001001234,
+  "unpriced_positions": 0
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `data` | array | Position rows, in the ordering of the query (see [pagination](#pagination)). |
+| `next_cursor` | string or null | Pass as `cursor` for the next page. `null` on the last page. |
+| `served_at` | integer | Unix milliseconds at which the live marks were read. |
+| `unpriced_positions` | integer | Open positions with an unknown mark among the rows this response covered, including rows a `min_position_value` floor excluded. |
+
+### Position fields
+
+Money and share fields are exact decimal **strings** with 6 decimal places, computed from integer micro-units. Parse them with a decimal type. See [numeric conventions](/reference/numeric-conventions).
+
+| Field | Type | Description |
+|---|---|---|
+| `venue` | string | `polymarket` or `predictfun`. |
+| `wallet` | string | Lowercase `0x` address. |
+| `market_id` | string or null | `null` when the token is not yet mapped to a market. |
+| `condition_id` | string or null | `0x` condition id; `null` when unknown. |
+| `token_id` | string | Decimal outcome token id. |
+| `outcome` | string or null | Outcome label (for example `Yes`); `null` when unlabelled. |
+| `shares` | string or null | Shares held now; `"0.000000"` for closed positions. `null` when `open_value_source` is `unknown_book_unseeded`. |
+| `avg_entry_price` | string or null | Remaining cost basis per **covered** share, in USDC. `null` when cost is unknown. |
+| `cost_basis` | string or null | Remaining cost basis in USDC. `null` when cost is unknown. Never `"0.000000"` as a stand-in for unknown. |
+| `current_price` | string or null | Live mark in USDC per share, `0` to `1`. `null` when `mark_source` is `unknown`. |
+| `current_value` | string or null | `shares` times `current_price`. `null` when the mark is unknown. |
+| `realized_pnl` | string | Realized PnL in USDC (signed). See [venue semantics](#venue-semantics). |
+| `unrealized_pnl` | string or null | On **covered** shares only: `min(shares, covered) × (current_price − cost per covered share)`. `null` when the mark or cost is unknown. |
+| `status` | string | `open` or `closed`. |
+| `last_updated_at` | integer | Unix **milliseconds** of the position's latest economic event. |
+| `mark_source` | string | `resolution`, `quote`, `trade` or `unknown`. |
+| `mark_ts` | integer or null | Unix seconds of the quote or trade the mark rests on. `null` for `resolution` and `unknown`. |
+| `open_value_source` | string | `book`, `fifo_lot` or `unknown_book_unseeded`. |
+
+### Marks and unknown values
+
+Marks are computed **live on every request** (responses are not cached), in this order: the market's resolution payout, then a fresh quote, then the last real trade, then **unknown**. They are never stored on the position, so a price tick does not change `last_updated_at`.
+
+- When no defensible mark exists, `mark_source` is `unknown` and `current_price`, `current_value` and `unrealized_pnl` are JSON `null`. The keys are always present. Unknown is never reported as `0`.
+- When the cost basis cannot be determined, `cost_basis` and `avg_entry_price` are `null`.
+- When `open_value_source` is `unknown_book_unseeded` (a Polymarket wallet whose on-chain balances have not been indexed yet), `shares`, `cost_basis`, `avg_entry_price`, `current_value` and `unrealized_pnl` are all `null`. The row's `status` is a placeholder in that case; rely on `open_value_source`.
+- A position with `shares` of `"0.000000"` has a `current_value` and `unrealized_pnl` of exactly `"0.000000"`: nothing held is worth nothing, which is known.
+
+### Pagination
+
+Results are paged with an opaque keyset `cursor`. Do not parse or construct it.
+
+- Follow `next_cursor` until it is `null`. A page can hold fewer than `limit` rows while `next_cursor` is still non-null, for example when a value floor discards many candidates.
+- Send the same filters on every page. Changing `limit` between pages is allowed.
+- Row order is the query's key order, not value order: by token then wallet for market and token queries, by token for a wallet query, and by `last_updated_at` for `updated_after`. Sort client-side if you need ranking by value.
+
+### Sync position state with `updated_after`
+
+Use `updated_after` to keep a local copy of position **state** current.
+
+1. Start from `updated_after=0`, or from the time you last finished a sync.
+2. Page with `cursor` until `next_cursor` is `null`. Each position appears **once**, at its latest state, even if it changed several times since your last sync.
+3. Remember the largest `last_updated_at` you received. For the next sync, use that value **minus a safety margin** (for example 15 minutes) as `updated_after`, and apply rows idempotently by `(wallet, token_id)`, keeping the row with the greater `last_updated_at`.
+
+`last_updated_at` is the on-chain time of the position's latest event, not the time the row became visible to the API. A row for a slightly older block can therefore appear after you have already seen a newer one; the overlap makes that harmless, and the idempotent apply makes the re-read free.
+
+`updated_after` syncs state, not prices. A position row changes only when the wallet's position changes on-chain. `current_price`, `current_value` and `unrealized_pnl` are always as of `served_at`; to re-price positions you already hold, query them again with `token_id` (all holders of that token) or `wallet`. The change feed does not drop positions that decay to dust, so `status=open` admission is not applied on this axis.
+
+### Venue semantics
+
+| | Polymarket | predict.fun (`venue=predictfun`) |
+|---|---|---|
+| `shares` source | On-chain `balanceOf` book (`open_value_source` is `book`) | FIFO lot state (`open_value_source` is `fifo_lot`); there is no `balanceOf` book |
+| `unknown_book_unseeded` | Possible | Never |
+| `mark_source` | `resolution`, `quote`, `trade`, `unknown` | `resolution`, `quote`, `unknown` (no `trade` tier) |
+| `realized_pnl` | As the PnL engine books it for the wallet | **Net of fees** |
+
+`open_shares` and `resolved_unredeemed_shares`, which decompose a `balanceOf` balance on the per-wallet endpoints, are not part of this response on either venue.
+
+Partner keys need the venue enabled for the request: `venue=predictfun` requires `predictfun` in your enabled venues (otherwise `403 VENUE_NOT_ENABLED`). The same data is available on the predict.fun mount, `GET /trader-analytics/predict/positions`, where `venue` defaults to `predictfun`.
+
+### Errors
+
+Errors return `{"error": "...", "code": "..."}`.
+
+| Status | `code` | Meaning |
+|---|---|---|
+| 400 | `unbounded_scan` | None of `wallet`, `token_id`, `condition_id`, `market_id`, `updated_after` was sent. |
+| 400 | `invalid_wallet`, `invalid_token_id`, `invalid_condition_id`, `invalid_market_id`, `invalid_status`, `invalid_limit`, `invalid_min_position_value`, `invalid_range` | A parameter failed validation. |
+| 400 | `unknown_parameter`, `duplicate_parameter` | An unsupported or repeated parameter. |
+| 400 | `invalid_cursor`, `cursor_mismatch` | The cursor is malformed, or was issued for different filters or ordering. |
+| 400 / 501 | `venue_not_captured` | Unknown venue (400) or `kalshi` (501). |
+
+See the [Error reference](/reference/errors) for the common error envelope.
+
+### Example
+
+<CodeGroup>
+
+```bash All holders of a market
+curl "https://partner-api.bravadotrade.com/trader-analytics/positions?market_id=540816&status=open&limit=500" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+```
+
+```bash One wallet
+curl "https://partner-api.bravadotrade.com/trader-analytics/positions?wallet=0x1111111111111111111111111111111111111111" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+```
+
+```bash State sync
+curl "https://partner-api.bravadotrade.com/trader-analytics/positions?updated_after=1780000000000&limit=1000" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+```
+
+</CodeGroup>
+
+### Position history and streaming
+
+Position **history** (how a position evolved over time) and a position-update **WebSocket** are not part of this endpoint. Bravado retains the underlying change data, so both are feasible as a separate future addition.
