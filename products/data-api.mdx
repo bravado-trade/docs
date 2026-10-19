@@ -222,6 +222,21 @@ Additional per-wallet endpoints:
 | `GET /traders/{address}/reconciliation` | On-chain data reconciliation report |
 | `GET /traders/{address}/tax-report` | Downloadable tax report for the wallet |
 
+## Combos data
+
+The same Data API credential also serves market-wide data on Polymarket **Combos** (multi-leg parlays): every combo settlement on the venue, each combo's legs mapped to its underlying markets, aggregate stats and a combo trader leaderboard, plus a live settlement stream. These routes live under `/v2/data/combos` on the same host and cost 1 credit per request like the rest of the product.
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /v2/data/combos` | Combos with at least one settlement, with legs and activity |
+| `GET /v2/data/combos/trades` | Every combo fill, newest first |
+| `GET /v2/data/combos/{combo_id}` | One combo, its underlying markets and recent settlements |
+| `GET /v2/data/combos/stats` | Volume, trades, traders, resolutions and top leg markets over a window |
+| `GET /v2/data/combos/leaderboard` | Wallets ranked by combo volume, PnL, trade count or win rate |
+| `WSS /stream/polymarket/partner/combos` | Live combo settlements (WebSockets key) |
+
+See the [Combos Data API reference](/api/combos-data/overview). To quote and buy combos, use the [Combos API](/api/combos/overview) instead.
+
 ## Tax statements
 
 Bravado generates formal accounting documents for tax reporting and financial reconciliation. Each statement type covers a specific aspect of wallet activity.

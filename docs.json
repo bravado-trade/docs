@@ -101,6 +101,18 @@
                   "api/analytics/trades",
                   "api/analytics/entity"
                 ]
+              },
+              {
+                "group": "Combos Data API",
+                "pages": [
+                  "api/combos-data/overview",
+                  "api/combos-data/list",
+                  "api/combos-data/trades",
+                  "api/combos-data/combo",
+                  "api/combos-data/stats",
+                  "api/combos-data/leaderboard",
+                  "api/combos-data/stream"
+                ]
               }
             ]
           },
@@ -243,6 +255,18 @@
               "api/analytics/trades",
               "api/analytics/entity"
             ]
+          },
+          {
+            "group": "Combos Data API",
+            "pages": [
+              "api/combos-data/overview",
+              "api/combos-data/list",
+              "api/combos-data/trades",
+              "api/combos-data/combo",
+              "api/combos-data/stats",
+              "api/combos-data/leaderboard",
+              "api/combos-data/stream"
+            ]
           }
         ]
       },
@@ -288,6 +312,18 @@
                   "api/analytics/trader-tax-report",
                   "api/analytics/trades",
                   "api/analytics/entity"
+                ]
+              },
+              {
+                "group": "Combos Data API",
+                "pages": [
+                  "api/combos-data/overview",
+                  "api/combos-data/list",
+                  "api/combos-data/trades",
+                  "api/combos-data/combo",
+                  "api/combos-data/stats",
+                  "api/combos-data/leaderboard",
+                  "api/combos-data/stream"
                 ]
               },
               {

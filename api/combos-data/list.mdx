@@ -1,0 +1,228 @@
+---
+title: "GET /v2/data/combos: List Combos"
+sidebarTitle: "/combos"
+api: "GET /v2/data/combos"
+description: "Combos with at least one settlement, newest trade first, with their legs and aggregate activity."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+One row per combo that has traded at least once, ordered by most recent trade. Each row carries the combo's legs (with Gamma metadata where known) and its activity: `trade_count`, `volume`, `unique_traders`, `last_price`, `avg_price`.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/data/combos
+```
+
+### Query Parameters
+
+<ParamField query="start_time" type="string">
+  Keep combos with at least one trade at or after this time. ISO-8601, or epoch seconds / milliseconds.
+</ParamField>
+
+<ParamField query="end_time" type="string">
+  Keep combos with at least one trade before this time. Same formats as `start_time`.
+</ParamField>
+
+<ParamField query="wallet" type="string">
+  Keep combos this wallet has traded.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Combo resolution at read time. One of `unresolved`, `win`, `loss`, `partial`.
+</ParamField>
+
+<ParamField query="market" type="string">
+  Keep combos with this market as a leg. Any of: the leg's V2 condition id (bytes31 or padded), Gamma's 32-byte `conditionId`, or Gamma's numeric market id.
+</ParamField>
+
+<ParamField query="min_notional" type="number">
+  Minimum total volume of the combo.
+</ParamField>
+
+<ParamField query="limit" default="50" type="integer">
+  Page size, 1 to 200.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Opaque. Pass back the previous page's `next_cursor`.
+</ParamField>
+
+### Response
+
+<ResponseField name="combos" type="array">
+  <Expandable title="Combo fields">
+    <ResponseField name="combo_id" type="string">
+      The combo's condition id (bytes31). Bravado's key for the combo.
+    </ResponseField>
+    <ResponseField name="combo_condition_id" type="string">
+      Same id in the venue's 32-byte wire form.
+    </ResponseField>
+    <ResponseField name="yes_position_id" type="string">
+      PositionManager token id of the YES side, uint256 as a decimal string.
+    </ResponseField>
+    <ResponseField name="no_position_id" type="string">
+      PositionManager token id of the NO side.
+    </ResponseField>
+    <ResponseField name="venue" type="string">
+      Always `polymarket`.
+    </ResponseField>
+    <ResponseField name="leg_count" type="integer">
+      Number of legs.
+    </ResponseField>
+    <ResponseField name="legs" type="array">
+      <Expandable title="Leg fields">
+        <ResponseField name="leg_index" type="integer">
+          0-based position of the leg in the combo.
+        </ResponseField>
+        <ResponseField name="position_id" type="string">
+          The venue's raw leg position id (uint256 as a decimal string).
+        </ResponseField>
+        <ResponseField name="condition_id" type="string">
+          The leg market's V2 condition id, padded to 32 bytes.
+        </ResponseField>
+        <ResponseField name="gamma_condition_id" type="string | null">
+          Gamma's 32-byte `conditionId` for the leg market, the join key to Gamma and the CLOB. `null` until looked up.
+        </ResponseField>
+        <ResponseField name="outcome_index" type="integer">
+          Index of the outcome the leg is on.
+        </ResponseField>
+        <ResponseField name="outcome" type="string | null">
+          Outcome label from Gamma, for example `Yes`.
+        </ResponseField>
+        <ResponseField name="question" type="string | null">
+          Market question from Gamma.
+        </ResponseField>
+        <ResponseField name="slug" type="string | null">
+          Market slug from Gamma.
+        </ResponseField>
+        <ResponseField name="market_id" type="string | null">
+          Gamma's numeric market id.
+        </ResponseField>
+        <ResponseField name="event_slug" type="string | null">
+          Slug of the event the market belongs to.
+        </ResponseField>
+        <ResponseField name="event_title" type="string | null">
+          Title of the event the market belongs to.
+        </ResponseField>
+        <ResponseField name="payout_fraction" type="string | null">
+          The leg's payout to the combo's outcome once its market resolved, `1` for a win, `0` for a loss, a fraction for a split. `null` while unresolved.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="resolution" type="string">
+      `unresolved`, `win`, `loss` or `partial`.
+    </ResponseField>
+    <ResponseField name="yes_settlement" type="string | null">
+      Payout per YES share once resolved (`1` on a win), `null` before.
+    </ResponseField>
+    <ResponseField name="resolved_at" type="string | null">
+      ISO-8601 time the resolution was recorded.
+    </ResponseField>
+    <ResponseField name="legs_resolved" type="integer">
+      How many legs have resolved so far.
+    </ResponseField>
+    <ResponseField name="prepared_at" type="string | null">
+      ISO-8601 time the combo was created on-chain, when seen by the indexer.
+    </ResponseField>
+    <ResponseField name="first_trade_at" type="string | null">
+      ISO-8601 time of the first settlement.
+    </ResponseField>
+    <ResponseField name="last_trade_at" type="string | null">
+      ISO-8601 time of the most recent settlement.
+    </ResponseField>
+    <ResponseField name="trade_count" type="integer">
+      Settlements (taker fills).
+    </ResponseField>
+    <ResponseField name="volume" type="string">
+      Total taker notional, decimal string.
+    </ResponseField>
+    <ResponseField name="unique_traders" type="integer">
+      Distinct taker wallets.
+    </ResponseField>
+    <ResponseField name="last_price" type="string | null">
+      Price of the most recent settlement.
+    </ResponseField>
+    <ResponseField name="avg_price" type="string | null">
+      Notional-weighted average price.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="next_cursor" type="string | null">
+  Pass back as `cursor` for the next page. `null` on the last page.
+</ResponseField>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | `INVALID_TIME`, `INVALID_CURSOR`, `INVALID_MARKET`, or a `status` / `limit` outside the allowed values |
+| `401 Unauthorized` | Missing or invalid HMAC credentials, or not a Data API key |
+| `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` header |
+
+See the [Combos Data overview](/api/combos-data/overview#errors) for the full list.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/v2/data/combos \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d status=unresolved \
+  -d min_notional=1000 \
+  -d limit=2
+```
+
+```json Response (abbreviated)
+{
+  "combos": [
+    {
+      "combo_id": "0x03a1...9f",
+      "combo_condition_id": "0x03a1...9f00",
+      "yes_position_id": "1234...00",
+      "no_position_id": "1234...01",
+      "venue": "polymarket",
+      "leg_count": 3,
+      "legs": [
+        {
+          "leg_index": 0,
+          "position_id": "5678...",
+          "condition_id": "0x01b2...00",
+          "gamma_condition_id": "0x9c3d...",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "question": "Will the Lakers win on Sunday?",
+          "slug": "lakers-win-sunday",
+          "market_id": "4058840",
+          "event_slug": "nba-sunday",
+          "event_title": "NBA Sunday",
+          "payout_fraction": null
+        }
+      ],
+      "resolution": "unresolved",
+      "yes_settlement": null,
+      "resolved_at": null,
+      "legs_resolved": 0,
+      "prepared_at": "2026-10-18T14:02:11.000Z",
+      "first_trade_at": "2026-10-18T14:03:40.000Z",
+      "last_trade_at": "2026-10-19T09:12:05.000Z",
+      "trade_count": 41,
+      "volume": "5820.500000",
+      "unique_traders": 23,
+      "last_price": "0.14000000",
+      "avg_price": "0.12730000"
+    }
+  ],
+  "next_cursor": "eyJ0IjoxNz..."
+}
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /v2/data/combos/{combo_id}`](/api/combos-data/combo) for one combo in full.
+- [`GET /v2/data/combos/trades`](/api/combos-data/trades) for the individual fills.

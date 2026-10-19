@@ -1,0 +1,123 @@
+---
+title: "GET /v2/data/combos/stats: Combo Stats"
+sidebarTitle: "/combos/stats"
+api: "GET /v2/data/combos/stats"
+description: "Aggregate combo activity over a window: volume, trades, traders, combos, average legs, largest trade, resolutions, realized PnL and the most common leg markets."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+```text
+GET https://partner-api.bravadotrade.com/v2/data/combos/stats
+```
+
+Answers are cached per window for 60 seconds; a cached answer's `window.end` is the time it was computed.
+
+<Warning>
+  `window=all` (the default) scans the whole tape. A cold call can take tens of seconds, once per cache period. Pass a bounded `window` or explicit `start_time` / `end_time` when latency matters.
+</Warning>
+
+### Query Parameters
+
+<ParamField query="window" default="all" type="string">
+  Rolling window ending now. One of `24h`, `7d`, `30d`, `all`. Ignored when `start_time` or `end_time` is given.
+</ParamField>
+
+<ParamField query="start_time" type="string">
+  Explicit window start. ISO-8601, or epoch seconds / milliseconds.
+</ParamField>
+
+<ParamField query="end_time" type="string">
+  Explicit window end. Same formats as `start_time`.
+</ParamField>
+
+### Response
+
+<ResponseField name="venue" type="string">
+  Always `polymarket`.
+</ResponseField>
+
+<ResponseField name="window" type="object">
+  `start` (ISO-8601 or `null` for all time) and `end` (ISO-8601) actually used.
+</ResponseField>
+
+<ResponseField name="total_volume" type="string">
+  Sum of taker notional in the window, decimal string.
+</ResponseField>
+
+<ResponseField name="total_trades" type="integer">
+  Settlements (taker fills) in the window.
+</ResponseField>
+
+<ResponseField name="unique_traders" type="integer">
+  Distinct taker wallets.
+</ResponseField>
+
+<ResponseField name="unique_combos" type="integer">
+  Distinct combos traded.
+</ResponseField>
+
+<ResponseField name="average_trade_notional" type="string | null">
+  `total_volume / total_trades`. `null` when there are no trades.
+</ResponseField>
+
+<ResponseField name="average_legs_per_combo" type="string | null">
+  Mean leg count over the combos traded in the window, one weight per combo (a 2-leg combo with a hundred settlements weighs the same as a 10-leg combo with one).
+</ResponseField>
+
+<ResponseField name="largest_trade" type="object | null">
+  The settlement with the highest `notional`, as a [ComboTrade](/api/combos-data/trades#response).
+</ResponseField>
+
+<ResponseField name="resolution_counts" type="object">
+  Combos traded in the window, by their resolution now: `win`, `loss`, `partial`, `unresolved`.
+</ResponseField>
+
+<ResponseField name="realized_pnl" type="object">
+  Taker-side PnL on resolved combos: `resolved_trades` (integer) and `total` (decimal string).
+</ResponseField>
+
+<ResponseField name="top_leg_markets" type="array">
+  The ten underlying markets that appear most often as legs of combos traded in the window. Each: `condition_id`, `question`, `slug`, `combo_count`, `trade_count`.
+</ResponseField>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | `INVALID_WINDOW` or `INVALID_TIME` |
+| `401 Unauthorized` | Missing or invalid HMAC credentials, or not a Data API key |
+| `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` header |
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/v2/data/combos/stats \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d window=24h
+```
+
+```json Response (abbreviated)
+{
+  "venue": "polymarket",
+  "window": { "start": "2026-10-18T09:00:00.000Z", "end": "2026-10-19T09:00:00.000Z" },
+  "total_volume": "565756.750000",
+  "total_trades": 6835,
+  "unique_traders": 2258,
+  "unique_combos": 1904,
+  "average_trade_notional": "82.774000",
+  "average_legs_per_combo": "3.41",
+  "largest_trade": { "trade_id": "0x7f1e...c0:3", "notional": "4200.000000", "wallet": "0xabc123...def456" },
+  "resolution_counts": { "win": 212, "loss": 1130, "partial": 4, "unresolved": 558 },
+  "realized_pnl": { "resolved_trades": 4810, "total": "-61240.120000" },
+  "top_leg_markets": [
+    { "condition_id": "0x01b2...00", "question": "Will the Lakers win on Sunday?", "slug": "lakers-win-sunday", "combo_count": 96, "trade_count": 410 }
+  ]
+}
+```
+
+</CodeGroup>

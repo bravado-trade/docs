@@ -1,0 +1,80 @@
+---
+title: "GET /v2/data/combos/{combo_id}: Combo Detail"
+sidebarTitle: "/combos/{combo_id}"
+api: "GET /v2/data/combos/{combo_id}"
+description: "One combo in full: its legs, its distinct underlying markets and its 50 most recent settlements."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+```text
+GET https://partner-api.bravadotrade.com/v2/data/combos/{combo_id}
+```
+
+### Path Parameters
+
+<ParamField path="combo_id" type="string" required>
+  The combo's condition id: bytes31 (`0x` plus 62 hex characters) or the 32-byte wire form padded with `00`.
+</ParamField>
+
+### Response
+
+<ResponseField name="combo" type="object">
+  The same object as one row of [`GET /v2/data/combos`](/api/combos-data/list#response).
+</ResponseField>
+
+<ResponseField name="markets" type="array">
+  The combo's distinct underlying markets, as leg objects. A market that appears in several legs is listed once.
+</ResponseField>
+
+<ResponseField name="recent_trades" type="array">
+  The 50 most recent settlements (taker fills), as [ComboTrade](/api/combos-data/trades#response) objects. For the full history page through `GET /v2/data/combos/trades?combo_id=`.
+</ResponseField>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | `INVALID_COMBO_ID`: not a bytes31 or padded 32-byte hex id |
+| `401 Unauthorized` | Missing or invalid HMAC credentials, or not a Data API key |
+| `404 Not Found` | `COMBO_NOT_FOUND`: well-formed id that has not been indexed |
+| `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` header |
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://partner-api.bravadotrade.com/v2/data/combos/0x03a1...9f \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+```
+
+```json Response (abbreviated)
+{
+  "combo": {
+    "combo_id": "0x03a1...9f",
+    "combo_condition_id": "0x03a1...9f00",
+    "leg_count": 3,
+    "legs": [ { "leg_index": 0, "condition_id": "0x01b2...00", "question": "Will the Lakers win on Sunday?" } ],
+    "resolution": "win",
+    "yes_settlement": "1",
+    "resolved_at": "2026-10-20T03:10:00.000Z",
+    "legs_resolved": 3,
+    "trade_count": 41,
+    "volume": "5820.500000",
+    "unique_traders": 23,
+    "last_price": "0.14000000",
+    "avg_price": "0.12730000"
+  },
+  "markets": [
+    { "leg_index": 0, "condition_id": "0x01b2...00", "gamma_condition_id": "0x9c3d...", "market_id": "4058840", "question": "Will the Lakers win on Sunday?", "payout_fraction": "1" }
+  ],
+  "recent_trades": [
+    { "trade_id": "0x7f1e...c0:3", "wallet": "0xabc123...def456", "side": "BUY", "outcome": "YES", "price": "0.14000000", "shares": "100.000000", "notional": "14.000000", "status": "win", "realized_pnl": "86.000000" }
+  ]
+}
+```
+
+</CodeGroup>

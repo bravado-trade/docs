@@ -1,0 +1,56 @@
+---
+title: "Combo Trades WebSocket"
+sidebarTitle: "Live Combos"
+description: "Subscribe to every Polymarket combo settlement as it is finalized on-chain, one frame per fill, with the combo's legs."
+icon:
+  name: "radio"
+  library: "lucide"
+---
+
+Connect to `wss://partner-api.bravadotrade.com/stream/polymarket/partner/combos` using a **WebSockets** key with `stream.read` and [HMAC authentication](/authentication). It is metered and billed exactly like [`/stream/polymarket/partner/trades`](/api/market-data/trade-feed); a Data API key is refused on this route.
+
+No subscription message is needed: the channel is the path. On connect the server sends a snapshot of the most recent settlements it has seen, then one frame per new settlement.
+
+```json Snapshot
+{ "type": "snapshot", "trades": [ { "type": "combo_trade", "...": "..." } ] }
+```
+
+```json Frame
+{
+  "type": "combo_trade",
+  "venue": "polymarket",
+  "trade_id": "0x7f1e...c0:3",
+  "tx_hash": "0x7f1e...c0",
+  "combo_id": "0x03a1...9f",
+  "combo_condition_id": "0x03a1...9f00",
+  "wallet": "0xabc123...def456",
+  "side": "BUY",
+  "outcome": "YES",
+  "legs": [
+    { "condition_id": "0x01b2...00", "gamma_condition_id": "0x9c3d...", "market_id": "4058840", "position_id": "5678...", "outcome_index": 0, "outcome": "Yes", "question": "Will the Lakers win on Sunday?", "slug": "lakers-win-sunday" }
+  ],
+  "leg_count": 3,
+  "price": "0.14000000",
+  "shares": "100.000000",
+  "notional": "14.000000",
+  "fee": "0.060200",
+  "max_payout": "100.000000",
+  "timestamp": 1792436405000
+}
+```
+
+<Info>
+  Taker side only: one frame per settlement, never the maker fills it matched. Decimals use the same fixed-scale strings as the REST routes. Frames arrive after on-chain finality (about 1 to 2 minutes behind the block), so this feed is for monitoring and analytics, not for front-running a settlement. History is served by [`GET /v2/data/combos/trades`](/api/combos-data/trades); the socket never replays it.
+</Info>
+
+`GET /stream/capabilities` advertises the route as `combos_path` for `polymarket` when it is available.
+
+## Connect
+
+Create a WebSockets credential in [Console](https://console.bravadotrade.com/endpoints/ws_stream?section=keys) and sign the connection the same way as the [Live Trades](/api/market-data/trade-feed#connect-with-usage-tracking) feed, with `path` set to `/stream/polymarket/partner/combos`.
+
+## Related
+
+- [Combos Data overview](/api/combos-data/overview)
+- [Live Trades WebSocket](/api/market-data/trade-feed)
+- [API credits](/api-credits#authenticated-websocket-credits)

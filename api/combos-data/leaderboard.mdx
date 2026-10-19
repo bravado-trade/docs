@@ -1,0 +1,127 @@
+---
+title: "GET /v2/data/combos/leaderboard: Combo Traders"
+sidebarTitle: "/combos/leaderboard"
+api: "GET /v2/data/combos/leaderboard"
+description: "Wallets ranked by combo volume, realized PnL, trade count or win rate over a rolling window."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+```text
+GET https://partner-api.bravadotrade.com/v2/data/combos/leaderboard
+```
+
+Answers are cached per window for 60 seconds. This board ranks **combo** activity only; for the venue-wide PnL board see [`GET /trader-analytics/leaderboard`](/api/analytics/leaderboard).
+
+### Query Parameters
+
+<ParamField query="window" default="all" type="string">
+  Rolling window ending now. One of `24h`, `7d`, `30d`, `all`.
+</ParamField>
+
+<ParamField query="sort_by" default="volume" type="string">
+  One of `volume`, `realized_pnl`, `trade_count`, `win_rate`. `win_rate` ranks only wallets with at least 5 resolved trades.
+</ParamField>
+
+<ParamField query="role" default="taker" type="string">
+  `taker` ranks the traders who took liquidity, `maker` the market makers, `all` both.
+</ParamField>
+
+<ParamField query="limit" default="25" type="integer">
+  Rows to return, 1 to 100. The board does not page.
+</ParamField>
+
+### Response
+
+<ResponseField name="window" type="string">
+  Echo of `window`.
+</ResponseField>
+
+<ResponseField name="sort_by" type="string">
+  Echo of `sort_by`.
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  Echo of `role`.
+</ResponseField>
+
+<ResponseField name="traders" type="array">
+  <Expandable title="Row fields">
+    <ResponseField name="rank" type="integer">
+      1-based rank.
+    </ResponseField>
+    <ResponseField name="wallet" type="string">
+      Polygon wallet address.
+    </ResponseField>
+    <ResponseField name="volume" type="string">
+      Notional traded in the window, decimal string.
+    </ResponseField>
+    <ResponseField name="trade_count" type="integer">
+      Fills in the window.
+    </ResponseField>
+    <ResponseField name="combo_count" type="integer">
+      Distinct combos traded.
+    </ResponseField>
+    <ResponseField name="resolved_trades" type="integer">
+      Fills whose combo has resolved.
+    </ResponseField>
+    <ResponseField name="wins" type="integer">
+      Resolved fills with positive PnL.
+    </ResponseField>
+    <ResponseField name="losses" type="integer">
+      Resolved fills with negative PnL.
+    </ResponseField>
+    <ResponseField name="win_rate" type="string | null">
+      `wins / resolved_trades`, between `0` and `1`. `null` with no resolved trades.
+    </ResponseField>
+    <ResponseField name="realized_pnl" type="string">
+      Sum of realized PnL over resolved fills.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | `INVALID_WINDOW`, `INVALID_SORT`, or a `role` / `limit` outside the allowed values |
+| `401 Unauthorized` | Missing or invalid HMAC credentials, or not a Data API key |
+| `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` header |
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/v2/data/combos/leaderboard \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d window=7d \
+  -d sort_by=realized_pnl \
+  -d limit=2
+```
+
+```json Response (abbreviated)
+{
+  "window": "7d",
+  "sort_by": "realized_pnl",
+  "role": "taker",
+  "traders": [
+    {
+      "rank": 1,
+      "wallet": "0xabc123...def456",
+      "volume": "18420.000000",
+      "trade_count": 57,
+      "combo_count": 31,
+      "resolved_trades": 40,
+      "wins": 9,
+      "losses": 31,
+      "win_rate": "0.2250",
+      "realized_pnl": "6120.500000"
+    }
+  ]
+}
+```
+
+</CodeGroup>
