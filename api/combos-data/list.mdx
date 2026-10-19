@@ -152,6 +152,82 @@ GET https://partner-api.bravadotrade.com/v2/data/combos
   Pass back as `cursor` for the next page. `null` on the last page.
 </ResponseField>
 
+<ResponseExample>
+
+```json 200
+{
+  "combos": [
+    {
+      "combo_id": "0x03a1...9f",
+      "combo_condition_id": "0x03a1...9f00",
+      "yes_position_id": "1234...00",
+      "no_position_id": "1234...01",
+      "venue": "polymarket",
+      "leg_count": 3,
+      "legs": [
+        {
+          "leg_index": 0,
+          "position_id": "56780000...",
+          "condition_id": "0x01b2...00",
+          "gamma_condition_id": "0x9c3d...",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "question": "Will the Lakers win on Sunday?",
+          "slug": "lakers-win-sunday",
+          "market_id": "4058840",
+          "event_slug": "nba-sunday",
+          "event_title": "NBA Sunday",
+          "payout_fraction": null
+        },
+        {
+          "leg_index": 1,
+          "position_id": "56781111...",
+          "condition_id": "0x02c4...00",
+          "gamma_condition_id": "0x7a11...",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "question": "Will the Celtics win on Sunday?",
+          "slug": "celtics-win-sunday",
+          "market_id": "4058841",
+          "event_slug": "nba-sunday",
+          "event_title": "NBA Sunday",
+          "payout_fraction": null
+        },
+        {
+          "leg_index": 2,
+          "position_id": "56782222...",
+          "condition_id": "0x03d6...00",
+          "gamma_condition_id": "0x5e90...",
+          "outcome_index": 0,
+          "outcome": "No",
+          "question": "Will the Knicks win on Sunday?",
+          "slug": "knicks-win-sunday",
+          "market_id": "4058842",
+          "event_slug": "nba-sunday",
+          "event_title": "NBA Sunday",
+          "payout_fraction": null
+        }
+      ],
+      "resolution": "unresolved",
+      "yes_settlement": null,
+      "resolved_at": null,
+      "legs_resolved": 0,
+      "prepared_at": "2026-10-18T14:02:11.000Z",
+      "first_trade_at": "2026-10-18T14:03:40.000Z",
+      "last_trade_at": "2026-10-19T09:12:05.000Z",
+      "trade_count": 41,
+      "volume": "5820.500000",
+      "unique_traders": 23,
+      "last_price": "0.14000000",
+      "avg_price": "0.12730000"
+    }
+  ],
+  "next_cursor": "eyJ0IjoxNz..."
+}
+```
+
+</ResponseExample>
+
 ### Errors
 
 | Status | When |
@@ -174,50 +250,6 @@ curl -G https://partner-api.bravadotrade.com/v2/data/combos \
   -d status=unresolved \
   -d min_notional=1000 \
   -d limit=2
-```
-
-```json Response (abbreviated)
-{
-  "combos": [
-    {
-      "combo_id": "0x03a1...9f",
-      "combo_condition_id": "0x03a1...9f00",
-      "yes_position_id": "1234...00",
-      "no_position_id": "1234...01",
-      "venue": "polymarket",
-      "leg_count": 3,
-      "legs": [
-        {
-          "leg_index": 0,
-          "position_id": "5678...",
-          "condition_id": "0x01b2...00",
-          "gamma_condition_id": "0x9c3d...",
-          "outcome_index": 0,
-          "outcome": "Yes",
-          "question": "Will the Lakers win on Sunday?",
-          "slug": "lakers-win-sunday",
-          "market_id": "4058840",
-          "event_slug": "nba-sunday",
-          "event_title": "NBA Sunday",
-          "payout_fraction": null
-        }
-      ],
-      "resolution": "unresolved",
-      "yes_settlement": null,
-      "resolved_at": null,
-      "legs_resolved": 0,
-      "prepared_at": "2026-10-18T14:02:11.000Z",
-      "first_trade_at": "2026-10-18T14:03:40.000Z",
-      "last_trade_at": "2026-10-19T09:12:05.000Z",
-      "trade_count": 41,
-      "volume": "5820.500000",
-      "unique_traders": 23,
-      "last_price": "0.14000000",
-      "avg_price": "0.12730000"
-    }
-  ],
-  "next_cursor": "eyJ0IjoxNz..."
-}
 ```
 
 </CodeGroup>

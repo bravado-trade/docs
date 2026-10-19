@@ -80,6 +80,44 @@ Answers are cached per window for 60 seconds. This board ranks **combo** activit
   </Expandable>
 </ResponseField>
 
+<ResponseExample>
+
+```json 200
+{
+  "window": "7d",
+  "sort_by": "realized_pnl",
+  "role": "taker",
+  "traders": [
+    {
+      "rank": 1,
+      "wallet": "0xabc123...def456",
+      "volume": "18420.000000",
+      "trade_count": 57,
+      "combo_count": 31,
+      "resolved_trades": 40,
+      "wins": 9,
+      "losses": 31,
+      "win_rate": "0.2250",
+      "realized_pnl": "6120.500000"
+    },
+    {
+      "rank": 2,
+      "wallet": "0x9f0a...11c2",
+      "volume": "9310.250000",
+      "trade_count": 22,
+      "combo_count": 14,
+      "resolved_trades": 18,
+      "wins": 5,
+      "losses": 13,
+      "win_rate": "0.2778",
+      "realized_pnl": "2240.000000"
+    }
+  ]
+}
+```
+
+</ResponseExample>
+
 ### Errors
 
 | Status | When |
@@ -100,28 +138,6 @@ curl -G https://partner-api.bravadotrade.com/v2/data/combos/leaderboard \
   -d window=7d \
   -d sort_by=realized_pnl \
   -d limit=2
-```
-
-```json Response (abbreviated)
-{
-  "window": "7d",
-  "sort_by": "realized_pnl",
-  "role": "taker",
-  "traders": [
-    {
-      "rank": 1,
-      "wallet": "0xabc123...def456",
-      "volume": "18420.000000",
-      "trade_count": 57,
-      "combo_count": 31,
-      "resolved_trades": 40,
-      "wins": 9,
-      "losses": 31,
-      "win_rate": "0.2250",
-      "realized_pnl": "6120.500000"
-    }
-  ]
-}
 ```
 
 </CodeGroup>
