@@ -1,71 +1,99 @@
 ---
 title: "Bravado API Docs: Prediction Market Infrastructure"
 sidebarTitle: "Home"
-description: "Infrastructure layer for Prediction Markets. REST APIs to execute orders, mirror top traders via copy-trading, and generate analytics and tax statements."
+description: "Data and execution infrastructure for prediction markets. Four products behind one account: Data API, Market Data, Trade API and MCP Server."
 ---
 
-<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
-
-
-Bravado gives partners and developers programmatic access to prediction market trading through a suite of REST APIs. Place sophisticated orders, mirror top traders, analyze wallet performance, and generate tax-ready statements, all from a single authenticated integration.
+Bravado gives developers programmatic access to prediction markets through four products that share one account, one credential scheme and one credit balance. Read trader and combo analytics, stream live market data, execute orders, or let an AI agent query everything through MCP.
 
 <CardGroup cols={2}>
   <Card title="Quick Start" icon="rocket" href="/quickstart">
-    Make your first API call in under 5 minutes
+    Create an endpoint, mint a credential and make your first signed call
   </Card>
 
   <Card title="Authentication" icon="key" href="/authentication">
-    Get your API key and authenticate requests
+    HMAC signing for the HTTP and WebSocket products, OAuth for MCP
   </Card>
 
-  <Card title="Place an Order" icon="arrow-up-right" href="/guides/place-an-order">
-    Buy and sell outcome tokens on Polymarket
+  <Card title="API credits" icon="coins" href="/api-credits">
+    What each product costs per request or per delivered byte
   </Card>
 
-  <Card title="API Reference" icon="code" href="/api/trade/overview">
-    Full endpoint reference for all three APIs
-  </Card>
-</CardGroup>
-
-## What you can build
-
-<CardGroup cols={3}>
-  <Card title="Trading Bots" icon="robot" href="/products/trade-api">
-    Automate strategies with TWAP, iceberg, pegged, and bracket orders
-  </Card>
-
-  <Card title="Copy Trading" icon="copy" href="/products/copytrade-api">
-    Mirror top traders automatically with configurable sizing
-  </Card>
-
-  <Card title="Analytics Dashboards" icon="chart-line" href="/products/data-api">
-    Surface leaderboards, PnL charts, and wallet profiles
+  <Card title="Supported venues" icon="globe" href="/markets/overview">
+    Polymarket and Predict.fun coverage by product
   </Card>
 </CardGroup>
 
-## APIs at a glance
+## Products
 
-Bravado exposes three APIs that work together:
+The four products map one-to-one to the endpoints you configure in [Console](https://console.bravadotrade.com/endpoints). Each endpoint issues its own credentials.
 
-| API | Base URL | What it does |
-| --- | --- | --- |
-| **Trade API v2** | `https://partner-api.bravadotrade.com/v2/trade` | Order execution, balances, positions, user provisioning |
-| **Copytrade API** | `https://partner-api.bravadotrade.com/v2/trade/copytrade` | Subscribe to leaders, mirror fills, paper-trade |
-| **Data API** | `https://partner-api.bravadotrade.com/trader-analytics` | Leaderboards, trader profiles, PnL series, tax statements |
+| Product | Base | Console endpoint | What it does |
+| --- | --- | --- | --- |
+| [**Data API**](/products/data-api) | `https://partner-api.bravadotrade.com/trader-analytics`, `/v2/data` | Data API | Trader PnL, positions, leaderboards, tax statements, and market-wide Combos data |
+| [**Market Data**](/products/market-data) | `wss://partner-api.bravadotrade.com/stream/...` | Market Data | Live order books, trades and combo settlements, UMA resolution, mempool fills |
+| [**Trade API**](/products/trade-api) | `https://partner-api.bravadotrade.com/v2/trade` | Trade API | Order execution, strategies, positions, withdrawals; includes Combos and Copytrade |
+| [**MCP Server**](/products/mcp-server) | `https://mcp.bravadotrade.com` | MCP Server | OAuth access to Bravado analytics and SQL for Claude and other agents |
+
+<CardGroup cols={2}>
+  <Card title="Data API" icon="chart-line" href="/products/data-api">
+    Wallet performance, leaderboards and tax statements from on-chain settlement, plus every Polymarket combo settlement.
+  </Card>
+
+  <Card title="Market Data" icon="activity" href="/products/market-data">
+    One WebSocket for order books, enriched trades and combo fills across venues, with UMA resolution and the mempool tier.
+  </Card>
+
+  <Card title="Trade API" icon="arrow-left-right" href="/products/trade-api">
+    Eight order types, managed strategies, multi-leg combos and copy trading on Polymarket and Predict.fun.
+  </Card>
+
+  <Card title="MCP Server" icon="sparkles" href="/products/mcp-server">
+    Connect Claude, Cursor or any MCP client to Bravado data with OAuth, no API key in the client.
+  </Card>
+</CardGroup>
 
 ## Get started
 
 <Steps>
-  <Step title="Get your API key">
-    Create an account in [Console](https://console.bravadotrade.com/signup), then generate a public API key and secret for your product.
+  <Step title="Create an organisation">
+    [Sign up](https://console.bravadotrade.com/signup) in Console. The Free plan includes the Data API and MCP Server; Market Data and Trade API need a paid plan or an entitlement.
   </Step>
-  <Step title="Verify your account">
-    Call `GET /v2/trade/account` to confirm your credentials and inspect your wallet address, scopes, and rate limits.
+  <Step title="Set up an endpoint">
+    Open **Endpoints**, pick a product and create its credential. One endpoint per product per organisation; keys and usage live under it.
   </Step>
-  <Step title="Place your first order">
-    Send a `POST /v2/trade/order` with `type: "MARKET"` to buy shares in any Polymarket outcome token.
+  <Step title="Make a signed call">
+    Follow the [quickstart](/quickstart) for a signed Data API request, or the [Trade quickstart](/quickstart-trade) to place an order.
   </Step>
-  <Step title="Explore advanced features">
-    Add bracket orders, set up copy-trading, or pull analytics to build richer product experiences.
+  <Step title="Watch usage">
+    **Usage** in Console shows calls, delivered bytes and credits per product. See [API credits](/api-credits).
   </Step>
 </Steps>
+
+## What you can build
+
+<CardGroup cols={3}>
+  <Card title="Terminals" icon="monitor" href="/use-cases/terminals">
+    Live tapes, depth and order entry in one surface.
+  </Card>
+
+  <Card title="Trading Bots" icon="bot" href="/use-cases/algorithmic-trading-bots">
+    React to live flow with TWAP, iceberg, pegged and bracket orders.
+  </Card>
+
+  <Card title="Portfolio Dashboards" icon="chart-pie" href="/use-cases/portfolio-dashboards">
+    Leaderboards, PnL charts and wallet profiles.
+  </Card>
+
+  <Card title="Copy Trading" icon="users-round" href="/use-cases/copy-trading">
+    Mirror top traders with configurable sizing.
+  </Card>
+
+  <Card title="Quant Research" icon="flask-conical" href="/use-cases/quant-research">
+    Capture and analyze market, trader and combo data.
+  </Card>
+
+  <Card title="AI Agents" icon="sparkles" href="/use-cases/ai-agents">
+    Give agents live data and analytics through the MCP Server.
+  </Card>
+</CardGroup>

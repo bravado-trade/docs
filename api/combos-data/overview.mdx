@@ -17,7 +17,7 @@ The base URL is `https://partner-api.bravadotrade.com` and every route lives und
 
 ## Authentication
 
-Requests are signed with a **Data API** credential (`analytics.read` scope) using the three HMAC headers. See [authentication](/authentication). A Trade API or WebSockets key is refused with `401`.
+The REST routes take a **Data API** credential (`analytics.read`) with the three HMAC headers; see [authentication](/authentication). A Trade API or Market Data key is refused with `401`. The live stream is part of [Market Data](/products/market-data) and takes that product's credential instead.
 
 ```http
 X-BRAVADO-API-KEY: <public-key>

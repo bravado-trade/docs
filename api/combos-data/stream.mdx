@@ -7,7 +7,7 @@ icon:
   library: "lucide"
 ---
 
-Connect to `wss://partner-api.bravadotrade.com/stream/polymarket/partner/combos` using a **WebSockets** key with `stream.read` and [HMAC authentication](/authentication). It is metered and billed exactly like [`/stream/polymarket/partner/trades`](/api/market-data/trade-feed); a Data API key is refused on this route.
+This feed is part of [Market Data](/products/market-data). Connect to `wss://partner-api.bravadotrade.com/stream/polymarket/partner/combos` using a **Market Data** credential (`stream.read`) and [HMAC authentication](/authentication). It is metered and billed exactly like [`/stream/polymarket/partner/trades`](/api/market-data/trade-feed); a Data API key is refused on this route.
 
 No subscription message is needed: the channel is the path. On connect the server sends a snapshot of the most recent settlements it has seen, then one frame per new settlement.
 
@@ -47,7 +47,7 @@ No subscription message is needed: the channel is the path. On connect the serve
 
 ## Connect
 
-Create a WebSockets credential in [Console](https://console.bravadotrade.com/endpoints/ws_stream?section=keys) and sign the connection the same way as the [Live Trades](/api/market-data/trade-feed#connect-with-usage-tracking) feed, with `path` set to `/stream/polymarket/partner/combos`.
+Create a Market Data credential in [Console](https://console.bravadotrade.com/endpoints/ws_stream?section=keys) and sign the connection the same way as the [Live Trades](/api/market-data/trade-feed#connect-with-usage-tracking) feed, with `path` set to `/stream/polymarket/partner/combos`.
 
 ## Related
 

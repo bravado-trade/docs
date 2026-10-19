@@ -1,7 +1,7 @@
 ---
-title: "Market Data: Realtime Feeds, Trades, and Order Books"
+title: "Market Data: Order Books, Trades, Combos, UMA and Mempool"
 sidebarTitle: "Overview"
-description: "Stream live prediction-market data over Bravado WebSockets: enriched trades across every market and live order books for any outcome token. One connection, no venue integration to maintain."
+description: "Stream live prediction-market data over Bravado WebSockets: order books, enriched trades, combo settlements and UMA resolution, plus the low-latency mempool tier. One credential, no venue integration to maintain."
 icon:
   name: "activity"
   library: "lucide"
@@ -18,11 +18,23 @@ Bravado's Market Data layer streams realtime prediction-market data over WebSock
     Live order-book snapshots and updates for outcome tokens on Polymarket and Predict.fun. Subscribe to multiple assets over one socket per venue.
   </Card>
 
+  <Card title="Live Combos" icon="radio" href="/api/combos-data/stream">
+    One frame per Polymarket combo settlement, with the combo's legs. History is served by the Data API.
+  </Card>
+
+  <Card title="UMA resolution" icon="gavel" href="/products/uma-api">
+    How Polymarket markets settle through UMA's Optimistic Oracle: proposals, disputes and outcomes, over REST and as a stream, with the same Market Data credential.
+  </Card>
+
   <Card title="Mempool Fills" icon="zap" href="/api/market-data/mempool-feed">
-    The low-latency tier: fills decoded from the Polygon mempool, ~1–2s ahead of the venue feed, with the full pending→settled→reverted lifecycle and the owner wallet behind each proxy. Partner tier.
+    The low-latency tier: fills decoded from the Polygon mempool, ~1–2s ahead of the venue feed, with the full pending→settled→reverted lifecycle and the owner wallet behind each proxy. Partner tier, separate feed token.
   </Card>
 
 </CardGroup>
+
+<Note>
+  Market Data is one product and one Console endpoint. Its credential (`stream.read`, paid plan) opens every feed above except Mempool Fills, which is provisioned separately during onboarding.
+</Note>
 
 <Info>
   **Live order books support Polymarket and Predict.fun.** The enriched trade feed currently covers Polymarket. See [venue order books](/api/market-data/venue-order-books) for the shared message format.
@@ -57,7 +69,7 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 
 <Info>
   The mempool feed is a **partner tier** — token-gated and provisioned during onboarding.
-  The standard [Live Trades](/api/market-data/trade-feed) feed uses a WebSockets credential and mirrors
+  The standard [Live Trades](/api/market-data/trade-feed) feed uses a Market Data credential and mirrors
   the venue's own push feed. See the [Mempool Fills feed](/api/market-data/mempool-feed) — contact Bravado to enable it.
 </Info>
 
@@ -66,13 +78,15 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 - **Live tickers and tapes.** Render a running feed of fills across the market, no polling.
 - **Depth and price displays.** Drive an order-book widget or a best bid/ask readout straight from the socket.
 - **Signal and discovery.** Watch flow across every market and react to it in realtime.
-- **Enriched activity.** Every trade arrives with the trader's wallet, so you can cross-reference [Trader Data](/products/data-api) (PnL, positions, history) for the wallets you see trading.
+- **Enriched activity.** Every trade arrives with the trader's wallet, so you can cross-reference [Data API](/products/data-api) (PnL, positions, history) for the wallets you see trading.
 
 ## Feeds
 
 | Feed | Endpoint | Auth | Direction |
 | --- | --- | --- | --- |
 | [Live Trades](/api/market-data/trade-feed) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner/trades` | HMAC | Server → client |
+| [Live Combos](/api/combos-data/stream) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner/combos` | HMAC | Server → client |
+| [UMA resolution](/products/uma-api) | `https://partner-api.bravadotrade.com/uma/*` and `wss://partner-api.bravadotrade.com/uma/ws` | HMAC | REST and server → client |
 | [Mempool Fills](/api/market-data/mempool-feed) (low-latency) | `wss://stream.bravadotrade.com/ws` | Partner | Bidirectional |
 | [Polymarket order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` | HMAC | Bidirectional |
 | [Predict.fun order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` | HMAC | Bidirectional |
@@ -83,7 +97,7 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 
 ## Historical data and custom delivery
 
-Wallet trade history and PnL are available through [Trader Data](/products/data-api). REST price history and bounded volume series are described in [historical data coverage](/api/market-data/historical-data).
+Wallet trade history and PnL are available through [Data API](/products/data-api). REST price history and bounded volume series are described in [historical data coverage](/api/market-data/historical-data).
 
 For historical L2 events, Parquet extracts, OHLCV, open-interest series or a market catalog integration, contact us with your markets and date range. We can scope delivery from available archives and develop additional datasets. Coverage and delivery dates are agreed per dataset; these are not unrestricted self-service history endpoints.
 
@@ -107,7 +121,7 @@ The trade-feed status reports whether the upstream source is connected, how many
 
 ## Related
 
-- [Quickstart](/quickstart), connect and receive live data in under five minutes.
-- [Trader Data API](/products/data-api), enrich the wallets you see trading with PnL, positions, and history.
+- [Live Trades](/api/market-data/trade-feed), a signed connection that receives data in under five minutes.
+- [Data API](/products/data-api), enrich the wallets you see trading with PnL, positions, history and combo analytics.
 - [Trade API](/products/trade-api), act on what you see by placing orders.
 - [Supported Prediction Markets](/markets/overview), venue coverage.

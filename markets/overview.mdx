@@ -47,14 +47,17 @@ The mechanics are broadly the same across venues, which is what makes a shared A
 
 | Bravado product | Polymarket | Predict.fun |
 | --- | --- | --- |
-| [Order-book WebSockets](/api/market-data/venue-order-books) | Supported | Supported |
-| [Enriched live trade feed](/api/market-data/trade-feed) | Supported | Not available |
-| [Trader Data API](/products/data-api) | Supported | Supported |
-| [Trade API](/products/trade-api) | Supported | Supported (LIMIT, MARKET, TWAP) |
-| [Copytrade API](/products/copytrade-api) | Supported | Not available |
-| [Combos API](/api/combos/overview) | Supported | Not applicable |
-| [PMWAS, tax and entity rollups](/products/data-api#accounting-coverage) | Supported for covered wallets | Not available |
-| [UMA API](/products/uma-api) | Contact us for access and endpoint details | Not applicable |
+| [Data API: trader analytics](/products/data-api) | Supported | Supported |
+| [Data API: Combos Data](/api/combos-data/overview) | Supported | Not applicable |
+| [Data API: PMWAS, tax and entity rollups](/products/data-api#accounting-coverage) | Supported for covered wallets | Not available |
+| [Market Data: order books](/api/market-data/venue-order-books) | Supported | Supported |
+| [Market Data: enriched live trades](/api/market-data/trade-feed) | Supported | Not available |
+| [Market Data: live combos](/api/combos-data/stream) | Supported | Not applicable |
+| [Market Data: UMA resolution](/products/uma-api) | Supported (paid plan, Market Data credential) | Not applicable |
+| [Trade API](/products/trade-api) | Supported | Supported (LIMIT, MARKET, PEGGED, TWAP, ICEBERG) |
+| [Trade API: Combos](/api/combos/overview) | Supported | Not applicable |
+| [Trade API: Copytrade](/products/copytrade-api) | Supported | Not available |
+| [MCP Server](/products/mcp-server) | Supported | Supported where the Data API is |
 
 <Info>
   Predict.fun is supported through the Trade API v2 by adding `"venue": "predictfun"` to a request. It runs on BNB Chain with USDT collateral. See the [Predict.fun overview](/markets/predict-fun/overview) for venue rules.
