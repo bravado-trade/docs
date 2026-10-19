@@ -4,7 +4,7 @@ sidebarTitle: "API catalog"
 icon:
   name: "layout-grid"
   library: "lucide"
-description: "Find each Bravado API, understand venue coverage and configure your organisation."
+description: "The four Bravado products, what is included in each, and which Console endpoint and credential you need."
 ---
 
 ## Create an account or log in
@@ -13,31 +13,41 @@ description: "Find each Bravado API, understand venue coverage and configure you
 
 ## Start with your organisation
 
-The [Console](https://console.bravadotrade.com) creates an organisation at first sign-in when you have no membership, after accepting eligible invitations. You become its owner. Billing changes apply to this existing organisation. The initial product access includes Analytics and MCP; Trade access requires the corresponding entitlements.
+The [Console](https://console.bravadotrade.com) creates an organisation at first sign-in when you have no membership, after accepting eligible invitations. You become its owner. Billing changes apply to this existing organisation. The Free plan includes the Data API and the MCP Server; Market Data needs a paid plan, and Trade access requires the corresponding entitlements.
 
-A configured endpoint groups a product’s credentials, usage and settings. It does not enable every scope, venue or deployment feature. Use [Endpoints](https://console.bravadotrade.com/endpoints) to browse all APIs and manage your configured products.
+An endpoint groups a product's credentials, usage and settings. There is one endpoint per product per organisation. Creating an endpoint does not by itself grant scopes, venues or plan features. Use [Endpoints](https://console.bravadotrade.com/endpoints) to set up your products.
 
-## Choose an API
+## The four products
 
-| API | Build with it | Documentation |
-| --- | --- | --- |
-| Analytics | History, traders, positions and PnL | [Data API](/products/data-api) |
-| Trade | Orders, accounts and managed strategies | [Trade API](/products/trade-api) |
-| Combos | Multi-leg RFQ and settlement on Polymarket | [Combos](/api/combos/overview) |
-| Combos Data | Market-wide combo settlements, legs, stats and leaderboard | [Combos Data API](/api/combos-data/overview) |
-| Copytrade | Polymarket subscriptions and simulation | [Copytrade](/api/copytrade/overview) |
-| Market data | Live trades and order books | [Market data](/products/market-data) |
-| MCP | OAuth access for analytics and SQL tools | [MCP server](/products/mcp-server) |
-| UMA | Polymarket proposals and resolution | [UMA API](/products/uma-api) |
+| Product | Console endpoint | Credential | Build with it | Documentation |
+| --- | --- | --- | --- | --- |
+| **Data API** | Data API | HMAC key, `analytics.read` | Trader PnL, positions, leaderboards, tax statements; market-wide Combos data | [Data API](/products/data-api) |
+| **Market Data** | Market Data | HMAC key, `stream.read` (paid plan) | Live order books, trades and combo fills; UMA resolution; mempool fills (partner tier) | [Market Data](/products/market-data) |
+| **Trade API** | Trade API | HMAC key, `trade.*` scopes | Orders, strategies, positions, withdrawals, sub-accounts | [Trade API](/products/trade-api) |
+| **MCP Server** | MCP Server | OAuth connection | Analytics and SQL tools for Claude and other agents | [MCP Server](/products/mcp-server) |
 
-The UMA Console workspace is planned; its API documentation is available separately. SQL tools are available through MCP even while the dedicated SQL workspace is planned.
+## Included in a product
+
+These are not separate endpoints or keys. Each one uses the credential of the product it belongs to.
+
+| Capability | Part of | Scope or access | Documentation |
+| --- | --- | --- | --- |
+| Trader analytics (`/trader-analytics/*`) | Data API | `analytics.read` | [Trader analytics reference](/api/analytics/overview) |
+| Combos Data (`/v2/data/combos/*`) | Data API | `analytics.read` | [Combos Data](/api/combos-data/overview) |
+| Live trades, order books, combo trades | Market Data | `stream.read` | [Feeds](/products/market-data#feeds) |
+| UMA resolution (REST and stream) | Market Data | `stream.read`, paid plan | [UMA resolution](/products/uma-api) |
+| Mempool Fills | Market Data | Partner feed token | [Mempool Fills](/api/market-data/mempool-feed) |
+| Combos (RFQ, accept, redeem) | Trade API | `trade.combos` | [Combos](/api/combos/overview) |
+| Copytrade | Trade API | `trade.copytrade` | [Copytrade](/products/copytrade-api) |
+| Sub-accounts | Trade API | `trade.users` | [Account](/api/trade/account) |
+| Withdrawals | Trade API | `trade.withdraw` | [Withdraw](/api/trade/withdraw) |
 
 ## Match the venue to the workflow
 
-Both Polymarket and Predict.fun support LIMIT, MARKET, PEGGED, TWAP and ICEBERG on the v2 Trade surface. Conditional orders, brackets, Combos and Copytrade are Polymarket-only. TRAILING_BUY additionally requires its deployment feature flag. Read the [Polymarket](/markets/polymarket/trade-api) and [Predict.fun](/markets/predict-fun/trade-api) guides for detailed constraints.
+Both Polymarket and Predict.fun support LIMIT, MARKET, PEGGED, TWAP and ICEBERG on the v2 Trade surface. Conditional orders, brackets, Combos and Copytrade are Polymarket-only. TRAILING_BUY additionally requires its deployment feature flag. Read the [Polymarket](/markets/polymarket/trade-api) and [Predict.fun](/markets/predict-fun/trade-api) guides for detailed constraints, and [supported venues](/markets/overview) for coverage by product.
 
 ## Connect and measure
 
-1. Follow the [Trade quickstart](/quickstart-trade) or [market-data quickstart](/quickstart).
-2. Read [authentication](/authentication) for HMAC and OAuth contracts.
+1. Follow the [quickstart](/quickstart) for a signed Data API call, or the [Trade quickstart](/quickstart-trade) to place an order.
+2. Read [authentication](/authentication) for the HMAC and OAuth contracts.
 3. Inspect product usage and [API credits](/api-credits) before changing your plan.

@@ -7,7 +7,7 @@ icon: "/logo/predict-fun.png"
 
 Predict.fun is a prediction market running on BNB Chain. It uses the same conditional-token / central-limit-order-book design as Polymarket, so outcomes trade as tokens that settle at \$1 if the event happens and \$0 if it does not, and live prices read as implied probabilities. Its collateral is **USDT**.
 
-Bravado supports Predict.fun through the **Trade API v2**, **Trader Data API**, and **live order-book WebSockets**. Trade requests use `"venue": "predictfun"`; analytics use `/trader-analytics/predict/`; order books use `/stream/predictfun/partner`.
+Bravado supports Predict.fun through the **Trade API v2**, **Data API**, and **live order-book WebSockets**. Trade requests use `"venue": "predictfun"`; analytics use `/trader-analytics/predict/`; order books use `/stream/predictfun/partner`.
 
 ## How to trade Predict.fun
 
@@ -33,7 +33,7 @@ The venue is available per partner. If your key is not entitled to it, the reque
 | --- | --- |
 | [Trade API](/markets/predict-fun/trade-api) | Supported — LIMIT, MARKET, TWAP, plus positions, redeem, split, merge, withdraw |
 | [Copytrade API](/markets/predict-fun/copytrade-api) | Not available |
-| [Trader Data API](/markets/predict-fun/data-api) | Supported — profiles, PnL, positions, trades, categories and leaderboards |
+| [Data API](/markets/predict-fun/data-api) | Supported — profiles, PnL, positions, trades, categories and leaderboards |
 | [Order-book WebSockets](/api/market-data/venue-order-books) | Supported — live snapshots and updates |
 | Combos API | Not available |
 
@@ -70,7 +70,7 @@ Balances and withdrawals are denominated in USDT; the `pusd` field of the balanc
   <Card title="Trade API" icon="arrow-left-right" href="/markets/predict-fun/trade-api">
     LIMIT, MARKET, and TWAP orders, plus positions, redeem, split, merge, and withdraw.
   </Card>
-  <Card title="Trader Data API" icon="chart-line" href="/markets/predict-fun/data-api">
+  <Card title="Data API" icon="chart-line" href="/markets/predict-fun/data-api">
     Read wallet performance, positions, trades and leaderboards.
   </Card>
 </CardGroup>

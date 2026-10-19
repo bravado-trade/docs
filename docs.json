@@ -20,219 +20,40 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Overview",
+        "tab": "Get Started",
         "groups": [
           {
             "group": "Get Started",
             "pages": [
               "introduction",
-              "api-catalog",
               "quickstart",
-              "quickstart-trade",
               "authentication",
+              "authentication-examples",
               "api-credits",
-              "build-with-ai"
+              "api-catalog"
             ]
           },
           {
-            "group": "Supported Prediction Markets",
+            "group": "Supported venues",
             "pages": [
               "markets/overview",
-              {
-                "group": "Polymarket",
-                "icon": "/logo/polymarket.png",
-                "pages": [
-                  "markets/polymarket/overview",
-                  "markets/polymarket/trade-api",
-                  "markets/polymarket/copytrade-api",
-                  "markets/polymarket/combos-api",
-                  "markets/polymarket/data-api",
-                  "markets/polymarket/uma-resolution"
-                ]
-              },
-              {
-                "group": "Predict.fun",
-                "icon": "/logo/predict-fun.png",
-                "pages": [
-                  "markets/predict-fun/overview",
-                  "markets/predict-fun/trade-api",
-                  "markets/predict-fun/copytrade-api",
-                  "markets/predict-fun/data-api"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Market Data",
-            "pages": [
-              "products/market-data",
-              "api/market-data/trade-feed",
-              "api/market-data/mempool-feed",
-              "api/market-data/order-book",
-              "api/market-data/venue-order-books",
-              "api/market-data/historical-data"
-            ]
-          },
-          {
-            "group": "Trader Data",
-            "pages": [
-              {
-                "group": "Trader Data API",
-                "icon": "chart-line",
-                "pages": [
-                  "products/data-api",
-                  "api/analytics/healthz",
-                  "api/analytics/leaderboard",
-                  "api/analytics/leaderboard-volume",
-                  "api/analytics/trader",
-                  "api/analytics/trader-pnl",
-                  "api/analytics/trader-positions",
-                  "api/analytics/trader-positions-active",
-                  "api/analytics/trader-positions-closed",
-                  "api/analytics/positions",
-                  "api/analytics/trader-trades",
-                  "api/analytics/trader-categories",
-                  "api/analytics/trader-usdc-balance",
-                  "api/analytics/trader-statements",
-                  "api/analytics/trader-statements-r1",
-                  "api/analytics/trader-metrics",
-                  "api/analytics/trader-reconciliation",
-                  "api/analytics/trader-tax-report",
-                  "api/analytics/trades",
-                  "api/analytics/entity"
-                ]
-              },
-              {
-                "group": "Combos Data API",
-                "pages": [
-                  "api/combos-data/overview",
-                  "api/combos-data/list",
-                  "api/combos-data/trades",
-                  "api/combos-data/combo",
-                  "api/combos-data/stats",
-                  "api/combos-data/leaderboard",
-                  "api/combos-data/stream"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Execution",
-            "pages": [
-              {
-                "group": "Trade API",
-                "icon": "arrow-left-right",
-                "pages": [
-                  "products/trade-api",
-                  "api/trade/orders",
-                  "api/trade/positions",
-                  "api/trade/strategies",
-                  "api/trade/account",
-                  "api/trade/withdraw"
-                ]
-              },
-              {
-                "group": "Combos API",
-                "icon": "combine",
-                "pages": [
-                  "api/combos/overview",
-                  "api/combos/quote-accept-redeem"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Automation",
-            "pages": [
-              {
-                "group": "Copytrade API",
-                "icon": "users",
-                "pages": [
-                  "products/copytrade-api",
-                  "api/copytrade/subscriptions",
-                  "api/copytrade/simulation"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Resolution",
-            "pages": [
-              "products/uma-api"
-            ]
-          },
-          {
-            "group": "Tools",
-            "pages": [
-              {
-                "group": "MCP Server",
-                "icon": "plug",
-                "pages": [
-                  "products/mcp-server"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Use Cases",
-            "pages": [
-              "use-cases/terminals",
-              "use-cases/algorithmic-trading-bots",
-              "use-cases/copy-trading",
-              "use-cases/portfolio-dashboards",
-              "use-cases/ai-agents",
-              "use-cases/quant-research",
-              "use-cases/tax-accounting-tooling"
-            ]
-          },
-          {
-            "group": "SDKs",
-            "pages": [
-              "sdk/overview",
-              "sdk/typescript",
-              "sdk/python"
+              "markets/polymarket/overview",
+              "markets/predict-fun/overview"
             ]
           }
         ]
       },
       {
-        "tab": "API Reference",
+        "tab": "Data API",
         "groups": [
           {
-            "group": "Market Data",
+            "group": "Data API",
             "pages": [
-              "products/market-data",
-              "api/market-data/trade-feed",
-              "api/market-data/mempool-feed",
-              "api/market-data/order-book",
-              "api/market-data/venue-order-books",
-              "api/market-data/historical-data"
+              "products/data-api"
             ]
           },
           {
-            "group": "Trade API",
-            "pages": [
-              "api/trade/overview"
-            ],
-            "openapi": "api-reference/openapi/v2-trade.json"
-          },
-          {
-            "group": "Combos API",
-            "pages": [
-              "api/combos/overview",
-              "api/combos/quote-accept-redeem"
-            ]
-          },
-          {
-            "group": "Copytrade API",
-            "pages": [
-              "api/copytrade/overview",
-              "api/copytrade/subscriptions",
-              "api/copytrade/simulation"
-            ]
-          },
-          {
-            "group": "Trader Data API",
+            "group": "Trader analytics",
             "pages": [
               "api/analytics/overview",
               "api/analytics/healthz",
@@ -257,127 +78,120 @@
             ]
           },
           {
-            "group": "Combos Data API",
+            "group": "Combos Data",
             "pages": [
               "api/combos-data/overview",
               "api/combos-data/list",
               "api/combos-data/trades",
               "api/combos-data/combo",
               "api/combos-data/stats",
-              "api/combos-data/leaderboard",
-              "api/combos-data/stream"
+              "api/combos-data/leaderboard"
+            ]
+          },
+          {
+            "group": "By venue",
+            "pages": [
+              "markets/polymarket/data-api",
+              "markets/predict-fun/data-api"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/pnl-leaderboard",
+              "guides/us-tax-statement"
             ]
           }
         ]
       },
       {
-        "tab": "Products",
+        "tab": "Market Data",
         "groups": [
           {
-            "group": "Products",
+            "group": "Market Data",
             "pages": [
-              {
-                "group": "Market Data",
-                "icon": "activity",
-                "pages": [
-                  "products/market-data",
-                  "api/market-data/trade-feed",
-                  "api/market-data/mempool-feed",
-                  "api/market-data/order-book",
-                  "api/market-data/venue-order-books",
-                  "api/market-data/historical-data"
-                ]
-              },
-              {
-                "group": "Trader Data API",
-                "icon": "chart-line",
-                "pages": [
-                  "products/data-api",
-                  "api/analytics/healthz",
-                  "api/analytics/leaderboard",
-                  "api/analytics/leaderboard-volume",
-                  "api/analytics/trader",
-                  "api/analytics/trader-pnl",
-                  "api/analytics/trader-positions",
-                  "api/analytics/trader-positions-active",
-                  "api/analytics/trader-positions-closed",
-                  "api/analytics/positions",
-                  "api/analytics/trader-trades",
-                  "api/analytics/trader-categories",
-                  "api/analytics/trader-usdc-balance",
-                  "api/analytics/trader-statements",
-                  "api/analytics/trader-statements-r1",
-                  "api/analytics/trader-metrics",
-                  "api/analytics/trader-reconciliation",
-                  "api/analytics/trader-tax-report",
-                  "api/analytics/trades",
-                  "api/analytics/entity"
-                ]
-              },
-              {
-                "group": "Combos Data API",
-                "pages": [
-                  "api/combos-data/overview",
-                  "api/combos-data/list",
-                  "api/combos-data/trades",
-                  "api/combos-data/combo",
-                  "api/combos-data/stats",
-                  "api/combos-data/leaderboard",
-                  "api/combos-data/stream"
-                ]
-              },
-              {
-                "group": "Trade API",
-                "icon": "arrow-left-right",
-                "pages": [
-                  "products/trade-api",
-                  "api/trade/orders",
-                  "api/trade/positions",
-                  "api/trade/strategies",
-                  "api/trade/account",
-                  "api/trade/withdraw"
-                ]
-              },
-              {
-                "group": "Copytrade API",
-                "icon": "users",
-                "pages": [
-                  "products/copytrade-api",
-                  "api/copytrade/subscriptions",
-                  "api/copytrade/simulation"
-                ]
-              },
-              {
-                "group": "Combos API",
-                "icon": "combine",
-                "pages": [
-                  "api/combos/overview",
-                  "api/combos/quote-accept-redeem"
-                ]
-              },
-              "products/uma-api"
+              "products/market-data"
+            ]
+          },
+          {
+            "group": "Feeds",
+            "pages": [
+              "api/market-data/order-book",
+              "api/market-data/venue-order-books",
+              "api/market-data/trade-feed",
+              "api/combos-data/stream",
+              "api/market-data/historical-data"
+            ]
+          },
+          {
+            "group": "UMA resolution",
+            "pages": [
+              "products/uma-api",
+              "markets/polymarket/uma-resolution"
+            ]
+          },
+          {
+            "group": "Mempool Fills",
+            "pages": [
+              "api/market-data/mempool-feed"
             ]
           }
         ]
       },
       {
-        "tab": "Guides",
+        "tab": "Trade API",
         "groups": [
           {
-            "group": "Start Here",
+            "group": "Trade API",
             "pages": [
-              "guides/overview"
+              "products/trade-api",
+              "quickstart-trade"
             ]
           },
           {
-            "group": "By Venue",
+            "group": "Reference",
             "pages": [
-              "guides/polymarket",
-              "guides/predict-fun"
+              "api/trade/overview",
+              "api/trade/orders",
+              "api/trade/positions",
+              "api/trade/strategies",
+              "api/trade/account",
+              "api/trade/withdraw"
             ]
           },
           {
-            "group": "Trading Bots",
+            "group": "Endpoints (OpenAPI)",
+            "pages": [],
+            "openapi": "api-reference/openapi/v2-trade.json"
+          },
+          {
+            "group": "Combos",
+            "pages": [
+              "api/combos/overview",
+              "api/combos/quote-accept-redeem",
+              "markets/polymarket/combos-api"
+            ]
+          },
+          {
+            "group": "Copytrade",
+            "pages": [
+              "products/copytrade-api",
+              "api/copytrade/overview",
+              "api/copytrade/subscriptions",
+              "api/copytrade/simulation",
+              "markets/polymarket/copytrade-api",
+              "markets/predict-fun/copytrade-api"
+            ]
+          },
+          {
+            "group": "By venue",
+            "pages": [
+              "markets/polymarket/trade-api",
+              "markets/predict-fun/trade-api"
+            ]
+          },
+          {
+            "group": "Guides",
             "pages": [
               "guides/place-an-order",
               "guides/build-a-trading-bot",
@@ -385,65 +199,26 @@
               "guides/stop-loss-take-profit",
               "guides/large-position-twap-iceberg",
               "guides/quote-both-sides-split-merge",
-              "guides/safe-retries-idempotency"
-            ]
-          },
-          {
-            "group": "Terminals",
-            "pages": [
+              "guides/safe-retries-idempotency",
               "guides/build-a-trading-terminal",
               "guides/display-positions-and-pnl",
               "guides/track-order-and-strategy-state",
-              "guides/white-label-sub-accounts"
-            ]
-          },
-          {
-            "group": "Copy Trading",
-            "pages": [
+              "guides/white-label-sub-accounts",
               "guides/track-whale-wallet",
               "guides/copy-trading-bot-50-lines"
             ]
-          },
-          {
-            "group": "Analytics",
-            "pages": [
-              "guides/pnl-leaderboard"
-            ]
-          },
-          {
-            "group": "Tax and Accounting",
-            "pages": [
-              "guides/us-tax-statement"
-            ]
           }
         ]
       },
       {
-        "tab": "Use Cases",
+        "tab": "MCP Server",
         "groups": [
           {
-            "group": "Use Cases",
+            "group": "MCP Server",
             "pages": [
-              "use-cases/terminals",
-              "use-cases/algorithmic-trading-bots",
-              "use-cases/copy-trading",
-              "use-cases/portfolio-dashboards",
-              "use-cases/ai-agents",
-              "use-cases/quant-research",
-              "use-cases/tax-accounting-tooling"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "SDKs",
-        "groups": [
-          {
-            "group": "SDKs",
-            "pages": [
-              "sdk/overview",
-              "sdk/typescript",
-              "sdk/python"
+              "products/mcp-server",
+              "build-with-ai",
+              "use-cases/ai-agents"
             ]
           }
         ]
@@ -452,7 +227,7 @@
         "tab": "Resources",
         "groups": [
           {
-            "group": "Resources",
+            "group": "Reference",
             "pages": [
               "reference/errors",
               "reference/rate-limits",
@@ -462,6 +237,33 @@
               "reference/versioning",
               "reference/changelog",
               "reference/status"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdk/overview",
+              "sdk/typescript",
+              "sdk/python"
+            ]
+          },
+          {
+            "group": "Use cases",
+            "pages": [
+              "use-cases/terminals",
+              "use-cases/algorithmic-trading-bots",
+              "use-cases/copy-trading",
+              "use-cases/portfolio-dashboards",
+              "use-cases/quant-research",
+              "use-cases/tax-accounting-tooling"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/overview",
+              "guides/polymarket",
+              "guides/predict-fun"
             ]
           }
         ]

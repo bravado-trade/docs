@@ -1,90 +1,95 @@
 ---
-title: "Connect your first market-data stream"
+title: "Make your first signed request"
 sidebarTitle: "Quick Start"
-description: "Create a WebSockets credential, authenticate a live trade stream and check its usage in Bravado Console."
+description: "Create an organisation, set up a Data API endpoint, mint a credential and make one signed request. Five minutes, no funded account."
 icon:
   name: "zap"
   library: "lucide"
 ---
 
-Receive live market data using your organisation's WebSockets credential. This guide reads trades; it does not place an order.
+This walk-through uses the **Data API** because it is included in the Free plan and needs no funded account. The same credential scheme (HMAC) applies to Market Data and the Trade API; only the endpoint and scope change.
 
 ## 1. Set up access
 
 1. [Create an account](https://console.bravadotrade.com/signup) or [log in](https://console.bravadotrade.com/login).
-2. Select your organisation and an eligible paid plan with WebSockets access. Free signup alone does not enable streams.
-3. Open **Endpoints → WebSockets → API keys** and create a credential with `stream.read`. Save the secret when it is shown.
+2. Open **Endpoints** and set up the **Data API** endpoint. One endpoint per product per organisation.
+3. Under its **API keys** tab, click **Create credential**. The key carries `analytics.read`. Save the secret when it is shown; it is not displayed again.
 4. Set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET` in your server environment. Never put the secret in browser code, a URL or source control.
 
-## 2. Connect and receive trades
+## 2. Sign and send a request
 
-Install `ws` with `npm install ws`. Save the following as `stream.mjs`, then run `node stream.mjs` with your environment variables set.
+Every request carries three headers: the public key, a millisecond timestamp and an HMAC-SHA256 signature of `timestamp\nMETHOD\npath\nsha256(body)`. For a GET the body hash is the empty-body constant. Save the file, then run it with your environment variables set.
+
+<CodeGroup>
 
 ```javascript Node.js
-import WebSocket from "ws";
 import { createHash, createHmac } from "node:crypto";
 
 const key = process.env.BRAVADO_API_KEY;
 const secret = process.env.BRAVADO_API_SECRET;
 if (!key || !secret) throw new Error("Set BRAVADO_API_KEY and BRAVADO_API_SECRET");
 
-const path = "/stream/polymarket/partner/trades";
+const path = "/trader-analytics/leaderboard";
 const timestamp = String(Date.now());
 const bodyHash = createHash("sha256").update("").digest("hex");
 const payload = [timestamp, "GET", path, bodyHash].join("\n");
 const signature = createHmac("sha256", secret).update(payload).digest("hex");
-const ws = new WebSocket(`wss://partner-api.bravadotrade.com${path}`, {
+
+const res = await fetch(`https://partner-api.bravadotrade.com${path}`, {
   headers: {
     "X-BRAVADO-API-KEY": key,
     "X-BRAVADO-TIMESTAMP": timestamp,
     "X-BRAVADO-SIGNATURE": signature,
   },
 });
-
-ws.on("message", data => {
-  const frame = JSON.parse(data.toString());
-  if (frame.type === "snapshot") {
-    console.log("Recent trades:", frame.trades.length);
-  } else if (frame.type === "trade") {
-    const trade = frame.trade;
-    console.log(trade.side, trade.size, trade.price, trade.assetId);
-  } else if (frame.type === "error") {
-    console.error(frame.code, frame.message);
-  }
-});
-ws.on("error", error => console.error(error.message));
-ws.on("close", (code, reason) => console.log("Closed:", code, reason.toString()));
-
-// End this sample after 30 seconds to bound usage.
-const stop = setTimeout(() => ws.close(), 30_000);
-ws.once("close", () => clearTimeout(stop));
+console.log(res.status, res.headers.get("x-ratelimit-remaining"));
+const body = await res.json();
+console.log(body.results?.slice(0, 3));
 ```
 
-The server sends a recent-trades `snapshot`, then `trade` frames. No subscription message is needed. Node's `ws` client responds to heartbeat pings automatically. See the [trade frame reference](/api/market-data/trade-feed#frames).
+```python Python
+import hashlib, hmac, os, time, requests
 
-Generate a new timestamp and signature for every reconnect. This example ends after 30 seconds; it is not a production reconnect loop. Use backoff in your application and inspect authentication failures before retrying.
+key = os.environ["BRAVADO_API_KEY"]
+secret = os.environ["BRAVADO_API_SECRET"]
 
-<Warning>
-  This is a live, billable connection. Snapshot and trade payloads consume [WebSocket credits](/api-credits#authenticated-websocket-credits). Closing the socket stops further delivery; data already delivered remains counted.
-</Warning>
+path = "/trader-analytics/leaderboard"
+timestamp = str(int(time.time() * 1000))
+body_hash = hashlib.sha256(b"").hexdigest()
+payload = "\n".join([timestamp, "GET", path, body_hash])
+signature = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+res = requests.get(
+    f"https://partner-api.bravadotrade.com{path}",
+    headers={
+        "X-BRAVADO-API-KEY": key,
+        "X-BRAVADO-TIMESTAMP": timestamp,
+        "X-BRAVADO-SIGNATURE": signature,
+    },
+    timeout=30,
+)
+print(res.status_code, res.headers.get("x-ratelimit-remaining"))
+print(res.json()["results"][:3])
+```
+
+</CodeGroup>
+
+A `200` returns the 30-day PnL leaderboard. The call costs 1 API credit. Query parameters are part of the signed path when present; the helpers on [request signing examples](/authentication-examples) canonicalise them for you, so start from those for anything beyond a bare path.
 
 ## 3. Check your usage
 
-Open **Usage** and **Billing** in the same Console organisation that owns the key. Messages and credits are different units: the current stream tariff is **1 credit per 100,000 delivered uncompressed UTF-8 bytes**, not one credit per message or per connection. Heartbeats and errors are not billed.
+Open **Usage** in the same Console organisation that owns the key. The call appears under the Data API with its credit. Usage is batched; allow about a minute, then refresh.
 
-Usage is batched while connections remain open. Allow about a minute, then refresh. Home's activity window and Billing's current cycle can cover different periods. Use the same organisation and period when comparing Console and Admin.
+## 4. Pick your next product
 
-## 4. Add order books or trader analytics
-
-- Use an `assetId` from a trade with the [authenticated order-book guide](/api/market-data/venue-order-books). It supports Polymarket and Predict.fun when your organisation has access to the venue.
-- Query the trader's history with the [Trader Data API](/products/data-api), using a credential with `analytics.read` and its own HMAC signature. A WebSockets-only key does not grant Analytics access.
-- For order execution, follow the separate [Trade quickstart](/quickstart-trade).
+- **Data API**: the [trader analytics reference](/api/analytics/overview) and [Combos Data](/api/combos-data/overview) use this same credential.
+- **Market Data**: set up the Market Data endpoint on a paid plan and follow [Live Trades](/api/market-data/trade-feed) for a signed WebSocket connection. A Data API key does not open streams.
+- **Trade API**: the [Trade quickstart](/quickstart-trade) places a first order with a Trade credential.
+- **MCP Server**: connect Claude or another client with OAuth, no API key, in [MCP Server](/products/mcp-server).
 
 ## Troubleshooting
 
-- **401:** check the matching key and secret, current millisecond timestamp and exact signed path. Keep your system clock synchronized.
-- **403:** inspect the error code and confirm scope, plan and venue access. Creating an endpoint does not grant these permissions.
-- **Connected but no updates:** inspect snapshot/status/error frames and market activity; a successful handshake alone does not prove data delivery.
-- **No Console usage:** confirm you used the authenticated `/stream/.../partner` route and selected the key's organisation. Legacy Terminal URLs are not a replacement for this integration.
-
-Browser WebSocket clients cannot set these authentication headers. Connect from your backend and relay only the data your frontend is allowed to receive; never send the API secret to the browser.
+- **401:** check the matching key and secret, current millisecond timestamp (within 30 s of server time) and the exact signed path. A Trade or Market Data key is refused here; the Data API needs its own credential.
+- **403:** the key lacks `analytics.read` or the organisation lacks the venue. Creating an endpoint does not grant scopes.
+- **402:** the organisation's credit ceiling is reached. See [API credits](/api-credits).
+- **429:** rate limit; respect `Retry-After`.

@@ -22,17 +22,17 @@ The **Bravado Console** is your developer dashboard for API keys, usage, billing
   </Card>
 </CardGroup>
 
-After signing in, use **Endpoints** to choose your product and venue, and **API keys** to manage credentials. Explore the [API catalog](/api-catalog) to find the right product for your integration.
+After signing in, use **Endpoints** to set up a product and **API keys** under it to manage credentials. There are four products, one endpoint each: [Data API](/products/data-api), [Market Data](/products/market-data), [Trade API](/products/trade-api) and [MCP Server](/products/mcp-server). The [API catalog](/api-catalog) lists what each one includes.
 
 ## Explore the documentation
 
 <CardGroup cols={2}>
   <Card title="Quick Start" icon="zap" href="/quickstart">
-    Connect to Bravado and receive live prediction-market data in under five minutes.
+    Set up an endpoint, mint a credential and make a signed request in under five minutes.
   </Card>
 
-  <Card title="Market Data" icon="activity" href="/products/market-data">
-    Realtime trades and order books over WebSockets.
+  <Card title="API catalog" icon="layout-grid" href="/api-catalog">
+    The four products, what each includes, and which credential it takes.
   </Card>
 
   <Card title="Authentication" icon="key" href="/authentication">
@@ -44,9 +44,21 @@ After signing in, use **Endpoints** to choose your product and venue, and **API 
   </Card>
 </CardGroup>
 
-## Product categories
+## The four products
 
-Bravado is organized around what kind of data you need, with execution available alongside it.
+Every product is one endpoint in Console with its own credential. Capabilities such as Combos, Copytrade, UMA resolution or Combos Data are parts of a product, not products of their own.
+
+### Data API
+
+Enriched participant intelligence derived from on-chain settlement: who is trading, how they perform, and what they hold, plus market-wide data on Polymarket Combos. It is about **traders and settlements**, not the live tape.
+
+- Wallet positions, PnL, and cost basis
+- Trade history and wallet activity
+- Leaderboards, win rate, and trader analytics
+- Tax statements and reconciliation
+- Every Polymarket combo settlement, with legs, stats and a combo leaderboard
+
+See the [Data API](/products/data-api). Base paths `/trader-analytics` and `/v2/data`, one credential with `analytics.read`.
 
 ### Market Data
 
@@ -54,35 +66,24 @@ Realtime prediction-market data over WebSockets, and the primary infrastructure 
 
 - Live trade feed, enriched server-side with trader name and wallet
 - Live order books: snapshots, incremental updates, best bid/ask, last-trade price
+- Live combo settlements, one frame per fill
+- UMA resolution: proposals, disputes and final outcomes, as queryable data and as a stream
+- Mempool Fills, the low-latency partner tier
 - One multiplexed connection instead of one socket per market
 
-See [Market Data](/products/market-data). Coverage today is Polymarket, with the interface designed to extend across venues.
+See [Market Data](/products/market-data). Order books cover Polymarket and Predict.fun; the other feeds cover Polymarket today. One credential with `stream.read` on a paid plan.
 
-### Trader Data API
+### Trade API
 
-Enriched participant intelligence derived from on-chain settlement: who is trading, how they perform, and what they hold. This is distinct from realtime market data, it is about **traders**, not the tape.
+The [Trade API](/products/trade-api) covers the full order lifecycle across supported venues: eight order types including TWAP, ICEBERG, PEGGED and bracket orders, managed strategies, position management, withdrawals and sub-accounts. It includes [Combos](/api/combos/overview) (multi-leg RFQ, accept and redeem) and [Copytrade](/products/copytrade-api) (mirror any wallet's fills with configurable sizing) on the same credential, enabled per organisation. Execution is a first-class capability you use **alongside** Bravado's data infrastructure, when you want data and trading behind one integration.
 
-- Wallet positions, PnL, and cost basis
-- Trade history and wallet activity
-- Leaderboards, win rate, and trader analytics
+### MCP Server
 
-See the [Trader Data API](/products/data-api).
-
-### Execution
-
-The [Trade API](/products/trade-api) covers the full order lifecycle across supported venues: standard order execution, eight order types including TWAP, ICEBERG, and bracket orders, and position management. Execution is a first-class capability you use **alongside** Bravado's data infrastructure, when you want data and trading behind one integration.
-
-### Automation
-
-The [Copytrade API](/products/copytrade-api) mirrors any wallet's fills with configurable sizing and risk controls, a specialized execution-automation product built on top of the Trade API.
-
-### Resolution
-
-The [UMA API](/products/uma-api) exposes how Polymarket markets settle through UMA's Optimistic Oracle: proposals, disputes, and final outcomes, so you can tell a concluded event from a redeemable position.
+The [MCP Server](/products/mcp-server) gives Claude and other MCP clients OAuth access to Bravado's analytics and SQL tools. No API key lives in the client; connections are managed in Console.
 
 ### Historical Data
 
-We are building toward historical market-data infrastructure, historical trades and market-state history, so customers do not have to record every stream themselves. Historical **trader** data is available today through the [Trader Data API](/products/data-api), which reconstructs a wallet's full economic history from its first trade.
+We are building toward historical market-data infrastructure, historical trades and market-state history, so customers do not have to record every stream themselves. Historical **trader** and **combo** data is available today through the [Data API](/products/data-api), which reconstructs a wallet's full economic history from its first trade and indexes every combo settlement from the chain.
 
 ## Why Bravado
 
@@ -103,8 +104,8 @@ We are building toward historical market-data infrastructure, historical trades 
     Execute through Bravado when you want data and trading infrastructure together, with eight order types.
   </Card>
 
-  <Card title="Specialized APIs" icon="combine" href="/products/copytrade-api">
-    Copytrade, UMA resolution, advanced orders, and other prediction-market-specific functionality.
+  <Card title="Prediction-market specific" icon="combine" href="/api-catalog">
+    Combos, copytrade, UMA resolution, mempool fills and combo analytics, each inside the product it belongs to.
   </Card>
 
   <Card title="Historical trader history" icon="clock" href="/products/data-api">
@@ -114,18 +115,16 @@ We are building toward historical market-data infrastructure, historical trades 
 
 ## API surfaces
 
-| API | Base URL | What it does |
+| Product | Base URL | Credential |
 | --- | --- | --- |
-| **Market Data** | `wss://partner-api.bravadotrade.com/stream/polymarket/partner/trades`, `/stream/{venue}/partner` | Realtime trades and order books over WebSockets |
-| **Trader Data API** | `https://partner-api.bravadotrade.com/trader-analytics` | Leaderboards, wallet PnL, trade logs, tax statements |
-| **Trade API v2** | `https://partner-api.bravadotrade.com/v2/trade` | Order execution, positions, balances, user provisioning |
-| **Copytrade API** | `https://partner-api.bravadotrade.com/v2/trade/copytrade` | Mirror fills from top traders with configurable sizing |
+| **Data API** | `https://partner-api.bravadotrade.com/trader-analytics`, `https://partner-api.bravadotrade.com/v2/data` | HMAC, `analytics.read` |
+| **Market Data** | `wss://partner-api.bravadotrade.com/stream/{venue}/partner`, `/stream/polymarket/partner/trades`, `/stream/polymarket/partner/combos`, UMA at `/uma` | HMAC, `stream.read` |
+| **Trade API** | `https://partner-api.bravadotrade.com/v2/trade` (Combos at `/v2/trade/combo`, Copytrade at `/v2/trade/copytrade`) | HMAC, `trade.*` |
+| **MCP Server** | `https://mcp.bravadotrade.com` | OAuth |
 
-## Your first stream
+## Your first request
 
-[Create your account](https://console.bravadotrade.com/signup), then enable WebSockets on an eligible paid plan and create a WebSockets credential in the Console. Your key needs `stream.read`; keep its secret on your server.
-
-The [quickstart](/quickstart) walks through a signed WebSocket connection, receiving trades and checking your organisation's usage. Use [venue order books](/api/market-data/venue-order-books) for Polymarket or Predict.fun depth. Each connection requires a fresh HMAC signature; an API key alone is not sufficient.
+[Create your account](https://console.bravadotrade.com/signup), set up the Data API endpoint and create its credential. The [quickstart](/quickstart) walks through one signed request and checking your organisation's usage. For a live stream, set up Market Data on a paid plan and follow [Live Trades](/api/market-data/trade-feed); each connection requires a fresh HMAC signature, an API key alone is not sufficient.
 
 ## Use cases
 
@@ -166,8 +165,8 @@ The [quickstart](/quickstart) walks through a signed WebSocket connection, recei
     Pythonic wrapper for the Bravado REST APIs.
   </Card>
 
-  <Card title="Concepts" icon="layers" href="/products/market-data">
-    Understand market data, trader data, order types, and resolution.
+  <Card title="API catalog" icon="layers" href="/api-catalog">
+    The four products and what each includes.
   </Card>
 
   <Card title="Error Reference" icon="triangle-alert" href="/reference/errors">

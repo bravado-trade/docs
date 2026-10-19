@@ -3,7 +3,7 @@ title: "Request signing examples"
 description: "Sign prepared Python and Node.js requests with HMAC."
 ---
 
-Create a public key and secret in [Console](https://console.bravadotrade.com/keys). Set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET` on your server. Keep the secret out of frontend code.
+Create a public key and secret in [Console](https://console.bravadotrade.com/endpoints). Set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET` on your server. Keep the secret out of frontend code.
 
 These helpers sign the exact body sent and canonicalize query parameters. Every call, including a retry, receives a fresh timestamp and signature. Keep the same idempotency key when retrying the same intended write. Do not reuse signed headers across different requests.
 

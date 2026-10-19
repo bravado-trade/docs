@@ -9,7 +9,7 @@ icon:
 
 For API integrations with Console usage and credit tracking, connect to
 `wss://partner-api.bravadotrade.com/stream/polymarket/partner/trades` using a
-WebSockets key with `stream.read` and [HMAC authentication](/authentication).
+Market Data key with `stream.read` and [HMAC authentication](/authentication).
 The server sends recent history, then every new trade across Polymarket markets.
 No subscription message is needed.
 
@@ -23,7 +23,7 @@ The legacy Terminal `/trade-feed/ws` route has a separate access contract. New C
 
 Your organisation needs an eligible paid plan with WebSockets access. Keep the secret on your server; browser-native WebSocket clients cannot set HMAC headers.
 
-Create a WebSockets credential in [Console](https://console.bravadotrade.com/endpoints/ws_stream?section=keys).
+Create a Market Data credential in [Console](https://console.bravadotrade.com/endpoints/ws_stream?section=keys).
 Save its key and secret locally as `BRAVADO_API_KEY` and `BRAVADO_API_SECRET`.
 
 ```javascript Node.js
@@ -123,7 +123,7 @@ The trade object in a `trade` frame and every element of the `snapshot` array sh
 | `transactionHash` | string | Polygon transaction hash for the fill. **The semantic key: dedupe on this.** Optional in the schema, but present on every trade we have observed. |
 
 <Tip>
-  `assetId` links the two feeds. Watch the trade stream to discover which outcome tokens are active right now, then pass those IDs to the [Order Books](/api/market-data/order-book) feed to see depth for them. And `trader` links Market Data to [Trader Data](/products/data-api): take a wallet you see filling and pull its PnL, positions, and history.
+  `assetId` links the two feeds. Watch the trade stream to discover which outcome tokens are active right now, then pass those IDs to the [Order Books](/api/market-data/order-book) feed to see depth for them. And `trader` links Market Data to [Data API](/products/data-api): take a wallet you see filling and pull its PnL, positions, and history.
 </Tip>
 
 ## Keep-alive and reconnect
@@ -144,4 +144,4 @@ Returns whether the upstream source is connected, total trades emitted, recent-b
 
 - [Order Books WebSocket](/api/market-data/order-book), live depth for a specific asset.
 - [Market Data overview](/products/market-data).
-- [Trader Data API](/products/data-api), enrich the wallets you see trading.
+- [Data API](/products/data-api), enrich the wallets you see trading.

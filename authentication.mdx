@@ -1,25 +1,25 @@
 ---
 title: "Authenticate requests"
 sidebarTitle: "Authentication"
-description: "Sign Trade and Analytics API requests with HMAC, and connect MCP clients with OAuth."
+description: "Sign Trade and Data API requests with HMAC, and connect MCP clients with OAuth."
 icon:
   name: "key"
   library: "lucide"
 ---
 
-Trade and Analytics API requests use **HMAC-SHA256** authentication. Each credential contains a public API key and a secret. Send the public key, timestamp and request signature; keep the secret in your server environment.
+Trade and Data API requests use **HMAC-SHA256** authentication. Each credential contains a public API key and a secret. Send the public key, timestamp and request signature; keep the secret in your server environment.
 
 | Surface | Authentication |
 | --- | --- |
 | Trade API, including advanced orders, Combos and Copytrade | HMAC signature and required scopes |
-| Analytics API | HMAC signature and analytics access |
+| Data API | HMAC signature with `analytics.read` (trader analytics and Combos Data) |
 | MCP server | OAuth 2.1; see [MCP authorization](#mcp-server-authorization) |
 | Market-data WebSockets | HMAC-signed upgrade with `stream.read`; see [trade feed](/api/market-data/trade-feed) and [order books](/api/market-data/venue-order-books) |
 
 ## Getting your API key
 
 1. [Create an account](https://console.bravadotrade.com/signup) or [log in](https://console.bravadotrade.com/login) to the Bravado Console, your developer dashboard.
-2. Open your product under **Endpoints**, then **API keys**.
+2. Open your product under **Endpoints**, then **API keys**. Each product (Data API, Market Data, Trade API) issues its own credentials; a key for one product is refused by the others.
 3. Create a credential using your organisation’s enabled access. Save the secret when it is revealed; it is shown once.
 4. Set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET` in your server environment.
 
@@ -65,7 +65,7 @@ Every Bravado API key is issued with one or more scopes. A request to an endpoin
 | `trade.combos` | Access multi-leg RFQ parlays: quote, accept, and redeem combo positions, and read combo positions |
 | `trade.users` | Provision and manage partner sub-users (white-label flow) |
 | `stream.read` | Connect to authenticated trade and order-book streams, subject to organisation plan and venue access |
-| `analytics.read` | Read the [Trader Data API](/products/data-api) (`/trader-analytics/*`): leaderboards, trader profiles, PnL series, positions, trade history |
+| `analytics.read` | Read the [Data API](/products/data-api) (`/trader-analytics/*`): leaderboards, trader profiles, PnL series, positions, trade history |
 | `mcp.read` | Use the [MCP server](/products/mcp-server)'s curated analytics tools. Granted by the **MCP Server** product, which is separate from the Data API |
 | `mcp.query` | Run read-only SQL through the MCP server's `run_sql` tool |
 
@@ -73,7 +73,7 @@ Every Bravado API key is issued with one or more scopes. A request to an endpoin
   **Data API requests are HMAC-signed**, not Bearer-authenticated: send `X-BRAVADO-API-KEY`, `X-BRAVADO-TIMESTAMP`, and `X-BRAVADO-SIGNATURE` as described in [Data API authentication](/products/data-api#authentication). Each request's venue (Polymarket, or Predict.fun under `/predict/*`) must also be enabled on your partner account. Bravado-issued static bearer tokens for the Data API are deprecated and only work during the migration window.
 </Note>
 
-Scopes are additive, a key can hold any combination. Available scopes depend on your organisation’s access. Manage credentials in the [Console](https://console.bravadotrade.com/keys). Creating an endpoint does not grant additional scopes.
+Scopes are additive, a key can hold any combination. Available scopes depend on your organisation’s access. Manage credentials under each product's endpoint in the [Console](https://console.bravadotrade.com/endpoints). Creating an endpoint does not grant additional scopes.
 
 ## Master keys vs. user keys
 
