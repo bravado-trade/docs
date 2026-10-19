@@ -45,6 +45,8 @@ X-BRAVADO-SIGNATURE: <signature-for-this-request>
 | GET | [`/entity/{owner}`](/api/analytics/entity) | Multi-wallet entity rollup |
 | GET | [`/trades`](/api/analytics/trades) | Trade log by wallet address (query param) |
 
+The same credential also serves the market-wide [Combos Data API](/api/combos-data/overview) under `/v2/data/combos`: every Polymarket combo settlement, legs, stats and a combo leaderboard.
+
 ## PnL Model
 
 Understanding how Bravado calculates PnL helps you interpret every number returned by the API.

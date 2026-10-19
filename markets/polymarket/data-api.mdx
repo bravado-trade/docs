@@ -26,6 +26,13 @@ Requests are signed with your partner API key (`analytics.read` scope) and requi
 | PnL leaderboard | [`GET /leaderboard`](/api/analytics/leaderboard) |
 | Volume leaderboard | [`GET /leaderboard/volume`](/api/analytics/leaderboard-volume) |
 | Tax summary | [`GET /traders/{address}/tax-report`](/api/analytics/trader-tax-report) |
+| Combos traded on the venue | [`GET /v2/data/combos`](/api/combos-data/list) |
+| Combo trade tape | [`GET /v2/data/combos/trades`](/api/combos-data/trades) |
+| Combo stats and leaderboard | [`GET /v2/data/combos/stats`](/api/combos-data/stats), [`GET /v2/data/combos/leaderboard`](/api/combos-data/leaderboard) |
+
+## Combos data
+
+Polymarket is the only venue with [Combos](/markets/polymarket/combos-api), and the Data API indexes every combo settlement on it, not only the ones placed through Bravado. The [Combos Data API](/api/combos-data/overview) serves the combos, their legs (joined to Gamma market metadata), the trade tape, aggregate stats and a combo leaderboard, with a [live settlement stream](/api/combos-data/stream) for WebSockets keys. Volume and trade counts count one row per settlement (the taker fill), so a combo matched against several makers is not counted several times.
 
 ## Accounting model
 
@@ -39,4 +46,5 @@ PnL is computed under the Prediction Market Wallet Accounting Standard (PMWAS), 
 
 - [Data API product overview](/products/data-api)
 - [Data API endpoint reference](/api/analytics/overview)
+- [Combos Data API reference](/api/combos-data/overview)
 - [Polymarket overview](/markets/polymarket/overview)

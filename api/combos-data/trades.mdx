@@ -1,0 +1,202 @@
+---
+title: "GET /v2/data/combos/trades: Combo Trades"
+sidebarTitle: "/combos/trades"
+api: "GET /v2/data/combos/trades"
+description: "Every combo settlement on Polymarket, newest first, with the combo's legs, its resolution at read time and realized PnL once resolved."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+The full combo trade tape. By default each settlement appears once (`role=taker`, the aggregate fill whose `wallet` is the trader who took liquidity). Each row carries the combo's legs, the combo's `status` at read time and `realized_pnl` once the combo resolved.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/data/combos/trades
+```
+
+### Query Parameters
+
+<ParamField query="start_time" type="string">
+  Fills at or after this time. ISO-8601, or epoch seconds / milliseconds.
+</ParamField>
+
+<ParamField query="end_time" type="string">
+  Fills before this time. Same formats as `start_time`.
+</ParamField>
+
+<ParamField query="wallet" type="string">
+  Fills where `wallet` is this address.
+</ParamField>
+
+<ParamField query="combo_id" type="string">
+  Fills on this combo. bytes31 or the padded 32-byte form.
+</ParamField>
+
+<ParamField query="market" type="string">
+  Fills on combos with this market as a leg. V2 condition id, Gamma `conditionId` or Gamma numeric market id.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Combo resolution at read time. One of `unresolved`, `win`, `loss`, `partial`.
+</ParamField>
+
+<ParamField query="role" default="taker" type="string">
+  Which side of each settlement to return. `taker` is the one aggregate fill per settlement, `maker` the market-maker fills it matched, `all` both.
+</ParamField>
+
+<ParamField query="min_notional" type="number">
+  Minimum `notional` of the fill.
+</ParamField>
+
+<ParamField query="limit" default="50" type="integer">
+  Page size, 1 to 200.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Opaque. Pass back the previous page's `next_cursor`.
+</ParamField>
+
+### Response
+
+<ResponseField name="trades" type="array">
+  <Expandable title="ComboTrade fields">
+    <ResponseField name="trade_id" type="string">
+      `<tx_hash>:<log_index>`.
+    </ResponseField>
+    <ResponseField name="tx_hash" type="string">
+      Polygon transaction hash.
+    </ResponseField>
+    <ResponseField name="log_index" type="integer">
+      Index of the fill log within the transaction.
+    </ResponseField>
+    <ResponseField name="block_number" type="integer">
+      Polygon block number.
+    </ResponseField>
+    <ResponseField name="timestamp" type="integer">
+      Block time, epoch milliseconds.
+    </ResponseField>
+    <ResponseField name="block_time" type="string">
+      Block time, ISO-8601.
+    </ResponseField>
+    <ResponseField name="venue" type="string">
+      Always `polymarket`.
+    </ResponseField>
+    <ResponseField name="combo_id" type="string">
+      The combo's condition id (bytes31).
+    </ResponseField>
+    <ResponseField name="wallet" type="string">
+      Owner of the filled order: the trader on a taker row, the market maker on a maker row.
+    </ResponseField>
+    <ResponseField name="counterparty" type="string">
+      The other side; the exchange itself on a taker fill.
+    </ResponseField>
+    <ResponseField name="role" type="string">
+      `taker` (the settlement) or `maker`.
+    </ResponseField>
+    <ResponseField name="side" type="string">
+      `BUY` or `SELL`.
+    </ResponseField>
+    <ResponseField name="outcome_index" type="integer">
+      `0` for YES, `1` for NO.
+    </ResponseField>
+    <ResponseField name="outcome" type="string">
+      `YES` or `NO` side of the combo.
+    </ResponseField>
+    <ResponseField name="leg_count" type="integer">
+      Number of legs.
+    </ResponseField>
+    <ResponseField name="legs" type="array">
+      Same leg objects as [`GET /v2/data/combos`](/api/combos-data/list#response).
+    </ResponseField>
+    <ResponseField name="price" type="string">
+      Fill price per share, decimal string with 8 places.
+    </ResponseField>
+    <ResponseField name="shares" type="string">
+      Shares filled.
+    </ResponseField>
+    <ResponseField name="notional" type="string">
+      `price × shares`, in pUSD.
+    </ResponseField>
+    <ResponseField name="fee" type="string">
+      Fee charged in pUSD, on both BUY and SELL.
+    </ResponseField>
+    <ResponseField name="max_payout" type="string">
+      Payout if the combo wins (`shares` at `1`).
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      The combo's resolution at read time: `unresolved`, `win`, `loss` or `partial`.
+    </ResponseField>
+    <ResponseField name="realized_pnl" type="string | null">
+      Taker-side PnL of this fill given the combo's resolution. `null` until the combo resolves.
+    </ResponseField>
+    <ResponseField name="builder" type="string | null">
+      Builder address attributed to the order, when the order carried one.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="next_cursor" type="string | null">
+  Pass back as `cursor` for the next page. `null` on the last page.
+</ResponseField>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | `INVALID_TIME`, `INVALID_CURSOR`, `INVALID_COMBO_ID`, `INVALID_MARKET`, or a `status` / `role` / `limit` outside the allowed values |
+| `401 Unauthorized` | Missing or invalid HMAC credentials, or not a Data API key |
+| `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` header |
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/v2/data/combos/trades \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d wallet=0xabc123...def456 \
+  -d start_time=2026-10-18T00:00:00Z \
+  -d limit=1
+```
+
+```json Response (abbreviated)
+{
+  "trades": [
+    {
+      "trade_id": "0x7f1e...c0:3",
+      "tx_hash": "0x7f1e...c0",
+      "log_index": 3,
+      "block_number": 95620114,
+      "timestamp": 1792436405000,
+      "block_time": "2026-10-19T09:00:05.000Z",
+      "venue": "polymarket",
+      "combo_id": "0x03a1...9f",
+      "wallet": "0xabc123...def456",
+      "counterparty": "0xe333...00Aa",
+      "role": "taker",
+      "side": "BUY",
+      "outcome_index": 0,
+      "outcome": "YES",
+      "leg_count": 3,
+      "legs": [ { "leg_index": 0, "condition_id": "0x01b2...00", "question": "Will the Lakers win on Sunday?", "outcome": "Yes" } ],
+      "price": "0.14000000",
+      "shares": "100.000000",
+      "notional": "14.000000",
+      "fee": "0.060200",
+      "max_payout": "100.000000",
+      "status": "unresolved",
+      "realized_pnl": null,
+      "builder": null
+    }
+  ],
+  "next_cursor": "eyJ0IjoxNz..."
+}
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /v2/data/combos/leaderboard`](/api/combos-data/leaderboard) for wallets ranked over these fills.
+- [`WSS /stream/polymarket/partner/combos`](/api/combos-data/stream) for the same rows live.

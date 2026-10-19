@@ -17,6 +17,8 @@ Usage on our pricing plans is measured in **API Credits**. Credit cost varies by
 | Authenticated order books | WSS `/partner` | 1 credit per 100,000 bytes for enrolled organisations |
 | Authenticated Polymarket trades | WSS `/partner/trades` | 1 credit per 100,000 bytes for enrolled organisations |
 | Trader Data API | HTTP | 1 credit / request |
+| Combos Data API | HTTP | 1 credit / request |
+| Authenticated Polymarket combo trades | WSS `/partner/combos` | 1 credit per 100,000 bytes for enrolled organisations |
 | MCP Server | HTTP | 10 credits / request |
 | Trade API | HTTP | No API credits |
 | Copytrade API | HTTP | No API credits |
@@ -30,7 +32,7 @@ Usage on our pricing plans is measured in **API Credits**. Credit cost varies by
 ## Authenticated WebSocket credits
 
 The authenticated routes are `/stream/polymarket/partner` and
-`/stream/predictfun/partner`, plus `/stream/polymarket/partner/trades`. Use a key with `stream.read` and sign the connection
+`/stream/predictfun/partner`, plus `/stream/polymarket/partner/trades` and `/stream/polymarket/partner/combos`. Use a key with `stream.read` and sign the connection
 with [HMAC](/authentication).
 
 Snapshots, order-book updates and authenticated trade frames consume **1 credit per 100,000 uncompressed

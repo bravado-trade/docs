@@ -1,0 +1,96 @@
+---
+title: "Combos Data API: Polymarket Combos Market Data"
+sidebarTitle: "Overview"
+description: "Read-only, market-wide data on Polymarket Combos: every multi-leg settlement on the venue, each combo's legs mapped to its underlying markets, aggregate stats and a combo trader leaderboard."
+icon:
+  name: "layers"
+  library: "lucide"
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+The Combos Data API covers Polymarket **Combos** (multi-leg parlays) across the whole venue, not only the combos placed through Bravado. Every settlement on the Combos exchange is indexed from Polygon, and each combo's legs are normalised so an underlying market can be queried on its own.
+
+It is part of the [Data API](/products/data-api) product: same key, same gate and same credit model as `/trader-analytics/*`. It is independent of the [Combos API](/api/combos/overview), which is the execution surface (`/v2/trade/combo/*`).
+
+The base URL is `https://partner-api.bravadotrade.com` and every route lives under `/v2/data`.
+
+## Authentication
+
+Requests are signed with a **Data API** credential (`analytics.read` scope) using the three HMAC headers. See [authentication](/authentication). A Trade API or WebSockets key is refused with `401`.
+
+```http
+X-BRAVADO-API-KEY: <public-key>
+X-BRAVADO-TIMESTAMP: <unix-ms>
+X-BRAVADO-SIGNATURE: <signature-for-this-request>
+```
+
+Create or manage a Data API credential in [Console](https://console.bravadotrade.com/).
+
+## All Endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | [`/v2/data/combos`](/api/combos-data/list) | Combos with at least one settlement, with legs and activity |
+| GET | [`/v2/data/combos/trades`](/api/combos-data/trades) | Every combo fill, newest first |
+| GET | [`/v2/data/combos/{combo_id}`](/api/combos-data/combo) | One combo in full, with its underlying markets and recent settlements |
+| GET | [`/v2/data/combos/stats`](/api/combos-data/stats) | Aggregate volume, trades, traders, resolutions and top leg markets |
+| GET | [`/v2/data/combos/leaderboard`](/api/combos-data/leaderboard) | Wallets ranked by volume, PnL, trade count or win rate |
+| WSS | [`/stream/polymarket/partner/combos`](/api/combos-data/stream) | Live combo settlements, one frame per fill |
+
+Every HTTP call costs **1 API credit**, including a `400` or `404` answer. See [API credits](/api-credits).
+
+## Identifiers
+
+| Field | What it is |
+| --- | --- |
+| `combo_id` | The combo's condition id, the venue's `bytes31` (`0x` plus 62 hex characters). Bravado's key for a combo, accepted everywhere a combo is named, in either form below. |
+| `combo_condition_id` | The same id in the 32-byte wire form (padded with `00`), as the CLOB, Gamma and `/v2/positions` carry it. |
+| `yes_position_id` / `no_position_id` | PositionManager token ids for the two sides of the combo, as uint256 decimal strings. |
+| `legs[].position_id` | The venue's raw leg position id (uint256). |
+| `legs[].condition_id` | The leg market's **V2** condition id, padded to 32 bytes. This is **not** the id Gamma or the CLOB use. |
+| `legs[].gamma_condition_id` | Gamma's own 32-byte `conditionId` for the leg market: the join key to Gamma, the CLOB and Polymarket's data API. `null` until the market has been looked up on Gamma. |
+| `trade_id` | `<tx_hash>:<log_index>` of the on-chain `OrderFilled` log. |
+
+Wherever a route accepts `market=`, you may pass the leg market in any of three forms: its V2 condition id (bytes31 or padded), Gamma's 32-byte `conditionId`, or Gamma's numeric market id.
+
+## Counting rule
+
+The Combos exchange emits one fill per maker order matched **plus one aggregate fill for the taker order**, whose counterparty is the exchange itself. That aggregate row is one settlement. Volume, trade counts, stats and the default leaderboard count **those rows only** (`role=taker`), so a settlement matched against three market makers is counted once, not four times.
+
+`role=maker` returns the other side of each settlement, `role=all` both. On a taker row `wallet` is the trader who took liquidity; on a maker row it is the market maker.
+
+`fee` is charged in collateral (pUSD) on both sides and is reported as-is, for a BUY as much as for a SELL.
+
+## Numbers, times, resolution
+
+- Money and shares are **decimal strings** with a fixed scale (8 places for `price`, 6 for amounts). Parse them with an arbitrary-precision type, never a float. See [Numeric conventions](/reference/numeric-conventions).
+- `timestamp` is epoch milliseconds; `block_time` and every `*_at` field are ISO-8601.
+- A combo's `resolution` / `status` is one of `unresolved`, `win` (YES paid in full), `loss` (a leg lost) or `partial` (a leg split its payout), as known at read time.
+- `realized_pnl` on a trade is `null` until the combo resolves. It is never reported as `0` when unknown.
+- Data lags the chain by finality (about 1 to 2 minutes). Coverage starts at the launch of Polymarket Combos.
+
+## Pagination
+
+The two list routes page with an opaque `cursor`: pass back the `next_cursor` of the previous page until it is `null`. `limit` is 1 to 200 (default 50). The leaderboard takes `limit` 1 to 100 (default 25) and does not page.
+
+## Errors
+
+All errors are `{ "error": "...", "code": "..." }`.
+
+| Status | Code |
+| --- | --- |
+| `400 Bad Request` | `INVALID_TIME`, `INVALID_WINDOW`, `INVALID_CURSOR`, `INVALID_COMBO_ID`, `INVALID_MARKET`, `INVALID_SORT` |
+| `401 Unauthorized` | Missing or invalid HMAC headers, or a key that is not a Data API credential |
+| `402 Payment Required` | Credit ceiling reached |
+| `403 Forbidden` | Key lacks `analytics.read` |
+| `404 Not Found` | `COMBO_NOT_FOUND`: the id is well-formed but not indexed |
+| `429 Too Many Requests` | Rate limit exceeded, see `Retry-After` |
+
+See the [Error reference](/reference/errors).
+
+## Related
+
+- [Data API product overview](/products/data-api)
+- [Combos API](/api/combos/overview) to quote, buy and redeem combos
+- [Live Trades WebSocket](/api/market-data/trade-feed) for single-market fills
