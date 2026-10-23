@@ -1,0 +1,368 @@
+---
+title: "Polymarket Perps: Perpetual Futures Through the Trade API"
+sidebarTitle: "Perps"
+description: "Trade Polymarket Perps for your users with the same Trade API keys, HMAC signing and deposit wallets. Enterprise only, enabled on request. Scopes trade.perps and perps.read."
+icon:
+  name: "trending-up"
+  library: "lucide"
+---
+
+<Note>Authenticate with HMAC. Signature values in request examples are placeholders; compute a fresh signature over the exact method, path and body. See [authentication](/authentication) and the [runnable quickstart](/quickstart-trade).</Note>
+
+
+Polymarket Perps is Polymarket's perpetual futures venue. The Perps endpoints let you place and manage perpetual futures orders for your users through the Trade API you already integrate. Bravado routes each order to the venue in the user's own Polymarket Perps account, where it is matched. **Bravado is not the counterparty** to any trade and does not hold the collateral: pUSD moves from the user's deposit wallet to their venue account and back.
+
+<Warning>
+  **Enterprise only, enabled on request.** No self-serve plan includes Perps. Ask your Bravado integration manager to enable it for your organisation. Until it is enabled, every `/v2/trade/perps/*` path answers `404`. Once enabled, your key needs **`perps.read`** for reads and **`trade.perps`** for everything that changes state.
+</Warning>
+
+## What stays the same
+
+Perps is part of the Trade API, not a separate product:
+
+- **Same base URL, keys and signing.** Paths live under `/v2/trade/perps/`, signed with the [HMAC headers](/authentication) you already send.
+- **Same users.** Perps acts for one integration user at a time: send a user key, or your master key with `X-Partner-User-Id`, exactly as on the other user routes. See [sub-accounts](/guides/white-label-sub-accounts).
+- **Same `Idempotency-Key`.** Required on every `POST`, honoured on `PATCH` and `DELETE`.
+- **Same deposit wallet.** Deposits are funded from the user's deposit wallet, and withdrawals are always paid back to it.
+
+What is different:
+
+- **Deposit-wallet (V2) users only.** A user still on a V1 Safe gets `409 USER_PROVISIONING_PENDING` with `reason: "v2_wallet_required"` on enrolment and on deposits. Migrate the user first.
+- **The perps balance is separate.** pUSD you deposit to Perps leaves the deposit wallet. It cannot back prediction-market orders or be sent out with [`/v2/trade/withdraw`](/api/trade/withdraw) until you withdraw it from Perps back to the deposit wallet.
+- **Amounts, prices and quantities are decimal strings.** Quantities are in the base asset (for example BTC), not in pUSD.
+
+## Endpoints
+
+| Method | Path | Scope | Description |
+|--------|------|-------|-------------|
+| GET | `/v2/trade/perps/instruments` | `perps.read` | Instruments with mark, index, funding and order rules. `?symbol=` filters |
+| GET | `/v2/trade/perps/readiness` | `perps.read` | Where the user stands: enrolment, credential, approval, funding |
+| POST | `/v2/trade/perps/accounts` | `trade.perps` | Enrol the user with your jurisdiction attestation |
+| GET | `/v2/trade/perps/account` | `perps.read` | Margin summary, `withdrawable`, liquidation state |
+| GET | `/v2/trade/perps/balances` | `perps.read` | Venue balances |
+| GET | `/v2/trade/perps/positions` | `perps.read` | Open positions with TP/SL. `?instrument_id=` filters |
+| PATCH | `/v2/trade/perps/leverage` | `trade.perps` | Set leverage and margin mode for an instrument |
+| PATCH | `/v2/trade/perps/margin` | `trade.perps` | Add or remove isolated margin |
+| POST | `/v2/trade/perps/orders` | `trade.perps` | Place an order |
+| GET | `/v2/trade/perps/orders` | `perps.read` | Open orders. `?instrument_id=` filters |
+| GET | `/v2/trade/perps/orders/{id}` | `perps.read` | One order, by `order_id`, `coid:<32 hex>`, `ik:<Idempotency-Key>` or `intent_id` |
+| PATCH | `/v2/trade/perps/orders/{id}` | `trade.perps` | Modify price and/or quantity |
+| DELETE | `/v2/trade/perps/orders/{id}` | `trade.perps` | Cancel one order |
+| DELETE | `/v2/trade/perps/orders` | `trade.perps` | Cancel all open orders. `?instrument_id=` limits it to one instrument |
+| POST | `/v2/trade/perps/positions/{instrument_id}/tpsl` | `trade.perps` | Set (replace) the position's take-profit and stop-loss |
+| POST | `/v2/trade/perps/auto-cancel` | `trade.perps` | Arm or disarm the venue's dead-man's switch |
+| GET | `/v2/trade/perps/fills` | `perps.read` | Fills |
+| GET | `/v2/trade/perps/funding` | `perps.read` | Funding payments |
+| POST | `/v2/trade/perps/deposits` | `trade.perps` | Fund the venue account from the deposit wallet |
+| GET | `/v2/trade/perps/deposits` · `/deposits/{deposit_id}` | `perps.read` | Deposits, or one deposit |
+| POST | `/v2/trade/perps/withdrawals` | `trade.perps` | Withdraw to the deposit wallet |
+| GET | `/v2/trade/perps/withdrawals` · `/withdrawals/{withdrawal_id}` | `perps.read` | Withdrawals, or one withdrawal |
+
+Instruments are named by the venue's numeric `instrument_id`. Order placement also accepts `symbol` (for example `BTC-USD`) as an alias.
+
+<Note>
+  Perps features roll out in stages. A route whose feature is not live yet answers `409 PERPS_CAPABILITY_UNAVAILABLE` with `Retry-After: 60` and a `reason` naming the feature (for example `orders_modify` or `funding`). Nothing reached the venue. Retry later with the same `Idempotency-Key`. `GET /v2/trade/perps/instruments` is always available.
+</Note>
+
+## The flow
+
+```
+readiness → accounts → deposits → leverage → orders → reduce_only close → withdrawals
+```
+
+<Steps>
+  <Step title="Check readiness">
+    `GET /v2/trade/perps/readiness` tells you the next step for this user.
+
+    | `state` | Meaning | Next step |
+    |---|---|---|
+    | `not_enrolled` | No perps account yet | Enrol (step 2) |
+    | `blocked` | The attested jurisdiction cannot trade perps | None. The user cannot be enrolled |
+    | `enrolled`, `needs_deposit` | Enrolled, not yet funded | Deposit (step 3) |
+    | `ready` | Can trade | Place orders |
+    | `credential_expiring` | Can trade; the venue credential is being renewed | Place orders |
+    | `credential_expired` | Cannot trade until the credential is renewed | Retry later |
+
+    Orders need `ready` or `credential_expiring`. The response also carries `rungs` (`credential`, `approval`, `funded`, each `ok`, `missing` or `unknown`) and `venue` (`cancel_only`, `in_liquidation`).
+  </Step>
+
+  <Step title="Enrol the user">
+    `POST /v2/trade/perps/accounts` takes your attestation of where the end user is. Bravado supplies the user's wallet; you send only the attestation.
+
+    ```json
+    // POST /v2/trade/perps/accounts
+    // Idempotency-Key: 7c1e9a52-perps-enrol-user-42
+
+    {
+      "attestation": {
+        "jurisdiction": "BR",
+        "subdivision": null,
+        "method": "kyc",
+        "attested_at": "2026-10-23T14:00:00Z",
+        "attestation_version": "v1",
+        "partner_signer": "compliance@yourcompany.com"
+      }
+    }
+    ```
+
+    - `jurisdiction` is ISO-3166-1 alpha-2; `subdivision` is ISO-3166-2 when you know it (for example `UA-43`).
+    - `method` is `kyc` or `ip_self_declaration`.
+    - A user in a blocked jurisdiction gets `403 GEO_BLOCKED` and is never enrolled.
+    - An attestation older than 180 days makes opens answer `409 USER_PROVISIONING_PENDING` with `reason: "attestation_stale"`. Call `POST /v2/trade/perps/accounts` again with a fresh attestation, under a new `Idempotency-Key`.
+  </Step>
+
+  <Step title="Deposit pUSD">
+    `POST /v2/trade/perps/deposits` moves pUSD from the user's deposit wallet to their venue account. The minimum is **10 pUSD**, with at most 6 decimal places.
+
+    <CodeGroup>
+
+    ```json Request
+    // POST /v2/trade/perps/deposits
+    // Idempotency-Key: 0b5d3f8e-perps-deposit-0001
+
+    { "amount": "50" }
+    ```
+
+    ```json Response: 202
+    {
+      "deposit_id": "3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b",
+      "amount": "50",
+      "eoa": "0xUserEoa...aabbccdd",
+      "tx_hash": "0xtxhash...deposit01",
+      "state": "pending",
+      "chain_state": "PENDING",
+      "venue_state": "UNSEEN",
+      "fail_reason": null,
+      "created_at": "2026-10-23T14:05:00.000Z"
+    }
+    ```
+
+    </CodeGroup>
+
+    Poll `GET /v2/trade/perps/deposits/{deposit_id}` until `state` is `credited`. States are `prepared`, `pending` (sent, not yet confirmed and credited), `confirmed` (on chain, not yet credited by the venue), `credited`, `failed`, `reverted` and `not_found`. They update about once a minute, so polling faster returns the same object. Not enough pUSD on the deposit wallet answers `422 INSUFFICIENT_BALANCE`.
+  </Step>
+
+  <Step title="Set leverage">
+    Leverage is set **per instrument, for the whole account**. It is not an order field.
+
+    ```json
+    // PATCH /v2/trade/perps/leverage
+    // Idempotency-Key: 9a4c2e7b-perps-leverage-0001
+
+    { "instrument_id": 1, "leverage": 5, "cross": true }
+    ```
+
+    `leverage` is an integer from 1 to 100, subject to your integration's cap (`409 LEVERAGE_CAP_EXCEEDED`) and the venue's risk tiers (`422 INVALID_LEVERAGE`). `cross: false` selects isolated margin. The margin mode cannot change while a position or open orders exist on the instrument (`409 POSITION_OR_ORDERS_EXIST`). Use `PATCH /v2/trade/perps/margin` with a signed `delta` to add or remove isolated margin.
+  </Step>
+
+  <Step title="Place orders">
+    `POST /v2/trade/perps/orders` places an order. `Idempotency-Key` is required.
+
+    | Field | Description |
+    |---|---|
+    | `instrument_id` or `symbol` | The instrument |
+    | `side` | `buy` (long) or `sell` (short) |
+    | `quantity` | Base-asset quantity, decimal string |
+    | `price` | Limit price. Omit for a market-style order |
+    | `tif` | `gtc`, `ioc` or `fok`. Defaults to `gtc` with a price and `ioc` without |
+    | `post_only` | Requires `tif: "gtc"` and a price |
+    | `reduce_only` | Only reduce the position (see step 6) |
+    | `take_profit`, `stop_loss` | `{trigger_price, price?}`, triggered on the mark. Omit `price` for market |
+    | `client_order_id` | Your label, up to 64 characters. Echoed back |
+
+    <CodeGroup>
+
+    ```json Request: limit buy
+    // POST /v2/trade/perps/orders
+    // Idempotency-Key: 4e8b1d6a-perps-order-0001
+
+    {
+      "instrument_id": 1,
+      "side": "buy",
+      "quantity": "0.002",
+      "price": "81478",
+      "client_order_id": "user-42-entry-1"
+    }
+    ```
+
+    ```json Response: 201
+    {
+      "order_id": "184467440737",
+      "client_order_id": "user-42-entry-1",
+      "status": "accepted",
+      "venue_status": null,
+      "reduce_only_applied": false,
+      "reduce_only_forced": false,
+      "quantity_capped": false
+    }
+    ```
+
+    ```json Response: 202
+    {
+      "status": "pending_confirmation",
+      "intent_id": "coid:ec3b49658da8ac0006f1198abb8a3bc0",
+      "client_order_id": "user-42-entry-1",
+      "retry_after_ms": 2000
+    }
+    ```
+
+    </CodeGroup>
+
+    The answer is one of two:
+
+    - **`201`**: the venue answered. `status` is one of `accepted`, `open`, `partially_filled`, `filled`, `cancelled` or `rejected`, and `venue_status` is the venue's raw string. For an IOC, FOK or post-only order, Bravado reads the order back before answering, so `status` and `filled_size` are the venue's.
+    - **`202 pending_confirmation`**: the venue may or may not have the order. **Do not send it again, and never under a new key.** Poll `GET /v2/trade/perps/orders/{intent_id}` after `retry_after_ms` until `status` is `open` or terminal. An order that never reached the venue ends as `rejected` with `venue_status: "not_placed"`. Replaying the request with the same `Idempotency-Key` returns the same `202`.
+
+    To find an order you placed, read `GET /v2/trade/perps/orders/ik:<your Idempotency-Key>`. A read of a placed order returns the venue's view, whose `client_order_id` is the order's coid rather than your label, so keep your own map from label to `order_id`.
+
+    `DELETE /v2/trade/perps/orders` cancels **open orders only**. A take-profit or stop-loss armed on a position stays armed until you cancel it by `order_id` or replace it with `POST /v2/trade/perps/positions/{instrument_id}/tpsl`.
+  </Step>
+
+  <Step title="Close with reduce_only">
+    To close, send the opposite side with `reduce_only: true`. A reduce-only order can only shrink the position; one that would increase or flip it is refused with `422 REDUCE_ONLY_VIOLATION`.
+
+    ```json
+    // POST /v2/trade/perps/orders
+    // Idempotency-Key: 2c7f5a9d-perps-close-0001
+    // Long position of 0.002 on instrument 1: close all of it at market
+
+    {
+      "instrument_id": 1,
+      "side": "sell",
+      "quantity": "0.002",
+      "reduce_only": true
+    }
+    ```
+
+    - **Close the whole position to exit a small one.** A close (reduce-only, against the position, no larger than it) is exempt from `min_notional`. The venue decides whether to accept it. If it refuses, you get `400 INVALID_SIZE`, or a `201` with `status: "rejected"` and `venue_status: "below_min_notional"`. Neither is ever reported as filled.
+    - **A partial close may not leave dust.** A partial close is refused before the venue with `400 INVALID_SIZE` when what it leaves open, `(position size − quantity) × mark price`, would be worth less than `min_notional`. The message names the quantity that closes the whole position. Send that instead.
+    - On a `201`, `reduce_only_applied: true` says the order went to the venue reduce-only.
+  </Step>
+
+  <Step title="Withdraw">
+    `POST /v2/trade/perps/withdrawals` moves pUSD from the venue account back to the user's deposit wallet. Pass an amount, or `"max"` for the venue's current `withdrawable`.
+
+    <CodeGroup>
+
+    ```json Request
+    // POST /v2/trade/perps/withdrawals
+    // Idempotency-Key: 6d1a8f3c-perps-withdraw-0001
+
+    { "amount": "max" }
+    ```
+
+    ```json Response: 202
+    {
+      "withdrawal_id": "8b7e6d5c-4a3b-4c2d-9e1f-0a9b8c7d6e5f",
+      "amount": "48.21",
+      "to": "0xDepositWallet...aabbccdd",
+      "venue_withdraw_id": "77120",
+      "state": "pending",
+      "venue_state": null,
+      "tx_hash": null,
+      "created_at": "2026-10-23T16:30:00.000Z"
+    }
+    ```
+
+    </CodeGroup>
+
+    The destination is always the user's deposit wallet; there is no destination field. Poll `GET /v2/trade/perps/withdrawals/{withdrawal_id}` until `state` is `confirmed`. States are `pending`, `confirmed`, `failed`, `rejected` and `unknown`. An amount above `withdrawable` answers `422 INSUFFICIENT_BALANCE`. To move the funds out of Bravado afterwards, use [`/v2/trade/withdraw`](/api/trade/withdraw).
+  </Step>
+</Steps>
+
+## Limits
+
+Every order rule is checked **before** the order reaches the venue. Each input is on `GET /v2/trade/perps/instruments`, and a refusal frees your `Idempotency-Key` so you can fix the request and retry with the same key.
+
+| Rule | Refusal |
+|---|---|
+| `price` has at most `price_decimals` decimal places | `400 INVALID_PRICE` |
+| A non-integer `price` has at most **5 significant figures**. At a BTC mark near 83,000, that means an integer price (`81478`, not `81478.5`) | `400 INVALID_PRICE` |
+| `\|price − mark_price\| ≤ mark_price × price_bounds`. `price_bounds` is a fraction: `"0.02"` is 2%. Leave room, because the mark moves | `400 INVALID_PRICE` |
+| `quantity` has at most `quantity_decimals` decimal places | `400 INVALID_SIZE` |
+| `quantity × (price, or the mark without one)` is at least `min_notional` (`"10"` at the time of writing). Closes are exempt, as above | `400 INVALID_SIZE` |
+| A partial close leaves at least `min_notional` open, valued at the mark | `400 INVALID_SIZE` |
+| Notional is at most `max_limit_notional` (with a price) or `max_market_notional` (without) | `400 INVALID_SIZE` |
+| Deposit at least 10 pUSD, at most 6 decimal places | `400 INVALID_BODY` |
+
+Your integration also has a policy that Bravado sets with you when Perps is enabled:
+
+| Policy | Refusal |
+|---|---|
+| Notional cap per order, and on the user's total notional | `409 NOTIONAL_CAP_EXCEEDED` |
+| Maximum leverage | `409 LEVERAGE_CAP_EXCEEDED` |
+| Instrument allowlist | `403 INSTRUMENT_NOT_ALLOWED` |
+| Reduce-only mode: opens are refused, and an order against the position goes reduce-only, capped at the position size (`reduce_only_forced`, `quantity_capped` on the `201`) | `403 REDUCE_ONLY_MODE` |
+| Deposits or withdrawals switched off | `403 OPERATION_DISABLED` (`reason` says which) |
+
+## Errors
+
+Errors use the Trade API envelope, plus an optional `reason` when one code has several next steps:
+
+```json
+{
+  "error": "Polymarket Perps v1 requires a V2 deposit wallet",
+  "code": "USER_PROVISIONING_PENDING",
+  "reason": "v2_wallet_required",
+  "request_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+### When to retry, and with which key
+
+**Refused before the venue: retry with the same key.** These codes mean nothing reached the venue. Fix the cause, or wait for it to clear, and send the request again with the **same** `Idempotency-Key`:
+
+`GEO_BLOCKED`, `NOTIONAL_CAP_EXCEEDED`, `LEVERAGE_CAP_EXCEEDED`, `INSTRUMENT_NOT_ALLOWED`, `REDUCE_ONLY_MODE`, `PERPS_HALTED`, `VENUE_CANCEL_ONLY`, `ACCOUNT_IN_LIQUIDATION`, `PRICE_SOURCE_UNAVAILABLE`, `LOCAL_RATE_BUDGET_EXCEEDED`, `CLOCK_SKEW_REFUSED`, `OPERATION_DISABLED`, `PERPS_CAPABILITY_UNAVAILABLE`, `INVALID_PRICE`, `INVALID_SIZE`, `INVALID_BODY`, and `USER_PROVISIONING_PENDING` from the readiness check.
+
+**Answered by the venue: the key is kept.** Any other answer is stored and replayed for the same key (`X-Idempotent-Replay: true`). Read the order, position or transfer state first, and use a new key only once you know the first request did not act.
+
+A `409` with `PERPS_HALTED`, `VENUE_CANCEL_ONLY`, `CLOCK_SKEW_REFUSED` or `PERPS_CAPABILITY_UNAVAILABLE` means "try later", not a conflict to abandon. Wait for `Retry-After` when it is sent, then repeat with the same key. Generic HTTP clients rarely retry a `409` on their own, so handle these codes explicitly.
+
+<Warning>
+  **A `504` is an unknown outcome, never a failure.** Bravado's hosting edge turns every `502` and `503` into an HTML `504`, so the JSON body never reaches you. The `X-Bravado-Error-Code` header usually does. Treat any `504` as "the request may have acted":
+
+  - **Do not send it again under a new key.** Retry with the **same** `Idempotency-Key`: Bravado either replays the stored answer or acts once.
+  - **For an order, look it up first** at `GET /v2/trade/perps/orders/ik:<your key>`. While it answers `pending_confirmation`, keep polling; `rejected` with `venue_status: "not_placed"` means nothing was placed.
+  - **For a deposit or withdrawal**, list `GET /v2/trade/perps/deposits` or `/withdrawals` before acting again.
+</Warning>
+
+### Perps error codes
+
+| Code | HTTP | Meaning | Key |
+|---|---|---|---|
+| `GEO_BLOCKED` | 403 | The attested jurisdiction cannot trade perps; the user is never enrolled | Freed |
+| `INSTRUMENT_NOT_ALLOWED` | 403 | The instrument is outside your allowlist | Freed |
+| `REDUCE_ONLY_MODE` | 403 | Your integration is in reduce-only mode; only closes are accepted | Freed |
+| `OPERATION_DISABLED` | 403 | Your policy does not allow this deposit or withdrawal | Freed |
+| `NOTIONAL_CAP_EXCEEDED` | 409 | Above your notional cap | Freed |
+| `LEVERAGE_CAP_EXCEEDED` | 409 | Above your leverage cap | Freed |
+| `ACCOUNT_IN_LIQUIDATION` | 409 | The venue is liquidating the account; opens are refused | Freed |
+| `PERPS_HALTED` | 409 | Bravado has halted perps opens; try later | Freed |
+| `VENUE_CANCEL_ONLY` | 409 | The venue is cancel-only (for example, maintenance); `Retry-After: 60` | Freed |
+| `CLOCK_SKEW_REFUSED` | 409 | Clock disagreement with the venue; nothing was signed. `Retry-After: 5` | Freed |
+| `PERPS_CAPABILITY_UNAVAILABLE` | 409 | This feature is not live yet; `reason` names it. `Retry-After: 60` | Freed |
+| `USER_PROVISIONING_PENDING` | 409 | The user is not ready: `reason` is `v2_wallet_required` or `attestation_stale` | Freed before the venue, kept after |
+| `INVALID_PRICE`, `INVALID_SIZE`, `INVALID_BODY` | 400 | The request breaks an order rule (see [Limits](#limits)). A venue refusal of a close is also `INVALID_SIZE` | Freed before the venue, kept after |
+| `LOCAL_RATE_BUDGET_EXCEEDED` | 429 | Bravado's shared venue budget refused before sending; `Retry-After` | Freed |
+| `VENUE_RATE_LIMITED` | 429 | The venue throttled the request; `Retry-After` | Kept |
+| `INSUFFICIENT_MARGIN` | 422 | Not enough margin for the order | Kept |
+| `INSUFFICIENT_BALANCE` | 422 | Not enough pUSD to deposit, or a withdrawal above `withdrawable` | Kept |
+| `INVALID_LEVERAGE` | 422 | The venue refused the leverage for the position's risk tier | Kept |
+| `REDUCE_ONLY_VIOLATION` | 422 | A `reduce_only` order would increase or flip the position | Kept |
+| `MODIFY_WOULD_CROSS` | 422 | The modified price would cross the book | Kept |
+| `MARKET_REJECTED` | 422 | The instrument is close-only or settled | Kept |
+| `POSITION_OR_ORDERS_EXIST` | 409 | The margin mode cannot change while a position or orders exist | Kept |
+| `ORDER_TERMINAL` | 409 | The order is already filled or cancelled | Kept |
+| `ORDER_IN_FLIGHT` | 409 | The order is changing at the venue; `Retry-After: 1` | Kept |
+| `MODIFY_REJECTED` | 409 | The venue refused the modify; `reason` says why | Kept |
+| `ACTIVE_LIMIT_EXCEEDED` | 409 | Too many open orders | Kept |
+| `NOT_FOUND` | 404 | Unknown id, or one that belongs to another user | n/a |
+| `PRICE_SOURCE_UNAVAILABLE` | 503 → HTML 504 | The mark is stale; nothing was sent | Freed |
+| `VENUE_UNAVAILABLE` | 503 → HTML 504 | Bravado could not reach the venue; the outcome of a write is unknown | Kept |
+| `UPSTREAM_TIMEOUT` | 502 → HTML 504 | A non-order write whose outcome is unknown | Kept |
+
+When Bravado halts perps, opens and leverage increases answer `409 PERPS_HALTED`. Cancels, reduce-only orders and closes, TP/SL cancels, leverage decreases, deposits, withdrawals and reads keep working, so your users can always exit.
+
+<Tip>
+  Quote `request_id` (or the `X-Request-Id` header on a `504`) when you contact Bravado about a perps request.
+</Tip>
