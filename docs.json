@@ -184,6 +184,12 @@
             ]
           },
           {
+            "group": "Perps",
+            "pages": [
+              "api/trade/perps"
+            ]
+          },
+          {
             "group": "By venue",
             "pages": [
               "markets/polymarket/trade-api",
