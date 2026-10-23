@@ -62,6 +62,10 @@ These limits are enforced by Polymarket's CLOB and the underlying protocol. Reje
 - **Market order notional minimum**, `MARKET` orders require a minimum spend of \$1.
 - **Iceberg slices are post-only**, each slice is submitted passively, so for a buy the slice price must be at or below the current best bid.
 
+<Note>
+  **Protocol V2 markets are not tradable through Bravado yet.** Polymarket lists every new market on [Protocol V2](https://docs.polymarket.com/protocol-v2-migration) from 2 November 2026, with a small canary set before that. Orders on them return `422 MARKET_PROTOCOL_UNSUPPORTED`, which is not a retry. Markets on protocol v1 are unaffected. Gamma tags each market with `version`: read outcome ids from `positionIds` on `"v2"` markets and from `clobTokenIds` on `"v1"` markets. See the [error reference](/reference/errors).
+</Note>
+
 <Warning>
   Prices are decimal probabilities, not cents. Sending `price: "62"` is rejected because 62 falls outside the valid `0.001`–`0.999` range. Send `"0.62"` instead.
 </Warning>
