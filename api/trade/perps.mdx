@@ -13,7 +13,7 @@ icon:
 Polymarket Perps is Polymarket's perpetual futures venue. The Perps endpoints let you place and manage perpetual futures orders for your users through the Trade API you already integrate. Bravado routes each order to the venue in the user's own Polymarket Perps account, where it is matched. **Bravado is not the counterparty** to any trade and does not hold the collateral: pUSD moves from the user's deposit wallet to their venue account and back.
 
 <Warning>
-  **Enterprise only, enabled on request.** No self-serve plan includes Perps. Ask your Bravado integration manager to enable it for your organisation. Until it is enabled, every `/v2/trade/perps/*` path answers `404`. Once enabled, your key needs **`perps.read`** for reads and **`trade.perps`** for everything that changes state.
+  **Enterprise plan only, switched on by Bravado.** Perps is available on the Enterprise plan and on no self-serve plan. Being on Enterprise does not turn it on by itself: ask your Bravado integration manager to enable it for your organisation. Until it is enabled, every `/v2/trade/perps/*` path answers `404`. Once enabled, your key needs **`perps.read`** for reads and **`trade.perps`** for everything that changes state.
 </Warning>
 
 ## What stays the same
@@ -112,7 +112,7 @@ readiness → accounts → deposits → leverage → orders → reduce_only clos
   </Step>
 
   <Step title="Deposit pUSD">
-    `POST /v2/trade/perps/deposits` moves pUSD from the user's deposit wallet to their venue account. The minimum is **10 pUSD**, with at most 6 decimal places.
+    `POST /v2/trade/perps/deposits` moves pUSD from the user's deposit wallet to their venue account. There is a minimum deposit, and an amount below it is refused with `400 INVALID_BODY` and a message naming the minimum. Amounts take at most 6 decimal places.
 
     <CodeGroup>
 
@@ -234,8 +234,8 @@ readiness → accounts → deposits → leverage → orders → reduce_only clos
     }
     ```
 
-    - **Close the whole position to exit a small one.** A close (reduce-only, against the position, no larger than it) is exempt from `min_notional`. The venue decides whether to accept it. If it refuses, you get `400 INVALID_SIZE`, or a `201` with `status: "rejected"` and `venue_status: "below_min_notional"`. Neither is ever reported as filled.
-    - **A partial close may not leave dust.** A partial close is refused before the venue with `400 INVALID_SIZE` when what it leaves open, `(position size − quantity) × mark price`, would be worth less than `min_notional`. The message names the quantity that closes the whole position. Send that instead.
+    - **A close is exempt from `min_notional`.** A close is a reduce-only order against the position, no larger than it, and it may be worth less than `min_notional`. The venue accepts such a close when it closes the whole position, or when what it leaves open is still worth at least `min_notional`. If the venue does refuse a close, you get `400 INVALID_SIZE`, or a `201` with `status: "rejected"` and `venue_status: "below_min_notional"`. Neither is ever reported as filled.
+    - **A partial close may not leave dust.** A partial close is refused before the venue with `400 INVALID_SIZE` when what it leaves open, `(position size − quantity) × mark price`, would be worth less than `min_notional`. The refusal carries `details.rule: "reduce_only_remainder_below_min_notional"` and the numbers as decimal strings: `details.position_size`, `details.remainder` and `details.min_notional`. To close the whole position instead, send `quantity: details.position_size`.
     - On a `201`, `reduce_only_applied: true` says the order went to the venue reduce-only.
   </Step>
 
@@ -266,24 +266,24 @@ readiness → accounts → deposits → leverage → orders → reduce_only clos
 
     </CodeGroup>
 
-    The destination is always the user's deposit wallet; there is no destination field. Poll `GET /v2/trade/perps/withdrawals/{withdrawal_id}` until `state` is `confirmed`. States are `pending`, `confirmed`, `failed`, `rejected` and `unknown`. An amount above `withdrawable` answers `422 INSUFFICIENT_BALANCE`. To move the funds out of Bravado afterwards, use [`/v2/trade/withdraw`](/api/trade/withdraw).
+    The destination is always the user's deposit wallet; there is no destination field. Poll `GET /v2/trade/perps/withdrawals/{withdrawal_id}` until `state` is `confirmed`. When the venue pays out promptly, the withdrawal shows `confirmed` with its `tx_hash` within about 10 seconds of the request, so poll every few seconds at first. Bravado reports `confirmed` only once the pUSD transfer to the deposit wallet is verified on chain; `tx_hash` can appear while `state` is still `pending`. States are `pending`, `confirmed`, `failed`, `rejected` and `unknown`. An amount above `withdrawable` answers `422 INSUFFICIENT_BALANCE`. To move the funds out of Bravado afterwards, use [`/v2/trade/withdraw`](/api/trade/withdraw).
   </Step>
 </Steps>
 
 ## Limits
 
-Every order rule is checked **before** the order reaches the venue. Each input is on `GET /v2/trade/perps/instruments`, and a refusal frees your `Idempotency-Key` so you can fix the request and retry with the same key.
+Every order rule is checked **before** the order reaches the venue. Each input is on `GET /v2/trade/perps/instruments`; read the values from there rather than hard-coding them, because they can change. A refusal frees your `Idempotency-Key` so you can fix the request and retry with the same key. When Bravado enforced the rule, the refusal names it in `details.rule`.
 
-| Rule | Refusal |
-|---|---|
-| `price` has at most `price_decimals` decimal places | `400 INVALID_PRICE` |
-| A non-integer `price` has at most **5 significant figures**. At a BTC mark near 83,000, that means an integer price (`81478`, not `81478.5`) | `400 INVALID_PRICE` |
-| `\|price − mark_price\| ≤ mark_price × price_bounds`. `price_bounds` is a fraction: `"0.02"` is 2%. Leave room, because the mark moves | `400 INVALID_PRICE` |
-| `quantity` has at most `quantity_decimals` decimal places | `400 INVALID_SIZE` |
-| `quantity × (price, or the mark without one)` is at least `min_notional` (`"10"` at the time of writing). Closes are exempt, as above | `400 INVALID_SIZE` |
-| A partial close leaves at least `min_notional` open, valued at the mark | `400 INVALID_SIZE` |
-| Notional is at most `max_limit_notional` (with a price) or `max_market_notional` (without) | `400 INVALID_SIZE` |
-| Deposit at least 10 pUSD, at most 6 decimal places | `400 INVALID_BODY` |
+| Rule | Refusal | `details.rule` |
+|---|---|---|
+| `price` has at most `price_decimals` decimal places | `400 INVALID_PRICE` | `price_decimals` |
+| A non-integer `price` has at most **5 significant figures**. At a BTC mark near 83,000, that means an integer price (`81478`, not `81478.5`) | `400 INVALID_PRICE` | `price_significant_figures` |
+| `\|price − mark_price\| ≤ mark_price × price_bounds`. `price_bounds` is a fraction: `"0.05"` would be 5%. Leave room, because the mark moves | `400 INVALID_PRICE` | `price_bounds` |
+| `quantity` has at most `quantity_decimals` decimal places | `400 INVALID_SIZE` | `quantity_decimals` |
+| `quantity × (price, or the mark without one)` is at least `min_notional`. Closes are exempt, as above | `400 INVALID_SIZE` | `min_notional` |
+| A partial close leaves at least `min_notional` open, valued at the mark | `400 INVALID_SIZE` | `reduce_only_remainder_below_min_notional` |
+| Notional is at most `max_limit_notional` (with a price) or `max_market_notional` (without) | `400 INVALID_SIZE` | `max_limit_notional`, `max_market_notional` |
+| A deposit is at least the minimum deposit, with at most 6 decimal places | `400 INVALID_BODY` | `min_deposit`, `amount_decimals` |
 
 Your integration also has a policy that Bravado sets with you when Perps is enabled:
 
@@ -297,9 +297,16 @@ Your integration also has a policy that Bravado sets with you when Perps is enab
 
 ## Errors
 
-Errors use the Trade API envelope, plus an optional `reason` when one code has several next steps:
+Errors use the Trade API envelope, plus two optional fields:
 
-```json
+- **`reason`**, a lower-case token, when one code has several next steps.
+- **`details`**, an object. It holds `rule`, a lower-case token, when Bravado names the rule it enforced (see [Limits](#limits)); this can be on any code. Only beside `rule: "reduce_only_remainder_below_min_notional"` does it also hold `position_size`, `remainder` and `min_notional`, as decimal strings. No other field appears in it.
+
+Any refusal may come without `details`: a refusal from request validation (a malformed field, a missing header) has none. Check that it is there before reading it, and read only the fields you know.
+
+<CodeGroup>
+
+```json reason
 {
   "error": "Polymarket Perps v1 requires a V2 deposit wallet",
   "code": "USER_PROVISIONING_PENDING",
@@ -307,6 +314,22 @@ Errors use the Trade API envelope, plus an optional `reason` when one code has s
   "request_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+```json details
+{
+  "error": "this close would leave 0.0005 open, worth less than min_notional at the mark; close the whole position (quantity 0.0015) instead",
+  "code": "INVALID_SIZE",
+  "request_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "details": {
+    "rule": "reduce_only_remainder_below_min_notional",
+    "position_size": "0.0015",
+    "remainder": "0.0005",
+    "min_notional": "<the instrument's min_notional>"
+  }
+}
+```
+
+</CodeGroup>
 
 ### When to retry, and with which key
 
@@ -342,7 +365,7 @@ A `409` with `PERPS_HALTED`, `VENUE_CANCEL_ONLY`, `CLOCK_SKEW_REFUSED` or `PERPS
 | `CLOCK_SKEW_REFUSED` | 409 | Clock disagreement with the venue; nothing was signed. `Retry-After: 5` | Freed |
 | `PERPS_CAPABILITY_UNAVAILABLE` | 409 | This feature is not live yet; `reason` names it. `Retry-After: 60` | Freed |
 | `USER_PROVISIONING_PENDING` | 409 | The user is not ready: `reason` is `v2_wallet_required` or `attestation_stale` | Freed before the venue, kept after |
-| `INVALID_PRICE`, `INVALID_SIZE`, `INVALID_BODY` | 400 | The request breaks an order rule (see [Limits](#limits)). A venue refusal of a close is also `INVALID_SIZE` | Freed before the venue, kept after |
+| `INVALID_PRICE`, `INVALID_SIZE`, `INVALID_BODY` | 400 | The request breaks an order rule (see [Limits](#limits)); `details.rule` names it when Bravado enforced it. A venue refusal of a close is also `INVALID_SIZE` | Freed before the venue, kept after |
 | `LOCAL_RATE_BUDGET_EXCEEDED` | 429 | Bravado's shared venue budget refused before sending; `Retry-After` | Freed |
 | `VENUE_RATE_LIMITED` | 429 | The venue throttled the request; `Retry-After` | Kept |
 | `INSUFFICIENT_MARGIN` | 422 | Not enough margin for the order | Kept |
