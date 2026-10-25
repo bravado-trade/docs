@@ -13,7 +13,7 @@ icon:
 Polymarket Perps is Polymarket's perpetual futures venue. The Perps endpoints let you place and manage perpetual futures orders for your users through the Trade API you already integrate. Bravado routes each order to the venue in the user's own Polymarket Perps account, where it is matched. **Bravado is not the counterparty** to any trade and does not hold the collateral: pUSD moves from the user's deposit wallet to their venue account and back.
 
 <Warning>
-  **Enterprise plan only, switched on by Bravado.** Perps is available on the Enterprise plan and on no self-serve plan. Being on Enterprise does not turn it on by itself: ask your Bravado integration manager to enable it for your organisation. Until it is enabled, every `/v2/trade/perps/*` path answers `404`. Once enabled, your key needs **`perps.read`** for reads and **`trade.perps`** for everything that changes state.
+  **Enterprise plan only, switched on by Bravado.** Perps is available on the Enterprise plan and on no self-serve plan. Being on Enterprise does not turn it on by itself: ask your Bravado integration manager to enable it for your organisation. Until it is enabled, every `/v2/trade/perps/*` path answers `403 INSUFFICIENT_SCOPE`, naming the missing scope, even with a correctly signed request. Once enabled, your key needs **`perps.read`** for reads and **`trade.perps`** for everything that changes state.
 </Warning>
 
 ## What stays the same
@@ -78,7 +78,8 @@ readiness → accounts → deposits → leverage → orders → reduce_only clos
     |---|---|---|
     | `not_enrolled` | No perps account yet | Enrol (step 2) |
     | `blocked` | The attested jurisdiction cannot trade perps | None. The user cannot be enrolled |
-    | `enrolled`, `needs_deposit` | Enrolled, not yet funded | Deposit (step 3) |
+    | `needs_deposit` | Enrolled; the venue balance was read as zero | Deposit (step 3) |
+    | `enrolled` | Enrolled; the balance could not be read (`rungs.funded: "unknown"`) | Read readiness again before depositing |
     | `ready` | Can trade | Place orders |
     | `credential_expiring` | Can trade; the venue credential is being renewed | Place orders |
     | `credential_expired` | Cannot trade until the credential is renewed | Retry later |
@@ -152,7 +153,7 @@ readiness → accounts → deposits → leverage → orders → reduce_only clos
     { "instrument_id": 1, "leverage": 5, "cross": true }
     ```
 
-    `leverage` is an integer from 1 to 100, subject to your integration's cap (`409 LEVERAGE_CAP_EXCEEDED`) and the venue's risk tiers (`422 INVALID_LEVERAGE`). `cross: false` selects isolated margin. The margin mode cannot change while a position or open orders exist on the instrument (`409 POSITION_OR_ORDERS_EXIST`). Use `PATCH /v2/trade/perps/margin` with a signed `delta` to add or remove isolated margin.
+    `leverage` is an integer from 1 to 100, subject to your integration's cap (`409 LEVERAGE_CAP_EXCEEDED`) and the venue's risk tiers (`422 INVALID_LEVERAGE`). Leverage above the instrument's maximum, or `cross: true` on an isolated-only instrument, is refused before the venue with `400 INVALID_BODY`. `cross: false` selects isolated margin. The margin mode cannot change while a position or open orders exist on the instrument (`409 POSITION_OR_ORDERS_EXIST`). Use `PATCH /v2/trade/perps/margin` with a signed `delta` to add or remove isolated margin.
   </Step>
 
   <Step title="Place orders">
@@ -210,7 +211,7 @@ readiness → accounts → deposits → leverage → orders → reduce_only clos
 
     The answer is one of two:
 
-    - **`201`**: the venue answered. `status` is one of `accepted`, `open`, `partially_filled`, `filled`, `cancelled` or `rejected`, and `venue_status` is the venue's raw string. For an IOC, FOK or post-only order, Bravado reads the order back before answering, so `status` and `filled_size` are the venue's.
+    - **`201`**: the venue answered. `status` is one of `accepted`, `open`, `partially_filled`, `filled`, `cancelled`, `rejected` or `unknown` (a venue status Bravado does not map), and `venue_status` is the venue's raw string. For an IOC, FOK or post-only order, Bravado reads the order back before answering, so `status` and `filled_size` are the venue's when the read-back resolves in time. If it does not, the `201` says `accepted`, with `venue_status: null` and no `filled_size`: read `GET /v2/trade/perps/orders/{order_id}` for the outcome.
     - **`202 pending_confirmation`**: the venue may or may not have the order. **Do not send it again, and never under a new key.** Poll `GET /v2/trade/perps/orders/{intent_id}` after `retry_after_ms` until `status` is `open` or terminal. An order that never reached the venue ends as `rejected` with `venue_status: "not_placed"`. Replaying the request with the same `Idempotency-Key` returns the same `202`.
 
     To find an order you placed, read `GET /v2/trade/perps/orders/ik:<your Idempotency-Key>`. A read of a placed order returns the venue's view, whose `client_order_id` is the order's coid rather than your label, so keep your own map from label to `order_id`.
@@ -234,7 +235,7 @@ readiness → accounts → deposits → leverage → orders → reduce_only clos
     }
     ```
 
-    - **A close is exempt from `min_notional`.** A close is a reduce-only order against the position, no larger than it, and it may be worth less than `min_notional`. The venue accepts such a close when it closes the whole position, or when what it leaves open is still worth at least `min_notional`. If the venue does refuse a close, you get `400 INVALID_SIZE`, or a `201` with `status: "rejected"` and `venue_status: "below_min_notional"`. Neither is ever reported as filled.
+    - **A close is exempt from `min_notional`.** A close is a reduce-only order against the position, no larger than it, and it may be worth less than `min_notional`. The venue has accepted such a close when what it leaves open is still worth at least `min_notional`; whether it accepts a whole-position close below `min_notional` is the venue's call. If the venue does refuse a close, you get `400 INVALID_SIZE`, or a `201` with `status: "rejected"` and `venue_status: "below_min_notional"`. Neither is ever reported as filled.
     - **A partial close may not leave dust.** A partial close is refused before the venue with `400 INVALID_SIZE` when what it leaves open, `(position size − quantity) × mark price`, would be worth less than `min_notional`. The refusal carries `details.rule: "reduce_only_remainder_below_min_notional"` and the numbers as decimal strings: `details.position_size`, `details.remainder` and `details.min_notional`. To close the whole position instead, send `quantity: details.position_size`.
     - On a `201`, `reduce_only_applied: true` says the order went to the venue reduce-only.
   </Step>
@@ -283,7 +284,7 @@ Every order rule is checked **before** the order reaches the venue. Each input i
 | `quantity × (price, or the mark without one)` is at least `min_notional`. Closes are exempt, as above | `400 INVALID_SIZE` | `min_notional` |
 | A partial close leaves at least `min_notional` open, valued at the mark | `400 INVALID_SIZE` | `reduce_only_remainder_below_min_notional` |
 | Notional is at most `max_limit_notional` (with a price) or `max_market_notional` (without) | `400 INVALID_SIZE` | `max_limit_notional`, `max_market_notional` |
-| A deposit is at least the minimum deposit, with at most 6 decimal places | `400 INVALID_BODY` | `min_deposit`, `amount_decimals` |
+| A deposit is at least the minimum deposit. A deposit with more than 6 decimal places is refused by request validation, with no `details` | `400 INVALID_BODY` | `min_deposit` |
 
 Your integration also has a policy that Bravado sets with you when Perps is enabled:
 
@@ -303,6 +304,20 @@ Errors use the Trade API envelope, plus two optional fields:
 - **`details`**, an object. It holds `rule`, a lower-case token, when Bravado names the rule it enforced (see [Limits](#limits)); this can be on any code. Only beside `rule: "reduce_only_remainder_below_min_notional"` does it also hold `position_size`, `remainder` and `min_notional`, as decimal strings. No other field appears in it.
 
 Any refusal may come without `details`: a refusal from request validation (a malformed field, a missing header) has none. Check that it is there before reading it, and read only the fields you know.
+
+The `reason` values below are the ones you will meet most. **The list is open**: Bravado may send others, and a code may come with no `reason` at all. On a `reason` you do not know, read `GET /v2/trade/perps/readiness` before acting, rather than treating it as fatal.
+
+| `reason` | Code | Next step |
+|---|---|---|
+| `v2_wallet_required` | `409 USER_PROVISIONING_PENDING` | Migrate the user to a deposit wallet |
+| `not_enrolled` | `409 USER_PROVISIONING_PENDING` | Enrol the user (step 2) |
+| `needs_deposit` | `409 USER_PROVISIONING_PENDING` | The account has no collateral: deposit (step 3). Reduce-only orders are not refused for this |
+| `attestation_stale` | `409 USER_PROVISIONING_PENDING` | Enrol again with a fresh attestation, under a new `Idempotency-Key` |
+| `credential_expired` | `409 USER_PROVISIONING_PENDING` | The venue credential is being renewed, and every signed call waits for it, closes included. Retry later with the same key |
+| `enrolment_in_progress` | `409 USER_PROVISIONING_PENDING`, `Retry-After: 5` | Another enrolment for this user is running. **The key is kept**, so a retry with the same key replays this `409`. Wait, then read readiness |
+| `withdrawable_unreadable` | `409 USER_PROVISIONING_PENDING` | `"max"` needs a readable account; send an explicit amount |
+| `close_only` | `403 INSTRUMENT_NOT_ALLOWED` | The venue made the instrument close-only; only reduce-only orders are accepted |
+| `no_position` | `409 POSITION_OR_ORDERS_EXIST` | TP/SL needs an open position on the instrument |
 
 <CodeGroup>
 
@@ -337,6 +352,8 @@ Any refusal may come without `details`: a refusal from request validation (a mal
 
 `GEO_BLOCKED`, `NOTIONAL_CAP_EXCEEDED`, `LEVERAGE_CAP_EXCEEDED`, `INSTRUMENT_NOT_ALLOWED`, `REDUCE_ONLY_MODE`, `PERPS_HALTED`, `VENUE_CANCEL_ONLY`, `ACCOUNT_IN_LIQUIDATION`, `PRICE_SOURCE_UNAVAILABLE`, `LOCAL_RATE_BUDGET_EXCEEDED`, `CLOCK_SKEW_REFUSED`, `OPERATION_DISABLED`, `PERPS_CAPABILITY_UNAVAILABLE`, `INVALID_PRICE`, `INVALID_SIZE`, `INVALID_BODY`, and `USER_PROVISIONING_PENDING` from the readiness check.
 
+Some of these codes can also come back after the venue was reached, and then the key is kept. `VENUE_CANCEL_ONLY` can be the venue's own answer. `INVALID_SIZE` can be the venue's refusal of a close. `USER_PROVISIONING_PENDING` with `reason: "enrolment_in_progress"` also keeps the key. In these cases a retry with the same key replays the stored answer (`X-Idempotent-Replay: true`).
+
 **Answered by the venue: the key is kept.** Any other answer is stored and replayed for the same key (`X-Idempotent-Replay: true`). Read the order, position or transfer state first, and use a new key only once you know the first request did not act.
 
 A `409` with `PERPS_HALTED`, `VENUE_CANCEL_ONLY`, `CLOCK_SKEW_REFUSED` or `PERPS_CAPABILITY_UNAVAILABLE` means "try later", not a conflict to abandon. Wait for `Retry-After` when it is sent, then repeat with the same key. Generic HTTP clients rarely retry a `409` on their own, so handle these codes explicitly.
@@ -354,17 +371,17 @@ A `409` with `PERPS_HALTED`, `VENUE_CANCEL_ONLY`, `CLOCK_SKEW_REFUSED` or `PERPS
 | Code | HTTP | Meaning | Key |
 |---|---|---|---|
 | `GEO_BLOCKED` | 403 | The attested jurisdiction cannot trade perps; the user is never enrolled | Freed |
-| `INSTRUMENT_NOT_ALLOWED` | 403 | The instrument is outside your allowlist | Freed |
+| `INSTRUMENT_NOT_ALLOWED` | 403 | The instrument is outside your allowlist. Also: `reason: "close_only"`, an open on an instrument the venue made close-only, and `reason: "no_policy"`, Perps is not configured for your integration yet | Freed |
 | `REDUCE_ONLY_MODE` | 403 | Your integration is in reduce-only mode; only closes are accepted | Freed |
 | `OPERATION_DISABLED` | 403 | Your policy does not allow this deposit or withdrawal | Freed |
 | `NOTIONAL_CAP_EXCEEDED` | 409 | Above your notional cap | Freed |
 | `LEVERAGE_CAP_EXCEEDED` | 409 | Above your leverage cap | Freed |
 | `ACCOUNT_IN_LIQUIDATION` | 409 | The venue is liquidating the account; opens are refused | Freed |
 | `PERPS_HALTED` | 409 | Bravado has halted perps opens; try later | Freed |
-| `VENUE_CANCEL_ONLY` | 409 | The venue is cancel-only (for example, maintenance); `Retry-After: 60` | Freed |
+| `VENUE_CANCEL_ONLY` | 409 | The venue is cancel-only (for example, maintenance); `Retry-After: 60` | Freed before the venue, kept after |
 | `CLOCK_SKEW_REFUSED` | 409 | Clock disagreement with the venue; nothing was signed. `Retry-After: 5` | Freed |
 | `PERPS_CAPABILITY_UNAVAILABLE` | 409 | This feature is not live yet; `reason` names it. `Retry-After: 60` | Freed |
-| `USER_PROVISIONING_PENDING` | 409 | The user is not ready: `reason` is `v2_wallet_required` or `attestation_stale` | Freed before the venue, kept after |
+| `USER_PROVISIONING_PENDING` | 409 | The user is not ready; `reason` says why (see the list above, which is open) | Freed before the venue, kept after and on `enrolment_in_progress` |
 | `INVALID_PRICE`, `INVALID_SIZE`, `INVALID_BODY` | 400 | The request breaks an order rule (see [Limits](#limits)); `details.rule` names it when Bravado enforced it. A venue refusal of a close is also `INVALID_SIZE` | Freed before the venue, kept after |
 | `LOCAL_RATE_BUDGET_EXCEEDED` | 429 | Bravado's shared venue budget refused before sending; `Retry-After` | Freed |
 | `VENUE_RATE_LIMITED` | 429 | The venue throttled the request; `Retry-After` | Kept |
@@ -374,7 +391,7 @@ A `409` with `PERPS_HALTED`, `VENUE_CANCEL_ONLY`, `CLOCK_SKEW_REFUSED` or `PERPS
 | `REDUCE_ONLY_VIOLATION` | 422 | A `reduce_only` order would increase or flip the position | Kept |
 | `MODIFY_WOULD_CROSS` | 422 | The modified price would cross the book | Kept |
 | `MARKET_REJECTED` | 422 | The instrument is close-only or settled | Kept |
-| `POSITION_OR_ORDERS_EXIST` | 409 | The margin mode cannot change while a position or orders exist | Kept |
+| `POSITION_OR_ORDERS_EXIST` | 409 | The margin mode cannot change while a position or orders exist. With `reason: "no_position"`, the opposite: TP/SL was set with no position | Kept |
 | `ORDER_TERMINAL` | 409 | The order is already filled or cancelled | Kept |
 | `ORDER_IN_FLIGHT` | 409 | The order is changing at the venue; `Retry-After: 1` | Kept |
 | `MODIFY_REJECTED` | 409 | The venue refused the modify; `reason` says why | Kept |
@@ -384,7 +401,7 @@ A `409` with `PERPS_HALTED`, `VENUE_CANCEL_ONLY`, `CLOCK_SKEW_REFUSED` or `PERPS
 | `VENUE_UNAVAILABLE` | 503 → HTML 504 | Bravado could not reach the venue; the outcome of a write is unknown | Kept |
 | `UPSTREAM_TIMEOUT` | 502 → HTML 504 | A non-order write whose outcome is unknown | Kept |
 
-When Bravado halts perps, opens and leverage increases answer `409 PERPS_HALTED`. Cancels, reduce-only orders and closes, TP/SL cancels, leverage decreases, deposits, withdrawals and reads keep working, so your users can always exit.
+When Bravado halts perps, opens, leverage increases and removing isolated margin (a negative `delta`) answer `409 PERPS_HALTED`. Cancels, reduce-only orders and closes, TP/SL cancels, leverage decreases, deposits, withdrawals and reads keep working, so your users can always exit.
 
 <Tip>
   Quote `request_id` (or the `X-Request-Id` header on a `504`) when you contact Bravado about a perps request.
