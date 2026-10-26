@@ -1,0 +1,67 @@
+---
+title: "PATCH /v2/trade/perps/orders/{id}: Modify an Order"
+sidebarTitle: "PATCH /orders/{id}"
+api: "PATCH /v2/trade/perps/orders/{id}"
+description: "Change the price and/or quantity of an open Polymarket Perps order. Scope trade.perps."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Modifies an open order's price, quantity, or both. Scope `trade.perps`; `Idempotency-Key` is honoured.
+
+This feature rolls out in stages: until it is live, the route answers `409 PERPS_CAPABILITY_UNAVAILABLE` with `reason: "orders_modify"` and `Retry-After: 60`. Nothing reached the venue; retry later with the same `Idempotency-Key`.
+
+```text
+PATCH https://partner-api.bravadotrade.com/v2/trade/perps/orders/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The order: venue `order_id`, `coid:<32 hex>`, `ik:<Idempotency-Key>` or `intent_id`, as on [`GET /v2/trade/perps/orders/{id}`](/api/trade/perps/orders#get-one-order).
+</ParamField>
+
+### Body
+
+At least one of the two.
+
+<ParamField body="price" type="string">
+  New limit price, decimal string.
+</ParamField>
+
+<ParamField body="quantity" type="string">
+  New total quantity, decimal string.
+</ParamField>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `404 Not Found` | `NOT_FOUND`: unknown id, or one that belongs to another user |
+| `409 Conflict` | `MODIFY_REJECTED`: the venue refused the modify; `reason` says why |
+| `409 Conflict` | `ORDER_TERMINAL`: the order is already filled or cancelled |
+| `409 Conflict` | `ORDER_IN_FLIGHT`: the order is changing at the venue; `Retry-After: 1` |
+| `409 Conflict` | `PERPS_CAPABILITY_UNAVAILABLE` with `reason: "orders_modify"`: not live yet |
+| `422 Unprocessable Entity` | `MODIFY_WOULD_CROSS`: the modified price would cross the book |
+
+Every Perps code and its retry rule: [Errors](/api/trade/perps#errors).
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X PATCH https://partner-api.bravadotrade.com/v2/trade/perps/orders/184467440737 \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 3d9e2b7c-perps-modify-0001" \
+  -H "Content-Type: application/json" \
+  -d '{ "price": "81200" }'
+```
+
+</CodeGroup>
+
+## Related
+
+- [`DELETE /v2/trade/perps/orders/{id}`](/api/trade/perps/cancel-orders) to cancel instead.

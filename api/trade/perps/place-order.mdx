@@ -1,0 +1,230 @@
+---
+title: "POST /v2/trade/perps/orders: Place an Order"
+sidebarTitle: "POST /orders"
+api: "POST /v2/trade/perps/orders"
+description: "Place a Polymarket Perps order for the user, including reduce-only closes and attached take-profit / stop-loss. Answers 201, or 202 pending_confirmation when the outcome is not yet known. Scope trade.perps."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Places an order. Scope `trade.perps`; `Idempotency-Key` is required. The user's [readiness](/api/trade/perps/readiness) must be `ready` or `credential_expiring`.
+
+Every order rule is checked **before** the order reaches the venue; see [Limits](/api/trade/perps#limits).
+
+```text
+POST https://partner-api.bravadotrade.com/v2/trade/perps/orders
+```
+
+### Body
+
+<ParamField body="instrument_id" type="integer">
+  The venue instrument id. Send this or `symbol`.
+</ParamField>
+
+<ParamField body="symbol" type="string">
+  Alias of `instrument_id`, for example `BTC-USD`.
+</ParamField>
+
+<ParamField body="side" type="string" required>
+  `buy` (long) or `sell` (short).
+</ParamField>
+
+<ParamField body="quantity" type="string" required>
+  Base-asset quantity (for example BTC, not pUSD), decimal string.
+</ParamField>
+
+<ParamField body="price" type="string">
+  Limit price. Omit for a market-style order. At most `price_decimals` decimal places, a non-integer price has at most 5 significant figures, and `|price − mark_price| ≤ mark_price × price_bounds`.
+</ParamField>
+
+<ParamField body="tif" type="string">
+  `gtc`, `ioc` or `fok`. Defaults to `gtc` with a price and `ioc` without.
+</ParamField>
+
+<ParamField body="post_only" type="boolean">
+  Requires `tif: "gtc"` and a price.
+</ParamField>
+
+<ParamField body="reduce_only" type="boolean">
+  Only reduce the position. See [Close a position](#close-a-position).
+</ParamField>
+
+<ParamField body="take_profit" type="object">
+  <Expandable title="take_profit fields">
+    <ParamField body="trigger_price" type="string" required>
+      Triggered on the mark price.
+    </ParamField>
+    <ParamField body="price" type="string">
+      Limit price once triggered. Omit for market.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="stop_loss" type="object">
+  <Expandable title="stop_loss fields">
+    <ParamField body="trigger_price" type="string" required>
+      Triggered on the mark price.
+    </ParamField>
+    <ParamField body="price" type="string">
+      Limit price once triggered. Omit for market.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="client_order_id" type="string">
+  Your label, up to 64 characters. Echoed back; never sent to the venue.
+</ParamField>
+
+### Response
+
+The answer is one of two.
+
+**`201`: the venue answered.**
+
+<ResponseField name="order_id" type="string">
+  The venue's order id.
+</ResponseField>
+
+<ResponseField name="client_order_id" type="string">
+  Your label, echoed back.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `accepted`, `open`, `partially_filled`, `filled`, `cancelled`, `rejected` or `unknown` (a venue status Bravado does not map).
+</ResponseField>
+
+<ResponseField name="venue_status" type="string | null">
+  The venue's raw status string.
+</ResponseField>
+
+<ResponseField name="filled_size" type="string">
+  For an IOC, FOK or post-only order, when the read-back resolves in time.
+</ResponseField>
+
+<ResponseField name="reduce_only_applied" type="boolean">
+  `true` when the order went to the venue reduce-only.
+</ResponseField>
+
+<ResponseField name="reduce_only_forced" type="boolean">
+  `true` when your integration's reduce-only mode turned the order reduce-only.
+</ResponseField>
+
+<ResponseField name="quantity_capped" type="boolean">
+  `true` when reduce-only mode capped the quantity at the position size.
+</ResponseField>
+
+For an IOC, FOK or post-only order, Bravado reads the order back before answering, so `status` and `filled_size` are the venue's when the read-back resolves in time. If it does not, the `201` says `accepted`, with `venue_status: null` and no `filled_size`: read [`GET /v2/trade/perps/orders/{order_id}`](/api/trade/perps/orders#get-one-order) for the outcome.
+
+**`202 pending_confirmation`: the venue may or may not have the order.**
+
+<ResponseField name="status" type="string">
+  `pending_confirmation`.
+</ResponseField>
+
+<ResponseField name="intent_id" type="string">
+  Read the order by this id.
+</ResponseField>
+
+<ResponseField name="client_order_id" type="string">
+  Your label, echoed back.
+</ResponseField>
+
+<ResponseField name="retry_after_ms" type="integer">
+  Wait this long before the first read.
+</ResponseField>
+
+**Do not send it again, and never under a new key.** Poll [`GET /v2/trade/perps/orders/{intent_id}`](/api/trade/perps/orders#get-one-order) after `retry_after_ms` until `status` is `open` or terminal. An order that never reached the venue ends as `rejected` with `venue_status: "not_placed"`. Replaying the request with the same `Idempotency-Key` returns the same `202`.
+
+To find an order you placed, read `GET /v2/trade/perps/orders/ik:<your Idempotency-Key>`. A read of a placed order returns the venue's view, whose `client_order_id` is the order's coid rather than your label, so keep your own map from label to `order_id`.
+
+<ResponseExample>
+
+```json 201
+{
+  "order_id": "184467440737",
+  "client_order_id": "user-42-entry-1",
+  "status": "accepted",
+  "venue_status": null,
+  "reduce_only_applied": false,
+  "reduce_only_forced": false,
+  "quantity_capped": false
+}
+```
+
+```json 202
+{
+  "status": "pending_confirmation",
+  "intent_id": "coid:ec3b49658da8ac0006f1198abb8a3bc0",
+  "client_order_id": "user-42-entry-1",
+  "retry_after_ms": 2000
+}
+```
+
+</ResponseExample>
+
+### Close a position
+
+To close, send the opposite side with `reduce_only: true`. A reduce-only order can only shrink the position; one that would increase or flip it is refused with `422 REDUCE_ONLY_VIOLATION`.
+
+```json
+// POST /v2/trade/perps/orders
+// Idempotency-Key: 2c7f5a9d-perps-close-0001
+// Long position of 0.002 on instrument 1: close all of it at market
+
+{
+  "instrument_id": 1,
+  "side": "sell",
+  "quantity": "0.002",
+  "reduce_only": true
+}
+```
+
+- **A close is exempt from `min_notional`.** A close is a reduce-only order against the position, no larger than it, and it may be worth less than `min_notional`. The venue has accepted such a close when what it leaves open is still worth at least `min_notional`; whether it accepts a whole-position close below `min_notional` is the venue's call. If the venue does refuse a close, you get `400 INVALID_SIZE`, or a `201` with `status: "rejected"` and `venue_status: "below_min_notional"`. Neither is ever reported as filled.
+- **A partial close may not leave dust.** A partial close is refused before the venue with `400 INVALID_SIZE` when what it leaves open, `(position size − quantity) × mark price`, would be worth less than `min_notional`. The refusal carries `details.rule: "reduce_only_remainder_below_min_notional"` and the numbers as decimal strings: `details.position_size`, `details.remainder` and `details.min_notional`. To close the whole position instead, send `quantity: details.position_size`.
+- On a `201`, `reduce_only_applied: true` says the order went to the venue reduce-only.
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | `INVALID_PRICE`, `INVALID_SIZE`, `INVALID_BODY`: the order breaks a rule in [Limits](/api/trade/perps#limits); `details.rule` names it when Bravado enforced it |
+| `403 Forbidden` | `INSTRUMENT_NOT_ALLOWED`: outside your allowlist; or `reason: "close_only"`, an open on an instrument the venue made close-only; or `reason: "no_policy"` |
+| `403 Forbidden` | `REDUCE_ONLY_MODE`: your integration is in reduce-only mode; only closes are accepted |
+| `409 Conflict` | `NOTIONAL_CAP_EXCEEDED`, `LEVERAGE_CAP_EXCEEDED`: above your integration's caps |
+| `409 Conflict` | `USER_PROVISIONING_PENDING`: the user is not ready, for example `reason: "needs_deposit"`, `"attestation_stale"` or `"credential_expired"` |
+| `409 Conflict` | `PERPS_HALTED`: Bravado has halted perps opens; reduce-only orders and closes keep working |
+| `409 Conflict` | `VENUE_CANCEL_ONLY`: the venue is cancel-only (for example, maintenance); `Retry-After: 60` |
+| `409 Conflict` | `ACCOUNT_IN_LIQUIDATION`: the venue is liquidating the account; opens are refused |
+| `409 Conflict` | `ACTIVE_LIMIT_EXCEEDED`: too many open orders |
+| `422 Unprocessable Entity` | `INSUFFICIENT_MARGIN`: not enough margin for the order |
+| `422 Unprocessable Entity` | `REDUCE_ONLY_VIOLATION`: a `reduce_only` order would increase or flip the position |
+| `422 Unprocessable Entity` | `MARKET_REJECTED`: the instrument is close-only or settled |
+
+Every Perps code and its retry rule: [Errors](/api/trade/perps#errors). A `504` is an unknown outcome: look the order up at `GET /v2/trade/perps/orders/ik:<your key>` before anything else.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://partner-api.bravadotrade.com/v2/trade/perps/orders \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 4e8b1d6a-perps-order-0001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instrument_id": 1,
+    "side": "buy",
+    "quantity": "0.002",
+    "price": "81478",
+    "client_order_id": "user-42-entry-1"
+  }'
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /v2/trade/perps/orders`](/api/trade/perps/orders) for open orders, or one order.
+- [`PATCH /v2/trade/perps/leverage`](/api/trade/perps/leverage): leverage is set per instrument, not on the order.

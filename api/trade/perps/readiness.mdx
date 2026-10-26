@@ -1,0 +1,77 @@
+---
+title: "GET /v2/trade/perps/readiness: Readiness"
+sidebarTitle: "GET /readiness"
+api: "GET /v2/trade/perps/readiness"
+description: "Where the user stands on Polymarket Perps: enrolment, credential, approval and funding, and the next step. Scope perps.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Tells you the next step for this user. Read it first, and read it again whenever a refusal carries a `reason` you do not know. Scope `perps.read`.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/readiness
+```
+
+Acts for one integration user: send a user key, or your master key with `X-Partner-User-Id`. See [sub-accounts](/guides/white-label-sub-accounts).
+
+### Response
+
+<ResponseField name="state" type="string">
+  Where the user stands.
+
+  | `state` | Meaning | Next step |
+  |---|---|---|
+  | `not_enrolled` | No perps account yet | [Enrol](/api/trade/perps/enrol) |
+  | `blocked` | The attested jurisdiction cannot trade perps | None. The user cannot be enrolled |
+  | `needs_deposit` | Enrolled; the venue balance was read as zero | [Deposit](/api/trade/perps/deposit) |
+  | `enrolled` | Enrolled; the balance could not be read (`rungs.funded: "unknown"`) | Read readiness again before depositing |
+  | `ready` | Can trade | [Place orders](/api/trade/perps/place-order) |
+  | `credential_expiring` | Can trade; the venue credential is being renewed | Place orders |
+  | `credential_expired` | Cannot trade until the credential is renewed | Retry later |
+
+  Orders need `ready` or `credential_expiring`.
+</ResponseField>
+
+<ResponseField name="rungs" type="object">
+  <Expandable title="rungs fields">
+    <ResponseField name="credential" type="string">
+      `ok`, `missing` or `unknown`.
+    </ResponseField>
+    <ResponseField name="approval" type="string">
+      `ok`, `missing` or `unknown`.
+    </ResponseField>
+    <ResponseField name="funded" type="string">
+      `ok`, `missing` or `unknown`. `unknown` means the balance could not be read, not that it is zero.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="venue" type="object">
+  <Expandable title="venue fields">
+    <ResponseField name="cancel_only" type="boolean | null">
+      The venue is cancel-only.
+    </ResponseField>
+    <ResponseField name="in_liquidation" type="boolean | null">
+      The venue is liquidating the account.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://partner-api.bravadotrade.com/v2/trade/perps/readiness \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+```
+
+</CodeGroup>
+
+## Related
+
+- [The flow](/api/trade/perps#the-flow) from enrolment to withdrawal.
+- [`reason` values](/api/trade/perps#errors) on `409 USER_PROVISIONING_PENDING`.

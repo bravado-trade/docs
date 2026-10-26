@@ -1,0 +1,67 @@
+---
+title: "GET /v2/trade/perps/account: Account and Balances"
+sidebarTitle: "GET /account"
+api: "GET /v2/trade/perps/account"
+description: "The user's Polymarket Perps margin summary, withdrawable amount and liquidation state, and their venue balances. Scope perps.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Two reads of the user's venue account. Scope `perps.read`.
+
+The perps balance is separate from the deposit wallet: pUSD deposited to Perps cannot back prediction-market orders until you [withdraw it](/api/trade/perps/withdraw).
+
+## Account
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/account
+```
+
+### Response
+
+The margin summary, the liquidation state, and:
+
+<ResponseField name="withdrawable" type="string">
+  pUSD that can be withdrawn now. `"max"` on [`POST /v2/trade/perps/withdrawals`](/api/trade/perps/withdraw) withdraws this amount; an amount above it answers `422 INSUFFICIENT_BALANCE`.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://partner-api.bravadotrade.com/v2/trade/perps/account \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+```
+
+</CodeGroup>
+
+## Balances
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/balances
+```
+
+### Response
+
+The user's balances at the venue.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://partner-api.bravadotrade.com/v2/trade/perps/balances \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /v2/trade/perps/positions`](/api/trade/perps/positions) for open positions.
+- [`GET /v2/trade/perps/readiness`](/api/trade/perps/readiness) for whether the user can trade.

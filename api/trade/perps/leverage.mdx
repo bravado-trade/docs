@@ -1,0 +1,101 @@
+---
+title: "PATCH /v2/trade/perps/leverage: Leverage and Margin"
+sidebarTitle: "PATCH /leverage"
+api: "PATCH /v2/trade/perps/leverage"
+description: "Set leverage and margin mode for an instrument, and add or remove isolated margin, on Polymarket Perps. Scope trade.perps."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+## Set leverage
+
+Leverage is set **per instrument, for the whole account**. It is not an order field. Scope `trade.perps`; `Idempotency-Key` is honoured.
+
+```text
+PATCH https://partner-api.bravadotrade.com/v2/trade/perps/leverage
+```
+
+### Body
+
+<ParamField body="instrument_id" type="integer" required>
+  The venue instrument id.
+</ParamField>
+
+<ParamField body="leverage" type="integer" required>
+  1 to 100, subject to your integration's cap and the venue's risk tiers.
+</ParamField>
+
+<ParamField body="cross" type="boolean" required>
+  `true` for cross margin, `false` for isolated.
+</ParamField>
+
+The margin mode cannot change while a position or open orders exist on the instrument.
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | `INVALID_BODY`: leverage above the instrument's maximum, or `cross: true` on an isolated-only instrument. Refused before the venue |
+| `409 Conflict` | `LEVERAGE_CAP_EXCEEDED`: above your integration's cap |
+| `409 Conflict` | `POSITION_OR_ORDERS_EXIST`: the margin mode cannot change while a position or orders exist |
+| `409 Conflict` | `PERPS_HALTED`: Bravado has halted perps, which stops leverage increases. Decreases keep working |
+| `422 Unprocessable Entity` | `INVALID_LEVERAGE`: the venue refused the leverage for the position's risk tier |
+
+Every Perps code and its retry rule: [Errors](/api/trade/perps#errors).
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X PATCH https://partner-api.bravadotrade.com/v2/trade/perps/leverage \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 9a4c2e7b-perps-leverage-0001" \
+  -H "Content-Type: application/json" \
+  -d '{ "instrument_id": 1, "leverage": 5, "cross": true }'
+```
+
+</CodeGroup>
+
+## Add or remove isolated margin
+
+```text
+PATCH https://partner-api.bravadotrade.com/v2/trade/perps/margin
+```
+
+Scope `trade.perps`; `Idempotency-Key` is honoured.
+
+### Body
+
+<ParamField body="instrument_id" type="integer" required>
+  The venue instrument id of the isolated position.
+</ParamField>
+
+<ParamField body="delta" type="string" required>
+  pUSD to add (positive) or remove (negative) from an isolated position. Signed decimal string.
+</ParamField>
+
+When Bravado halts perps, removing isolated margin (a negative `delta`) answers `409 PERPS_HALTED`.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X PATCH https://partner-api.bravadotrade.com/v2/trade/perps/margin \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 1e6a9d4f-perps-margin-0001" \
+  -H "Content-Type: application/json" \
+  -d '{ "instrument_id": 1, "delta": "10" }'
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /v2/trade/perps/instruments`](/api/trade/perps/instruments) for the instruments.
+- [`POST /v2/trade/perps/orders`](/api/trade/perps/place-order) to trade once leverage is set.

@@ -1,0 +1,63 @@
+---
+title: "GET /v2/trade/perps/fills: Fills"
+sidebarTitle: "GET /fills"
+api: "GET /v2/trade/perps/fills"
+description: "The user's Polymarket Perps fills, filtered by instrument and time. Scope perps.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+The user's fills. Scope `perps.read`.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/fills
+```
+
+### Query Parameters
+
+<ParamField query="instrument_id" type="integer">
+  Only fills on this instrument.
+</ParamField>
+
+<ParamField query="start_timestamp" type="integer">
+  Epoch milliseconds, inclusive.
+</ParamField>
+
+<ParamField query="end_timestamp" type="integer">
+  Epoch milliseconds.
+</ParamField>
+
+<ParamField query="sort" type="string">
+  `asc` or `desc`.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Opaque. Pass back the previous page's `next_cursor`.
+</ParamField>
+
+`limit` is not supported here, and is refused with `400 INVALID_BODY`.
+
+### Response
+
+The user's fills. When there are more, pass the page's `next_cursor` back as `cursor`.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/v2/trade/perps/fills \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d instrument_id=1 \
+  -d start_timestamp=1792713600000 \
+  -d sort=desc
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /v2/trade/perps/funding`](/api/trade/perps/funding) for funding payments.
+- [`GET /v2/trade/perps/orders`](/api/trade/perps/orders) for open orders, or one order.

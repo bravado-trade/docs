@@ -1,0 +1,112 @@
+---
+title: "POST /v2/trade/perps/deposits: Deposit pUSD"
+sidebarTitle: "POST /deposits"
+api: "POST /v2/trade/perps/deposits"
+description: "Fund the user's Polymarket Perps account with pUSD from their deposit wallet. Scope trade.perps."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Moves pUSD from the user's deposit wallet to their venue account. Scope `trade.perps`; `Idempotency-Key` is required.
+
+pUSD you deposit to Perps leaves the deposit wallet. It cannot back prediction-market orders or be sent out with [`/v2/trade/withdraw`](/api/trade/withdraw) until you [withdraw it from Perps](/api/trade/perps/withdraw) back to the deposit wallet.
+
+```text
+POST https://partner-api.bravadotrade.com/v2/trade/perps/deposits
+```
+
+### Body
+
+<ParamField body="amount" type="string" required>
+  pUSD, as a decimal string with at most 6 decimal places. There is a minimum deposit: an amount below it is refused with `400 INVALID_BODY` and a message naming the minimum.
+</ParamField>
+
+### Response
+
+`202 Accepted`. Poll [`GET /v2/trade/perps/deposits/{deposit_id}`](/api/trade/perps/deposits#get-one-deposit) until `state` is `credited`.
+
+<ResponseField name="deposit_id" type="string">
+  The deposit's id. Read it back by this id.
+</ResponseField>
+
+<ResponseField name="amount" type="string">
+  pUSD deposited.
+</ResponseField>
+
+<ResponseField name="eoa" type="string">
+  The user's EOA.
+</ResponseField>
+
+<ResponseField name="tx_hash" type="string">
+  The deposit transaction.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `prepared`, `pending` (sent, not yet confirmed and credited), `confirmed` (on chain, not yet credited by the venue), `credited`, `failed`, `reverted` or `not_found`.
+</ResponseField>
+
+<ResponseField name="chain_state" type="string">
+  The transaction's state on chain, for example `PENDING`.
+</ResponseField>
+
+<ResponseField name="venue_state" type="string">
+  The venue's view of the deposit, for example `UNSEEN`.
+</ResponseField>
+
+<ResponseField name="fail_reason" type="string | null">
+  Why the deposit failed, when it did.
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO-8601.
+</ResponseField>
+
+<ResponseExample>
+
+```json 202
+{
+  "deposit_id": "3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b",
+  "amount": "50",
+  "eoa": "0xUserEoa...aabbccdd",
+  "tx_hash": "0xtxhash...deposit01",
+  "state": "pending",
+  "chain_state": "PENDING",
+  "venue_state": "UNSEEN",
+  "fail_reason": null,
+  "created_at": "2026-10-23T14:05:00.000Z"
+}
+```
+
+</ResponseExample>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | `INVALID_BODY`: below the minimum deposit (`details.rule: "min_deposit"`), or more than 6 decimal places (refused by request validation, with no `details`) |
+| `403 Forbidden` | `OPERATION_DISABLED`: your policy does not allow deposits |
+| `409 Conflict` | `USER_PROVISIONING_PENDING`: `reason` says why, for example `v2_wallet_required` |
+| `422 Unprocessable Entity` | `INSUFFICIENT_BALANCE`: not enough pUSD on the deposit wallet |
+
+Every Perps code and its retry rule: [Errors](/api/trade/perps#errors). After a `504`, list [`GET /v2/trade/perps/deposits`](/api/trade/perps/deposits) before acting again.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://partner-api.bravadotrade.com/v2/trade/perps/deposits \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 0b5d3f8e-perps-deposit-0001" \
+  -H "Content-Type: application/json" \
+  -d '{ "amount": "50" }'
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /v2/trade/perps/deposits`](/api/trade/perps/deposits) for every deposit, or one.
+- [`GET /v2/trade/perps/readiness`](/api/trade/perps/readiness): `needs_deposit` means the venue balance was read as zero.

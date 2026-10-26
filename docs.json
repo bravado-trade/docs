@@ -186,7 +186,24 @@
           {
             "group": "Perps",
             "pages": [
-              "api/trade/perps"
+              "api/trade/perps",
+              "api/trade/perps/instruments",
+              "api/trade/perps/readiness",
+              "api/trade/perps/enrol",
+              "api/trade/perps/deposit",
+              "api/trade/perps/deposits",
+              "api/trade/perps/account",
+              "api/trade/perps/leverage",
+              "api/trade/perps/place-order",
+              "api/trade/perps/orders",
+              "api/trade/perps/modify-order",
+              "api/trade/perps/cancel-orders",
+              "api/trade/perps/positions",
+              "api/trade/perps/auto-cancel",
+              "api/trade/perps/fills",
+              "api/trade/perps/funding",
+              "api/trade/perps/withdraw",
+              "api/trade/perps/withdrawals"
             ]
           },
           {
