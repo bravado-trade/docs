@@ -1,0 +1,81 @@
+---
+title: "GET /v2/trade/perps/instruments: Instruments"
+sidebarTitle: "GET /instruments"
+api: "GET /v2/trade/perps/instruments"
+description: "Polymarket Perps instruments with mark, index, funding and the order rules Bravado checks before an order reaches the venue. Scope perps.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+The instruments you can trade, with their mark, index, funding and order rules. Instruments are named by the venue's numeric `instrument_id`; order placement also accepts `symbol` (for example `BTC-USD`) as an alias. Scope `perps.read`.
+
+This route is always available: it never answers `409 PERPS_CAPABILITY_UNAVAILABLE`.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/instruments
+```
+
+### Query Parameters
+
+<ParamField query="symbol" type="string">
+  Only this instrument, by its symbol alias, for example `BTC-USD`.
+</ParamField>
+
+### Response
+
+Each instrument carries, among its fields, the inputs of the [order rules](/api/trade/perps#limits). Read the values from here rather than hard-coding them, because they can change.
+
+<ResponseField name="instrument_id" type="integer">
+  The venue's instrument id. Every other Perps route names instruments by it.
+</ResponseField>
+
+<ResponseField name="symbol" type="string">
+  The alias, for example `BTC-USD`.
+</ResponseField>
+
+<ResponseField name="mark_price" type="string | null">
+  The mark. `price_bounds` is measured from it, and an order without a price is valued at it. `null` when the mark is unavailable.
+</ResponseField>
+
+<ResponseField name="price_decimals" type="integer">
+  Maximum decimal places of `price`.
+</ResponseField>
+
+<ResponseField name="quantity_decimals" type="integer">
+  Maximum decimal places of `quantity`.
+</ResponseField>
+
+<ResponseField name="price_bounds" type="string">
+  A fraction: `|price − mark_price| ≤ mark_price × price_bounds`. `"0.05"` would be 5%.
+</ResponseField>
+
+<ResponseField name="min_notional" type="string">
+  Minimum `quantity × (price, or the mark without one)`. Closes are exempt; see [Close a position](/api/trade/perps/place-order#close-a-position).
+</ResponseField>
+
+<ResponseField name="max_limit_notional" type="string">
+  Maximum notional of an order with a price.
+</ResponseField>
+
+<ResponseField name="max_market_notional" type="string">
+  Maximum notional of an order without a price.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/v2/trade/perps/instruments \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d symbol=BTC-USD
+```
+
+</CodeGroup>
+
+## Related
+
+- [Order rules](/api/trade/perps#limits) for how each field is checked.
+- [`POST /v2/trade/perps/orders`](/api/trade/perps/place-order) to place an order on an instrument.

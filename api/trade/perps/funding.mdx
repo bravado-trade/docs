@@ -1,0 +1,51 @@
+---
+title: "GET /v2/trade/perps/funding: Funding Payments"
+sidebarTitle: "GET /funding"
+api: "GET /v2/trade/perps/funding"
+description: "The user's Polymarket Perps funding payments. Scope perps.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+The user's funding payments. Scope `perps.read`.
+
+This feature rolls out in stages: until it is live, the route answers `409 PERPS_CAPABILITY_UNAVAILABLE` with `reason: "funding"` and `Retry-After: 60`. Retry later.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/funding
+```
+
+### Query Parameters
+
+<ParamField query="instrument_id" type="integer">
+  Only funding on this instrument.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Opaque. Pass back the previous page's `next_cursor`.
+</ParamField>
+
+`limit` is not supported here, and is refused with `400 INVALID_BODY`.
+
+### Response
+
+The user's funding payments. When there are more, pass the page's `next_cursor` back as `cursor`.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/v2/trade/perps/funding \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d instrument_id=1
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /v2/trade/perps/instruments`](/api/trade/perps/instruments) for each instrument's funding.
+- [`GET /v2/trade/perps/fills`](/api/trade/perps/fills) for fills.

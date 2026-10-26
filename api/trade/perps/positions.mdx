@@ -1,0 +1,100 @@
+---
+title: "GET /v2/trade/perps/positions: Positions and TP/SL"
+sidebarTitle: "GET /positions"
+api: "GET /v2/trade/perps/positions"
+description: "The user's open Polymarket Perps positions with their take-profit and stop-loss, and the route that sets them. Scopes perps.read and trade.perps."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+## List positions
+
+Open positions, with their take-profit and stop-loss. Scope `perps.read`.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/positions
+```
+
+### Query Parameters
+
+<ParamField query="instrument_id" type="integer">
+  Only the position on this instrument.
+</ParamField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/v2/trade/perps/positions \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d instrument_id=1
+```
+
+</CodeGroup>
+
+## Set take-profit and stop-loss
+
+Sets the position's take-profit and stop-loss, **replacing** what was armed. Scope `trade.perps`; `Idempotency-Key` is required.
+
+```text
+POST https://partner-api.bravadotrade.com/v2/trade/perps/positions/{instrument_id}/tpsl
+```
+
+A take-profit or stop-loss armed on a position stays armed until you cancel it by `order_id` with [`DELETE /v2/trade/perps/orders/{id}`](/api/trade/perps/cancel-orders) or replace it here. [`DELETE /v2/trade/perps/orders`](/api/trade/perps/cancel-orders#cancel-all-open-orders) does not cancel it.
+
+### Path Parameters
+
+<ParamField path="instrument_id" type="string" required>
+  The venue instrument id of the position.
+</ParamField>
+
+### Body
+
+At least one of the two.
+
+<ParamField body="take_profit" type="object">
+  <Expandable title="take_profit fields">
+    <ParamField body="trigger_price" type="string" required>
+      Triggered on the mark price. Decimal string.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="stop_loss" type="object">
+  <Expandable title="stop_loss fields">
+    <ParamField body="trigger_price" type="string" required>
+      Triggered on the mark price. Decimal string.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `409 Conflict` | `POSITION_OR_ORDERS_EXIST` with `reason: "no_position"`: TP/SL needs an open position on the instrument |
+
+Every Perps code and its retry rule: [Errors](/api/trade/perps#errors).
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://partner-api.bravadotrade.com/v2/trade/perps/positions/1/tpsl \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 5f3b8c2a-perps-tpsl-0001" \
+  -H "Content-Type: application/json" \
+  -d '{ "take_profit": { "trigger_price": "90000" }, "stop_loss": { "trigger_price": "76000" } }'
+```
+
+</CodeGroup>
+
+## Related
+
+- [`POST /v2/trade/perps/orders`](/api/trade/perps/place-order) to attach TP/SL when placing an order, or to close a position.

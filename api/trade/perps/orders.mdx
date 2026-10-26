@@ -1,0 +1,88 @@
+---
+title: "GET /v2/trade/perps/orders: Orders"
+sidebarTitle: "GET /orders"
+api: "GET /v2/trade/perps/orders"
+description: "The user's open Polymarket Perps orders, or one order by order_id, coid, Idempotency-Key or intent_id. Scope perps.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Two reads: the user's open orders, or one order. Scope `perps.read`.
+
+## List open orders
+
+Open orders only. A past order is read by id, below.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/orders
+```
+
+### Query Parameters
+
+<ParamField query="instrument_id" type="integer">
+  Only orders on this instrument.
+</ParamField>
+
+`open`, `client_order_id` and `cursor` are not supported here, and are refused with `400 INVALID_BODY`.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/v2/trade/perps/orders \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d instrument_id=1
+```
+
+</CodeGroup>
+
+## Get one order
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/orders/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  One of:
+  - the venue `order_id`;
+  - `coid:<32 hex>`;
+  - `ik:<Idempotency-Key>`, the key you placed the order with;
+  - the `intent_id` of a `202 pending_confirmation`.
+</ParamField>
+
+### Response
+
+A read of a placed order returns the venue's view, with `status` and `venue_status` as on the [`201`](/api/trade/perps/place-order#response). Its `client_order_id` is the order's coid rather than your label, so keep your own map from label to `order_id`.
+
+After a `202 pending_confirmation`, poll by `intent_id` after `retry_after_ms` until `status` is `open` or terminal. An order that never reached the venue ends as `rejected` with `venue_status: "not_placed"`.
+
+After a `504`, look the order up at `GET /v2/trade/perps/orders/ik:<your key>` first. While it answers `pending_confirmation`, keep polling; `rejected` with `venue_status: "not_placed"` means nothing was placed.
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `404 Not Found` | `NOT_FOUND`: unknown id, or one that belongs to another user |
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://partner-api.bravadotrade.com/v2/trade/perps/orders/ik:4e8b1d6a-perps-order-0001 \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+```
+
+</CodeGroup>
+
+## Related
+
+- [`POST /v2/trade/perps/orders`](/api/trade/perps/place-order) to place an order.
+- [`PATCH /v2/trade/perps/orders/{id}`](/api/trade/perps/modify-order) and [`DELETE`](/api/trade/perps/cancel-orders) to change or cancel one.

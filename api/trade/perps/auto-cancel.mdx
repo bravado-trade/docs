@@ -1,0 +1,42 @@
+---
+title: "POST /v2/trade/perps/auto-cancel: Dead-Man's Switch"
+sidebarTitle: "POST /auto-cancel"
+api: "POST /v2/trade/perps/auto-cancel"
+description: "Arm or disarm the Polymarket Perps venue's dead-man's switch for the user. Scope trade.perps."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Arms or disarms the venue's dead-man's switch. Scope `trade.perps`; `Idempotency-Key` is required.
+
+```text
+POST https://partner-api.bravadotrade.com/v2/trade/perps/auto-cancel
+```
+
+### Body
+
+<ParamField body="deadline_ms" type="integer" required>
+  `5000` or more arms the switch; `0` disarms it. At most `86400000`.
+</ParamField>
+
+Every Perps code and its retry rule: [Errors](/api/trade/perps#errors).
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://partner-api.bravadotrade.com/v2/trade/perps/auto-cancel \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 2a7d4e9b-perps-auto-cancel-0001" \
+  -H "Content-Type: application/json" \
+  -d '{ "deadline_ms": 30000 }'
+```
+
+</CodeGroup>
+
+## Related
+
+- [`DELETE /v2/trade/perps/orders`](/api/trade/perps/cancel-orders#cancel-all-open-orders) to cancel open orders now.

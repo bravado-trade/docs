@@ -1,0 +1,79 @@
+---
+title: "DELETE /v2/trade/perps/orders/{id}: Cancel Orders"
+sidebarTitle: "DELETE /orders"
+api: "DELETE /v2/trade/perps/orders/{id}"
+description: "Cancel one Polymarket Perps order, or all of the user's open orders, optionally for one instrument. Scope trade.perps."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Two cancels: one order, or every open order. Scope `trade.perps`; `Idempotency-Key` is honoured. Cancels keep working when Bravado halts perps.
+
+## Cancel one order
+
+```text
+DELETE https://partner-api.bravadotrade.com/v2/trade/perps/orders/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The order: venue `order_id`, `coid:<32 hex>`, `ik:<Idempotency-Key>` or `intent_id`, as on [`GET /v2/trade/perps/orders/{id}`](/api/trade/perps/orders#get-one-order).
+</ParamField>
+
+A take-profit or stop-loss armed on a position is cancelled this way, by its `order_id`, or replaced with [`POST /v2/trade/perps/positions/{instrument_id}/tpsl`](/api/trade/perps/positions#set-take-profit-and-stop-loss).
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `404 Not Found` | `NOT_FOUND`: unknown id, or one that belongs to another user |
+| `409 Conflict` | `ORDER_TERMINAL`: the order is already filled or cancelled |
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X DELETE https://partner-api.bravadotrade.com/v2/trade/perps/orders/184467440737 \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 8c2f6a1d-perps-cancel-0001"
+```
+
+</CodeGroup>
+
+## Cancel all open orders
+
+```text
+DELETE https://partner-api.bravadotrade.com/v2/trade/perps/orders
+```
+
+Cancels **open orders only**. A take-profit or stop-loss armed on a position stays armed until you cancel it by `order_id` or replace it.
+
+### Query Parameters
+
+<ParamField query="instrument_id" type="integer">
+  Only open orders on this instrument.
+</ParamField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X DELETE "https://partner-api.bravadotrade.com/v2/trade/perps/orders?instrument_id=1" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 8c2f6a1d-perps-cancel-all-0001"
+```
+
+</CodeGroup>
+
+Every Perps code and its retry rule: [Errors](/api/trade/perps#errors).
+
+## Related
+
+- [`POST /v2/trade/perps/auto-cancel`](/api/trade/perps/auto-cancel) to arm or disarm the venue's dead-man's switch.

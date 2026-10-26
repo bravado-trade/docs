@@ -1,0 +1,88 @@
+---
+title: "POST /v2/trade/perps/accounts: Enrol a User"
+sidebarTitle: "POST /accounts"
+api: "POST /v2/trade/perps/accounts"
+description: "Enrol the user on Polymarket Perps with your attestation of their jurisdiction. Bravado supplies the wallet. Scope trade.perps."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Takes your attestation of where the end user is. Bravado supplies the user's wallet; you send only the attestation. Scope `trade.perps`; `Idempotency-Key` is required.
+
+Perps is for deposit-wallet (V2) users only. A user still on a V1 Safe gets `409 USER_PROVISIONING_PENDING` with `reason: "v2_wallet_required"`. Migrate the user first.
+
+```text
+POST https://partner-api.bravadotrade.com/v2/trade/perps/accounts
+```
+
+### Body
+
+<ParamField body="attestation" type="object" required>
+  <Expandable title="attestation fields">
+    <ParamField body="jurisdiction" type="string" required>
+      ISO-3166-1 alpha-2 of the end user, for example `BR`.
+    </ParamField>
+    <ParamField body="subdivision" type="string | null">
+      ISO-3166-2 when you know it, for example `UA-43`.
+    </ParamField>
+    <ParamField body="method" type="string" required>
+      `kyc` or `ip_self_declaration`.
+    </ParamField>
+    <ParamField body="attested_at" type="string" required>
+      ISO-8601 instant of the attestation.
+    </ParamField>
+    <ParamField body="attestation_version" type="string" required>
+      Your attestation's version label, 1 to 32 characters.
+    </ParamField>
+    <ParamField body="partner_signer" type="string" required>
+      Who at your company attests, 1 to 128 characters.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+After enrolling, read [`GET /v2/trade/perps/readiness`](/api/trade/perps/readiness) for the next step.
+
+### Attestation age
+
+An attestation older than 180 days makes opens answer `409 USER_PROVISIONING_PENDING` with `reason: "attestation_stale"`. Call this route again with a fresh attestation, under a new `Idempotency-Key`.
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | `INVALID_BODY`: a field outside the shapes above |
+| `403 Forbidden` | `GEO_BLOCKED`: the attested jurisdiction cannot trade perps. The user is never enrolled |
+| `409 Conflict` | `USER_PROVISIONING_PENDING` with `reason: "v2_wallet_required"`: migrate the user to a deposit wallet first |
+| `409 Conflict` | `USER_PROVISIONING_PENDING` with `reason: "enrolment_in_progress"` and `Retry-After: 5`: another enrolment for this user is running. **The key is kept**, so a retry with the same key replays this `409`. Wait, then read readiness |
+
+Every Perps code and its retry rule: [Errors](/api/trade/perps#errors).
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://partner-api.bravadotrade.com/v2/trade/perps/accounts \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -H "Idempotency-Key: 7c1e9a52-perps-enrol-user-42" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "attestation": {
+      "jurisdiction": "BR",
+      "subdivision": null,
+      "method": "kyc",
+      "attested_at": "2026-10-23T14:00:00Z",
+      "attestation_version": "v1",
+      "partner_signer": "compliance@yourcompany.com"
+    }
+  }'
+```
+
+</CodeGroup>
+
+## Related
+
+- [`GET /v2/trade/perps/readiness`](/api/trade/perps/readiness) for the user's state after enrolment.
+- [`POST /v2/trade/perps/deposits`](/api/trade/perps/deposit) to fund the account.

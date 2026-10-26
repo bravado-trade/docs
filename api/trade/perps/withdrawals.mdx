@@ -1,0 +1,71 @@
+---
+title: "GET /v2/trade/perps/withdrawals: Withdrawals"
+sidebarTitle: "GET /withdrawals"
+api: "GET /v2/trade/perps/withdrawals"
+description: "The user's Polymarket Perps withdrawals, or one withdrawal by withdrawal_id. Scope perps.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Two reads: every withdrawal of the user, or one withdrawal by the `withdrawal_id` that [`POST /v2/trade/perps/withdrawals`](/api/trade/perps/withdraw) answered. Scope `perps.read`.
+
+## List withdrawals
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/withdrawals
+```
+
+### Query Parameters
+
+<ParamField query="cursor" type="string">
+  Opaque. Pass back the previous page's `next_cursor`.
+</ParamField>
+
+### Response
+
+The user's withdrawals. When there are more, pass the page's `next_cursor` back as `cursor`.
+
+After a `504` on a withdrawal, list withdrawals before acting again: the request may have acted.
+
+## Get one withdrawal
+
+```text
+GET https://partner-api.bravadotrade.com/v2/trade/perps/withdrawals/{withdrawal_id}
+```
+
+### Path Parameters
+
+<ParamField path="withdrawal_id" type="string" required>
+  The `withdrawal_id` the `POST` answered, a UUID.
+</ParamField>
+
+### Response
+
+The withdrawal, with its `state` and `tx_hash`. Poll until `state` is `confirmed`.
+
+- When the venue pays out promptly, the withdrawal shows `confirmed` with its `tx_hash` within about 10 seconds of the request, so poll every few seconds at first.
+- Bravado reports `confirmed` only once the pUSD transfer to the deposit wallet is verified on chain; `tx_hash` can appear while `state` is still `pending`.
+- States are `pending`, `confirmed`, `failed`, `rejected` and `unknown`.
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| `404 Not Found` | `NOT_FOUND`: unknown id, or one that belongs to another user |
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl https://partner-api.bravadotrade.com/v2/trade/perps/withdrawals/8b7e6d5c-4a3b-4c2d-9e1f-0a9b8c7d6e5f \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>"
+```
+
+</CodeGroup>
+
+## Related
+
+- [`POST /v2/trade/perps/withdrawals`](/api/trade/perps/withdraw) to make a withdrawal.
