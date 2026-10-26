@@ -33,8 +33,8 @@ Each instrument carries, among its fields, the inputs of the [order rules](/api/
   The alias, for example `BTC-USD`.
 </ResponseField>
 
-<ResponseField name="mark_price" type="string">
-  The mark. `price_bounds` is measured from it, and an order without a price is valued at it.
+<ResponseField name="mark_price" type="string | null">
+  The mark. `price_bounds` is measured from it, and an order without a price is valued at it. `null` when the mark is unavailable.
 </ResponseField>
 
 <ResponseField name="price_decimals" type="integer">

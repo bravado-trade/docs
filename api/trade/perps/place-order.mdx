@@ -81,8 +81,8 @@ The answer is one of two.
 
 **`201`: the venue answered.**
 
-<ResponseField name="order_id" type="string">
-  The venue's order id.
+<ResponseField name="order_id" type="string | null">
+  The venue's order id. `null` when nothing was placed (`venue_status: "not_placed"`).
 </ResponseField>
 
 <ResponseField name="client_order_id" type="string">
@@ -188,7 +188,7 @@ To close, send the opposite side with `reduce_only: true`. A reduce-only order c
 | Status | When |
 | --- | --- |
 | `400 Bad Request` | `INVALID_PRICE`, `INVALID_SIZE`, `INVALID_BODY`: the order breaks a rule in [Limits](/api/trade/perps#limits); `details.rule` names it when Bravado enforced it |
-| `403 Forbidden` | `INSTRUMENT_NOT_ALLOWED`: outside your allowlist; or `reason: "close_only"`, an open on an instrument the venue made close-only; or `reason: "no_policy"` |
+| `403 Forbidden` | `INSTRUMENT_NOT_ALLOWED`: outside your allowlist; or `reason: "close_only"`, an open on an instrument the venue made close-only; or `reason: "no_policy"`, Perps is not configured for your integration yet |
 | `403 Forbidden` | `REDUCE_ONLY_MODE`: your integration is in reduce-only mode; only closes are accepted |
 | `409 Conflict` | `NOTIONAL_CAP_EXCEEDED`, `LEVERAGE_CAP_EXCEEDED`: above your integration's caps |
 | `409 Conflict` | `USER_PROVISIONING_PENDING`: the user is not ready, for example `reason: "needs_deposit"`, `"attestation_stale"` or `"credential_expired"` |
