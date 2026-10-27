@@ -70,9 +70,12 @@ The mechanics are broadly the same across venues, which is what makes a shared A
 <Info>
   **Kalshi order books are in rollout and are not callable yet.** `GET /stream/capabilities`
   reports the live per-venue state and is the authoritative answer for what you can subscribe to
-  today; it currently returns `implemented: false` for `kalshi`. Check that field rather than
-  this page before you build, and note that Kalshi access is a separate read-only data
-  entitlement from the trading venues.
+  today. Check `implemented`, `upstream_registered` and your organisation’s `entitled` state
+  before connecting; a built endpoint alone does not mean its source is available. Kalshi access
+  is a separate read-only data entitlement from the trading venues.
+
+  [Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately
+  through the Data API for the published short windows and point observations.
 </Info>
 
 ## What differs between venues
