@@ -36,6 +36,7 @@ one socket, many assets multiplexed, prices and sizes as decimal strings.
 | WebSocket URL | `wss://partner-api.bravadotrade.com/stream/kalshi/partner` |
 | Subscription | `book:<asset>`, where `asset` is the Kalshi market ticker |
 | Required scope | `stream.read` |
+| Book deltas | `full_book_replacement` — snapshots and deltas each carry complete sides, as on the other venues |
 | Status today | published, **not serving** — `reason: "upstream_not_registered"` |
 
 Everything in [Connect](/api/market-data/venue-order-books#subscribe) and
