@@ -64,9 +64,9 @@ You can use the Data API with an `analytics.read` key and no trading permissions
 
 Create an account in the [Bravado Console](https://console.bravadotrade.com/), then open **Endpoints** to configure your product and **API keys** to manage credentials. Contact the team if your organisation needs additional venue or product access. See [API credits](/api-credits) for published request costs; exact quotas and historical coverage depend on the product and dataset.
 
-## Captured market data
+## Kalshi market data
 
-The same Data credential class with `analytics.read` can query [captured Kalshi order-book history](/api/market-data/kalshi-history) under `/market-data/v1`, with an explicit Kalshi read-only data grant. This is a separate, limited captured dataset, not Kalshi trader analytics or a live WebSocket. Discover the available generations and capture intervals before integrating.
+With `analytics.read` and an explicit Kalshi data grant, a Data credential can read [native Kalshi market data](/api/market-data/kalshi-native): current order books, catalogue metadata, public trades and native candles. It can also query [captured Kalshi order-book history](/api/market-data/kalshi-history) under `/market-data/v1`, with an explicit Kalshi read-only data grant. This is a separate, limited captured dataset, not Kalshi trader analytics or a live WebSocket. Discover the available generations and capture intervals before integrating.
 
 ## Trader intelligence
 
