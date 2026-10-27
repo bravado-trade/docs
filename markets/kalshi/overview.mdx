@@ -54,7 +54,7 @@ Polymarket or Predict.fun access does not include it. Market Data connections ne
 with `stream.read` on an eligible paid plan — see [authentication](/authentication) and
 [API credits](/api-credits#authenticated-websocket-credits).
 
-[Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately through REST with a Data credential and Kalshi data grant. Its published coverage is limited to retained short windows and point observations; it is not a live book feed.
+[Native Kalshi market data](/api/market-data/kalshi-native) provides current books, catalogue metadata, public trades and native candles over REST. [Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately through REST with a Data credential and Kalshi data grant. Its published coverage is limited to retained short windows and point observations; it is not a live book feed.
 
 ## Product coverage
 
@@ -62,7 +62,7 @@ with `stream.read` on an eligible paid plan — see [authentication](/authentica
 | --- | --- |
 | [Order-book WebSockets](/api/market-data/venue-order-books) | In rollout |
 | [Enriched live trades](/api/market-data/trade-feed) | Not available |
-| [Data API](/products/data-api) | [Captured book history only](/api/market-data/kalshi-history); no trader analytics |
+| [Data API](/products/data-api) | [Native market data](/api/market-data/kalshi-native) and [captured book history](/api/market-data/kalshi-history); no trader analytics |
 | [Trade API](/products/trade-api) | Not available |
 | [Copytrade API](/products/copytrade-api) | Not available |
 | [MCP Server](/products/mcp-server) | Not available |

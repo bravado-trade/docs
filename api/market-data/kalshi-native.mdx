@@ -1,0 +1,75 @@
+---
+title: "Kalshi native market data"
+sidebarTitle: "Kalshi current data"
+description: "Read native Kalshi markets, current order books, public trades and candles through the Bravado Data API."
+---
+
+Base URL: `https://partner-api.bravadotrade.com/market-data/v1/native`
+
+Read Kalshi's native JSON through Bravado using a Data API credential. Field names, decimal strings and response bodies are preserved. Bravado adds freshness and provenance in response headers.
+
+## Access
+
+Use a credential attached to an active **Data endpoint**, with `analytics.read` and an explicit **Kalshi data grant** for your organisation. Sign each GET using [HMAC authentication](/authentication#making-authenticated-requests) and the [signing helpers](/authentication-examples). Sign the exact canonical path and sorted query with an empty body. Keep your secret on your server. Normal quotas, key restrictions and credit accounting apply.
+
+A Trade API or WebSocket credential does not substitute for a Data credential. Creating a key does not grant venue access.
+
+## Current order book
+
+`GET /markets/{ticker}/orderbook?depth=10&fresh=true`
+
+`depth` accepts 0–100; 0 requests all available levels. The native book contains YES and NO **bids**. A complementary ask is derived from the opposite side; it is not a separately observed ask. Keep prices and quantities as exact decimals, including fractional contracts.
+
+This is a current REST observation. For retained books at a past time, use [captured order-book history](/api/market-data/kalshi-history). Polling this route is not a WebSocket subscription and does not establish uninterrupted capture between reads.
+
+```bash
+# Generate a fresh signature for this exact GET using the signing helper.
+curl 'https://partner-api.bravadotrade.com/market-data/v1/native/markets/<TICKER>/orderbook?depth=10&fresh=true' \
+  -H 'X-BRAVADO-API-KEY: <your-data-api-public-key>' \
+  -H 'X-BRAVADO-TIMESTAMP: <unix-milliseconds>' \
+  -H 'X-BRAVADO-SIGNATURE: <signature-for-this-request>'
+```
+
+## Endpoints
+
+All paths below are relative to the base URL. Unknown parameters are rejected. Tickers and series tickers are case-sensitive. URL-encode query values and use native cursors unchanged.
+
+| GET path | Main parameters |
+| --- | --- |
+| `/markets` | `limit`, `cursor`, `status`, `series_ticker`, `event_ticker`, `tickers`, native time filters, `mve_filter` |
+| `/markets/{ticker}` | `fresh` |
+| `/markets/{ticker}/orderbook` | `depth` (0–100), `fresh` |
+| `/events` | `limit`, `cursor`, `status`, `series_ticker`, `tickers`, `with_nested_markets`, `with_milestones`, `min_close_ts`, `min_updated_ts` |
+| `/events/{ticker}` | `fresh`; native detail includes nested markets |
+| `/series` | `category`, `tags`, `include_product_metadata`, `include_volume`, `min_updated_ts` |
+| `/series/{ticker}` | `fresh` |
+| `/trades` | Required `ticker`; optional `limit` (1–1000), `cursor`, `min_ts`, `max_ts`, `is_block_trade`, `fresh` |
+| `/historical/trades` | Same trade parameters; explicitly select the historical tier |
+| `/series/{series_ticker}/markets/{ticker}/candlesticks` | Required `start_ts`, `end_ts`, `period_interval`; optional `include_latest_before_start`, `fresh` |
+| `/historical/markets/{ticker}/candlesticks` | Required `start_ts`, `end_ts`, `period_interval`; optional `fresh` |
+| `/historical/markets` | `limit`, `cursor`, `series_ticker`, `event_ticker`, `tickers`, `mve_filter=exclude`, `fresh` |
+| `/historical/cutoff` | `fresh` |
+
+`fresh` accepts `true` or `false` on every endpoint and defaults to `false`. Market and historical-market pages default to 100 records, events to 200 and trades to 100. The series list is not paginated. Responses are bounded to **1 MiB**; narrow filters or time windows when needed.
+
+Trade and candle query times are Unix **seconds**. Native candles support `period_interval=1`, `60` or `1440` minutes. These are native 1-minute, 1-hour and 1-day candles, not computed 1-second bars.
+
+Current and historical tiers follow Kalshi's advancing cutoff. Read `/historical/cutoff`, select the needed tier and follow its cursors explicitly. Bravado does not automatically merge the tiers or promise that an empty page establishes complete market history. A market detail may not contain every archived child market.
+
+## Freshness and errors
+
+Cached observations are served for at most **30 seconds**. `fresh=true` bypasses the service cache for that specific request; it does not refresh unrelated data or bypass provider limits. A failed fresh read returns an error rather than a stale book presented as fresh.
+
+| Response header | Meaning |
+| --- | --- |
+| `X-Bravado-Observed-At` | UTC time Bravado acquired the observation |
+| `X-Bravado-Observation-Sha256` | SHA-256 of the exact native response body |
+| `X-Bravado-Source` | `kalshi-public-rest` |
+| `X-Bravado-Cache` | `hit`, `miss` or `refresh` |
+| `X-Bravado-Max-Age-Ms` | `30000` |
+
+Responses use `Cache-Control: private, no-store`. Observation time does not replace a native exchange timestamp or prove matching-engine latency.
+
+Invalid queries return 400; missing or insufficient credentials return authentication or entitlement errors. Missing native data returns 404, an oversized supported catalogue response returns 413, upstream rate limiting returns 429, and unavailable or invalid sources return explicit errors. An empty native book is not manufactured to represent a source outage.
+
+These endpoints provide public market data only. They do not place orders, expose private account data, provide live benchmark series, or replace the separately qualified live-feed and historical-coverage contracts.
