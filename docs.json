@@ -38,7 +38,8 @@
             "pages": [
               "markets/overview",
               "markets/polymarket/overview",
-              "markets/predict-fun/overview"
+              "markets/predict-fun/overview",
+              "markets/kalshi/overview"
             ]
           }
         ]
