@@ -108,7 +108,7 @@ Everything in [Connect](#subscribe) and [Read the messages](#read-the-messages) 
     "subscription": "book:<asset>",
     "trades_path": null,
     "combos_path": null,
-    "book_delta_semantics": "<see the note below>",
+    "book_delta_semantics": "full_book_replacement",
     "sequence_domain": "bravado_delivery_per_asset",
     "snapshot_resets_sequence": true,
     "upstream_history_completeness_attested": false,
@@ -126,11 +126,9 @@ Everything in [Connect](#subscribe) and [Read the messages](#read-the-messages) 
 </Note>
 
 <Info>
-  {/* TBD-CONTRACT — the one line of this page still to be settled. Fill in the
-      agreed value and delete this comment; everything else on the page is final. */}
-  **`book_delta_semantics` for Kalshi is pending.** On Polymarket and Predict.fun it is `full_book_replacement`, and both snapshots and deltas carry complete sides. The Kalshi value is subject to a joint decision on delta handling and may instead be incremental.
+  **Kalshi uses `full_book_replacement`, the same as the other two venues.** Both snapshots and deltas carry complete sides: replace your local book on each frame, do not patch it.
 
-  Read `book_delta_semantics` from `GET /stream/capabilities` rather than assuming the Polymarket behaviour, and do not ship a Kalshi book consumer that hard-codes replacement semantics until this line is settled.
+  Confirmed by joint decision with the market-data side, 2026-10-27, after the normalisation was reviewed — Kalshi's native increments are summed api-side so the customer wire is level-set on every frame. Read `book_delta_semantics` from `GET /stream/capabilities` anyway: it is the live per-venue answer, and a venue added later need not match.
 </Info>
 
 ## Coverage
