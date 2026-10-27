@@ -1,0 +1,86 @@
+---
+title: "Kalshi on Bravado: Coverage and Rollout Status"
+sidebarTitle: "Overview"
+description: "Kalshi is a CFTC-regulated US event exchange. Bravado's Kalshi order books are in rollout; GET /stream/capabilities reports the live per-venue state."
+icon:
+  name: "chart-candlestick"
+  library: "lucide"
+---
+
+Kalshi is a US event exchange regulated by the CFTC as a designated contract market. Contracts
+settle at \$1 if the event happens and \$0 if it does not, so a live price reads as an implied
+probability — the same shape as the other venues on this page. Unlike Polymarket and Predict.fun
+it is not a conditional-token market on a public chain: contracts are exchange-listed instruments,
+identified by a market ticker rather than an on-chain token id.
+
+<Info>
+  **Kalshi order books are in rollout and are not callable yet.** `GET /stream/capabilities`
+  reports the live per-venue state and is the authoritative answer for what you can subscribe to
+  today; it currently returns `implemented: false` for `kalshi`. Check that field rather than
+  this page before you build.
+</Info>
+
+Kalshi is a **Market Data venue only**. There is no Kalshi trading, copy-trading or trader
+analytics on Bravado, and none is in rollout — see [product coverage](#product-coverage) below.
+
+## What is in rollout
+
+Live order books, and nothing else. When the venue goes live, Kalshi books are served over the
+same authenticated WebSocket surface, in the same message envelope, as the venues already
+documented in [multi-venue order books](/api/market-data/venue-order-books): one socket, many
+assets multiplexed, prices and sizes as decimal strings.
+
+No connection details are published here, because there is nothing to connect to yet. When there
+is, `GET /stream/capabilities` will carry the path and the subscription shape for `kalshi`
+alongside the other venues, and this page will name them.
+
+## Checking the live state
+
+`GET /stream/capabilities` is the contract for what this venue serves, per organisation, right
+now. It separates three facts that are easy to read as one:
+
+| Field | Means |
+| --- | --- |
+| `implemented` | Bravado has built the endpoint for this venue |
+| `upstream_registered` | the venue's upstream is wired in this deployment |
+| `entitled` | your organisation holds the entitlement |
+| `reason` | which of the three is missing, when the venue is not usable |
+
+While `implemented` is `false`, there is no path and no subscription to call. Treat a venue named
+in that payload as a published status, not an endpoint.
+
+## Access
+
+Kalshi is a **read-only data entitlement**, granted separately from the trading venues. Holding
+Polymarket or Predict.fun access does not include it. Market Data connections need a credential
+with `stream.read` on an eligible paid plan — see [authentication](/authentication) and
+[API credits](/api-credits#authenticated-websocket-credits).
+
+## Product coverage
+
+| Bravado product | Status |
+| --- | --- |
+| [Order-book WebSockets](/api/market-data/venue-order-books) | In rollout |
+| [Enriched live trades](/api/market-data/trade-feed) | Not available |
+| [Data API](/products/data-api) | Not available |
+| [Trade API](/products/trade-api) | Not available |
+| [Copytrade API](/products/copytrade-api) | Not available |
+| [MCP Server](/products/mcp-server) | Not available |
+| Combos, UMA resolution | Not applicable — Polymarket mechanisms |
+
+Tax statements, PMWAS reconciliation and entity rollups are Polymarket-only.
+
+## Venue details
+
+| Detail | Value |
+| --- | --- |
+| Venue type | CFTC-regulated designated contract market (US) |
+| Settlement | Cash-settled event contracts, \$0–\$1 |
+| Instrument identifier | Market ticker |
+| Bravado coverage | Market Data only |
+
+## Related
+
+- [Supported prediction markets](/markets/overview), coverage by product across every venue
+- [Multi-venue order books](/api/market-data/venue-order-books), the shared message format
+- [Polymarket overview](/markets/polymarket/overview), the fully supported reference implementation
