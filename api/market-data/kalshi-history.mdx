@@ -7,7 +7,7 @@ description: "Discover available Kalshi capture generations and query their reta
 Query retained Kalshi order books over REST at `https://partner-api.bravadotrade.com/market-data/v1`. Start with generation discovery and coverage; a market being listed on Kalshi does not mean its history is available here.
 
 <Warning>
-  This is a limited captured dataset, not a live book or complete Kalshi history. As verified on **27 October 2026**, four valid generations cover **19 distinct tickers**. A fifth published generation is invalid and must not be treated as usable data. Coverage can grow: use the API's current generation quality and coverage rather than assuming these counts remain fixed.
+  This endpoint serves published capture windows and point observations, not a live book or complete Kalshi history. Check each generation’s quality and reported coverage before querying. A catalog entry alone does not establish that its data is ready to serve.
 </Warning>
 
 ## Access and signing
@@ -64,18 +64,11 @@ Copy the returned `next_after` unchanged into `after` while keeping the generati
 
 Pages have a 2 MiB response bound and can contain fewer entries than `limit`. This is a paged REST export, not streaming replay.
 
-## Verified retained windows
+## Coverage and data quality
 
-The 27 October verification found these short windows across the four valid generations. Discover exact generation names and tickers through the API; these are not claims of continuous capture outside the listed windows.
+Coverage is reported per generation, ticker and capture interval. Use `/generations` and `/coverage` for the current available dataset rather than assuming one start date or continuous coverage for every market.
 
-| Retained cohort | Capture time in UTC |
-| --- | --- |
-| 16 tickers | 22 September 2026, 07:02:04.671200046–07:04:59.998807961 |
-| One BTC market | 13 October 2026, 22:28:02.133884561–22:28:31.864474465 |
-| BTC point observation | 24 October 2026, 19:25:05.902574395 |
-| ETH point observation | 24 October 2026, 19:25:55.414740323 |
-
-Input-digest checks verify retained input integrity. They do not establish complete exchange history or verified upstream manifests. A point observation does not establish a continuous interval around it. Additional archived captures are not automatically queryable until their verified generation and index are published.
+Input-digest checks verify retained input integrity. They do not establish complete exchange history or verified upstream manifests. A point observation does not establish a continuous interval around it. Additional archived captures become queryable when their verified generation and index are published.
 
 ## Errors
 
