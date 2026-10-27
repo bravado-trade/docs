@@ -12,7 +12,7 @@ it is not a conditional-token market on a public chain: contracts are exchange-l
 identified by a market ticker rather than an on-chain token id.
 
 <Info>
-  **Kalshi order books are in rollout and are not callable yet.** `GET /stream/capabilities`
+  **Kalshi order-book WebSockets are in rollout and are not callable yet.** `GET /stream/capabilities`
   reports the live per-venue state and is the authoritative answer for what you can subscribe to
   today; it currently returns `implemented: false` for `kalshi`. Check that field rather than
   this page before you build.
@@ -54,13 +54,15 @@ Polymarket or Predict.fun access does not include it. Market Data connections ne
 with `stream.read` on an eligible paid plan — see [authentication](/authentication) and
 [API credits](/api-credits#authenticated-websocket-credits).
 
+[Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately through REST with a Data credential and Kalshi data grant. Its published coverage is limited to retained short windows and point observations; it is not a live book feed.
+
 ## Product coverage
 
 | Bravado product | Status |
 | --- | --- |
 | [Order-book WebSockets](/api/market-data/venue-order-books) | In rollout |
 | [Enriched live trades](/api/market-data/trade-feed) | Not available |
-| [Data API](/products/data-api) | Not available |
+| [Data API](/products/data-api) | [Captured book history only](/api/market-data/kalshi-history); no trader analytics |
 | [Trade API](/products/trade-api) | Not available |
 | [Copytrade API](/products/copytrade-api) | Not available |
 | [MCP Server](/products/mcp-server) | Not available |

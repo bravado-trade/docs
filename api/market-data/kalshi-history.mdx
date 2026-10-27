@@ -1,0 +1,98 @@
+---
+title: "Captured Kalshi order-book history"
+sidebarTitle: "Kalshi order-book history"
+description: "Discover available Kalshi capture generations and query their retained books and short historical windows."
+---
+
+Query retained Kalshi order books over REST at `https://partner-api.bravadotrade.com/market-data/v1`. Start with generation discovery and coverage; a market being listed on Kalshi does not mean its history is available here.
+
+<Warning>
+  This is a limited captured dataset, not a live book or complete Kalshi history. As verified on **27 October 2026**, four valid generations cover **19 distinct tickers**. A fifth published generation is invalid and must not be treated as usable data. Coverage can grow: use the API's current generation quality and coverage rather than assuming these counts remain fixed.
+</Warning>
+
+## Access and signing
+
+Use a **Data API credential** with `analytics.read`, an active Data endpoint and an explicit **Kalshi read-only data grant** for your organisation. A Trade or Market Data WebSocket credential does not substitute for it. Contact Bravado if the Kalshi data grant is missing; creating a key does not grant venue access.
+
+Sign each GET using [HMAC authentication](/authentication#making-authenticated-requests) and the [signing helpers](/authentication-examples). Send `X-BRAVADO-API-KEY`, `X-BRAVADO-TIMESTAMP` and `X-BRAVADO-SIGNATURE`. Include the exact canonical path and sorted query in the signature and hash an empty request body. Keep the secret on your server. Normal analytics quotas, key restrictions and credit accounting apply, including discovery reads.
+
+```bash
+# Generate a fresh timestamp and signature for this exact GET using the signing helper.
+curl 'https://partner-api.bravadotrade.com/market-data/v1/generations?limit=100' \
+  -H 'X-BRAVADO-API-KEY: <your-data-api-public-key>' \
+  -H 'X-BRAVADO-TIMESTAMP: <unix-milliseconds>' \
+  -H 'X-BRAVADO-SIGNATURE: <signature-for-this-request>'
+```
+
+## Discover before querying
+
+1. Read `/capabilities` for the dataset's supported operations and limits. This endpoint describes stored history, not WebSocket availability.
+2. Read `/generations`, following `next_after` unchanged. Select a valid generation; a published entry or catalog quality alone does not establish query readiness. Some discovery entries require qualification before data reads can succeed.
+3. Read `/coverage?generation=<generation>` and `/instruments?generation=<generation>`. Choose a ticker and a valid anchored capture interval actually reported there.
+4. Query `/books/<ticker>` or `/history/<ticker>` using that generation. Keep it fixed across pages so the dataset cannot change underneath your request.
+
+The default generation currently exposes only the newest ETH point. To discover the full retained set, enumerate generations and select each explicitly. Do not infer all-generation coverage from the default `/instruments` response.
+
+## Endpoints and query parameters
+
+All paths below start with `/market-data/v1`. Unknown query parameters are rejected. URL-encode values and sign the resulting canonical path.
+
+| GET path | Query parameters |
+| --- | --- |
+| `/capabilities` | None |
+| `/generations` | Optional `limit` (1–100), `after`, `instrument` (exact ticker filter) |
+| `/coverage` | Optional `generation`; select one explicitly for reproducible coverage |
+| `/instruments` | Optional `generation`, `limit` (1–200), `after` (previous ticker cursor) |
+| `/books/{ticker}` | Optional `generation`, `at`; **`at` requires `generation`** |
+| `/history/{ticker}` | **Required** `generation`, `from`, `until`; optional `limit` (1–200), `after` (previous ordinal cursor) |
+
+Use generation names returned by discovery (1–80 letters, digits, `_` or `-`). Tickers are case-sensitive, start with an uppercase letter or digit and contain only uppercase letters, digits, `.` and `-` (maximum 256 characters).
+
+`at`, `from` and `until` are **UTC collector capture-time strings**, with up to nine fractional digits: `YYYY-MM-DDTHH:mm:ss.nnnnnnnnnZ`. Keep them as strings; do not round to milliseconds or send Unix nanoseconds as a JSON number. They are not exchange matching-engine timestamps. `from` must be at or before `until`.
+
+### Book lookup
+
+`/books/{ticker}?generation=<generation>` returns that generation's final retained book, not today's live book. Add `at=<capture-time>` for the last observed state on or before that time within an available anchored interval. The returned `as_of` can precede your requested time; it does not invent an update at that time. Out-of-range, unanchored or gap intervals are refused.
+
+The retained depth represents native YES and NO **bid** levels. Preserve decimal prices and contract quantities as exact strings. Do not treat a NO bid as a separately observed YES ask, or confuse quantities with dollar volume.
+
+### History pages
+
+`/history/{ticker}` returns `initial_book` plus `points`, each containing an observation ordinal and book. The initial state is queried at `from`, so `initial_book.as_of` may precede it. Update points cover **`(from, until]`**; each book's `as_of` is its capture time.
+
+Copy the returned `next_after` unchanged into `after` while keeping the generation, ticker and window fixed. For Kalshi history, `next_after: 0` means finished; omit `after` on the first page. For generation and instrument catalogs, an empty `next_after` means finished. Discovery generation cursors can be opaque and filter-bound: retain the same `instrument` filter on every page.
+
+Pages have a 2 MiB response bound and can contain fewer entries than `limit`. This is a paged REST export, not streaming replay.
+
+## Verified retained windows
+
+The 27 October verification found these short windows across the four valid generations. Discover exact generation names and tickers through the API; these are not claims of continuous capture outside the listed windows.
+
+| Retained cohort | Capture time in UTC |
+| --- | --- |
+| 16 tickers | 22 September 2026, 07:02:04.671200046–07:04:59.998807961 |
+| One BTC market | 13 October 2026, 22:28:02.133884561–22:28:31.864474465 |
+| BTC point observation | 24 October 2026, 19:25:05.902574395 |
+| ETH point observation | 24 October 2026, 19:25:55.414740323 |
+
+Input-digest checks verify retained input integrity. They do not establish complete exchange history or verified upstream manifests. A point observation does not establish a continuous interval around it. Additional archived captures are not automatically queryable until their verified generation and index are published.
+
+## Errors
+
+An unavailable response is not an empty book. Handle the HTTP status and returned `code`/`reason` explicitly.
+
+| Status | Meaning |
+| --- | --- |
+| 400 | Invalid or unknown query parameters or cursor |
+| 401 | Missing, invalid or expired HMAC credential |
+| 402 | Credit ceiling or reservation refused |
+| 403 | Endpoint inactive, missing `analytics.read` or missing Kalshi data grant |
+| 404 | Unknown generation or instrument, or no stored data |
+| 409 | Invalid, unavailable, unanchored, out-of-range or gap interval |
+| 413 | Response too large; narrow the window or lower `limit` |
+| 429 | Analytics quota exhausted |
+| 503 | Serving unavailable, timeout, capacity limit or qualification pending/busy |
+
+For qualification pending/busy, honor the returned `Retry-After` rather than repeatedly polling. Do not substitute a cached book as current data when a query fails.
+
+For live delivery status, see [Kalshi coverage](/markets/kalshi/overview). This historical surface does not provide a current native REST book, live trade tape, candles, order placement or a guarantee of every open market.

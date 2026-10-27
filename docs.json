@@ -54,6 +54,12 @@
             ]
           },
           {
+            "group": "Captured market data",
+            "pages": [
+              "api/market-data/kalshi-history"
+            ]
+          },
+          {
             "group": "Trader analytics",
             "pages": [
               "api/analytics/overview",
