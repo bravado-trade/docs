@@ -1,0 +1,111 @@
+---
+title: "Perps Market Data"
+sidebarTitle: "Perps Data"
+description: "Funding, open interest, basis, skew and liquidations for Polymarket Perps, with the same funding series read side by side against Binance, Bybit and Hyperliquid."
+icon:
+  name: "activity"
+  library: "lucide"
+---
+
+Read-only REST over Polymarket Perps market data, under `/perps` on
+`https://partner-api.bravadotrade.com`. Authenticate with a Market Data key
+carrying `analytics.read` and [HMAC signing](/authentication) — the same
+credential and the same credit accounting as the rest of the
+[Data API](/products/data-api). One request is one credit.
+
+<Info>
+  This is market data, not execution. Placing, modifying or cancelling a perps
+  order is the [Perps Trade API](/api/trade/perps), a separate product with a
+  separate scope. Nothing on this page can move a position.
+</Info>
+
+## Endpoints
+
+| Endpoint | Returns |
+|---|---|
+| `GET /perps/funding/history` | The funding-rate series for one instrument on one venue |
+| `GET /perps/funding/compare` | The same symbol's funding across venues, aligned on one time axis |
+| `GET /perps/oi/history` | Open interest over time, bucketed |
+| `GET /perps/basis` | Perp-to-spot basis over time, bucketed |
+| `GET /perps/skew` | Order-book skew, as a point-in-time read or a series of 1-minute bars |
+| `GET /perps/liquidations` | Liquidation events, filterable by instrument, account and evidence class |
+
+## Naming an instrument
+
+`instrument` accepts either the venue-native id (`6`) or the canonical symbol
+(`BTC`). Two exceptions are worth knowing before you build against them:
+
+- `funding/compare` takes `symbol`, not `instrument`, because the whole point
+  is to resolve one symbol across venues that id their instruments differently.
+- `skew` takes the **venue-native id only**. The skew tables carry no symbol
+  column, so a symbol there is not something we translate silently — it is a
+  400.
+
+`venue` accepts `polymarket`, `binance`, `bybit` and `hyperliquid`, and defaults
+to Polymarket. The cross-venue venues exist so a funding or basis number has
+something to be compared against; they are reference series, not a trading
+surface.
+
+## Time and paging
+
+`from` and `to` accept **RFC3339, unix seconds, or unix milliseconds** — all
+three, on every route, so you do not have to normalise before calling. `limit`
+is 1–5000 with a default of 1000, except `liquidations`, which is 1–1000 with a
+default of 200.
+
+`skew` has two modes and they are mutually exclusive: pass `at` for the latest
+observation at or before an instant (default: now), or `from`/`to` for a series
+of 1-minute bars.
+
+```bash Funding on Polymarket vs Hyperliquid
+# One symbol, every venue that has it, on a single time axis.
+curl -sS "https://partner-api.bravadotrade.com/perps/funding/compare?symbol=BTC&from=2026-10-01T00:00:00Z&to=2026-10-02T00:00:00Z" \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: $TS" \
+  -H "X-BRAVADO-SIGNATURE: $SIG"
+```
+
+## Liquidations carry their evidence
+
+A liquidation is not always something the chain states outright, so every row
+says how it was established. `evidence` is `confirmed`, `inferred` or
+`unknown`, and the filter takes a comma-separated subset; the default is all
+three.
+
+**`unknown` is never hidden from you.** A row we could not classify is returned
+labelled rather than dropped, because a quietly shorter list reads exactly like
+a quiet market. If you are reconciling, filter to `confirmed` explicitly rather
+than assuming the default did it for you.
+
+## An empty window is an answer
+
+These series are built by background collectors. A window with no rows means
+**this window has no data**, which is different from an error and different
+from "the instrument does not exist". Treat `200` with an empty array as
+"nothing happened here", and do not retry it as if it were a failure.
+
+## Errors
+
+| Status | Meaning |
+|---|---|
+| `400` | A typed validation error, passed through from the source — for example `range_too_large` or `invalid_evidence` |
+| `401` / `403` | The key is missing, unsigned, or lacks `analytics.read` |
+| `402` | The organisation's credit ceiling is reached |
+| `404` `NOT_IMPLEMENTED` | The feature exists in the contract but its table is not built yet. `GET /perps/book/asof` answers this today |
+| `429` | The per-key rate bucket is saturated |
+| `504` `UPSTREAM_TIMEOUT` | The source did not answer in time. Retry; it carries no partial body |
+
+<Warning>
+  A `404` with code `NOT_IMPLEMENTED` is **not** a missing route and not a bad
+  instrument — it is this endpoint telling you the dataset behind it has not
+  been built. It is answered as a 4xx on purpose: our edge replaces the body of
+  every 5xx with its own HTML page, which would have hidden the reason.
+</Warning>
+
+## Unknown parameters are dropped, not honoured
+
+Each route forwards only the parameters named on this page. A key we do not
+declare is removed before the request leaves Bravado, so a typo in a filter is
+a **silent no-op** — you get a valid answer for a wider query than you asked
+for. Check your filters against the tables above rather than against the shape
+of the response.
