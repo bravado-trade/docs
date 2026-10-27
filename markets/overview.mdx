@@ -68,11 +68,12 @@ The mechanics are broadly the same across venues, which is what makes a shared A
 </Info>
 
 <Info>
-  **Kalshi order books are in rollout and are not callable yet.** `GET /stream/capabilities`
-  reports the live per-venue state and is the authoritative answer for what you can subscribe to
-  today; it currently returns `implemented: false` for `kalshi`. Check that field rather than
-  this page before you build, and note that Kalshi access is a separate read-only data
-  entitlement from the trading venues.
+  **The Kalshi endpoint is published and is not serving yet.** `GET /stream/capabilities` is the
+  authoritative answer for what you can subscribe to today: for `kalshi` it reports
+  `implemented: true` with `book_path` set, and `upstream_registered: false` with
+  `reason: "upstream_not_registered"` — the endpoint exists, the stream is not flowing. Check
+  those fields rather than this page before you build, and note that Kalshi access is a separate
+  read-only data entitlement from the trading venues.
 </Info>
 
 ## What differs between venues
