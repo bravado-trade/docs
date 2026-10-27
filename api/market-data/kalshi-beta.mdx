@@ -1,0 +1,84 @@
+---
+title: "Kalshi order-book beta"
+sidebarTitle: "Kalshi beta"
+description: "Connect to the limited Kalshi order-book beta with a Market Data credential."
+---
+
+The Kalshi beta serves **four selected markets**, using the shared [order-book message format](/api/market-data/venue-order-books). It does not cover every open Kalshi market.
+
+| Market ticker | Current beta window |
+| --- | --- |
+| `KXBTC-26OCT3017-B79750` | BTC contract closing 30 October 2026 |
+| `KXBTC-26OCT3017-B80250` | BTC contract closing 30 October 2026 |
+| `KXFEDDECISION-26DEC-H0` | Fed contract closing 9 December 2026 |
+| `KXFEDDECISION-26DEC-H26` | Fed contract closing 9 December 2026 |
+
+These are fixed tickers, not rolling subscriptions. Read [native market metadata](/api/market-data/kalshi-native) for exact open, close and settlement times. A replacement contract is not subscribed automatically when one closes.
+
+## Check access first
+
+Use an active **Market Data** credential with `stream.read`, an eligible paid plan and an explicit Kalshi data grant. A Data REST key is a different credential class. Keep the secret on your server.
+
+Before connecting, make a signed `GET /stream/capabilities`. The `kalshi` row must have `implemented`, `upstream_registered` and `entitled` set to `true`. Then connect to `wss://partner-api.bravadotrade.com/stream/kalshi/partner`. Availability is still per market: inspect stream status and wait for a snapshot before using a book.
+
+## Server example
+
+Install `ws`, set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET`, and run this as a Node.js `.mjs` file. The example subscribes to one of the four beta tickers and closes after 30 seconds to bound usage.
+
+```javascript Node.js
+import WebSocket from "ws";
+import { createHash, createHmac } from "node:crypto";
+
+const key = process.env.BRAVADO_API_KEY;
+const secret = process.env.BRAVADO_API_SECRET;
+if (!key || !secret) throw new Error("Set your Market Data key and secret");
+const origin = "https://partner-api.bravadotrade.com";
+const headers = path => {
+  const timestamp = String(Date.now());
+  const payload = [timestamp, "GET", path,
+    createHash("sha256").update("").digest("hex")].join("\n");
+  return {
+    "X-BRAVADO-API-KEY": key,
+    "X-BRAVADO-TIMESTAMP": timestamp,
+    "X-BRAVADO-SIGNATURE": createHmac("sha256", secret).update(payload).digest("hex"),
+  };
+};
+const response = await fetch(`${origin}/stream/capabilities`, {
+  headers: headers("/stream/capabilities"), redirect: "error",
+  signal: AbortSignal.timeout(8_000),
+});
+if (!response.ok) throw new Error(`Capabilities refused (${response.status})`);
+const capabilities = await response.json();
+const kalshi = capabilities.venues?.find(row => row.venue === "kalshi");
+if (!kalshi?.implemented || !kalshi.upstream_registered || !kalshi.entitled)
+  throw new Error("Kalshi is not available for this organisation right now");
+
+const query = new URLSearchParams({ streams: "book:KXBTC-26OCT3017-B79750" });
+const path = `/stream/kalshi/partner?${query}`;
+const ws = new WebSocket(`wss://partner-api.bravadotrade.com${path}`, {
+  headers: headers(path), handshakeTimeout: 8_000,
+  followRedirects: false, rejectUnauthorized: true,
+});
+ws.on("message", raw => {
+  const frame = JSON.parse(raw.toString());
+  if (frame.type === "error") { console.error(frame.code); return; }
+  if (frame.type === "status") { console.log(frame.state, frame.reason); return; }
+  if (frame.channel === "book" && ["snapshot", "delta"].includes(frame.type))
+    console.log(frame.asset, frame.seq, frame.bids, frame.asks, frame.quote);
+});
+ws.on("error", () => console.error("WebSocket connection failed"));
+const stop = setTimeout(() => ws.close(), 30_000);
+ws.once("close", () => clearTimeout(stop));
+```
+
+Use the market ticker after `book:`, not an outcome token ID. You can request the four tickers on one connection. [Authentication helpers](/authentication-examples) cover signing; the [shared WebSocket guide](/api/market-data/venue-order-books) covers subscription commands, reconnection and credits. This example is server-side; never put its HMAC secret in browser code.
+
+## Use the book safely
+
+- Prices and sizes are **decimal strings**, including fractional quantities. Preserve them with exact decimal arithmetic.
+- Both `snapshot` and `delta` carry **complete** `bids` and `asks`. Replace your previous sides; do not add these quantities as increments. Empty or one-sided books can be valid.
+- `seq` is a Bravado sequence per asset. A snapshot starts a new book state. A missing or unexpected sequence means you must stop using that state and reconnect for a new snapshot.
+- `quote.sourceWallUtc` is the source's receive time; `quote.venueTs` is the venue timestamp when present. Sending-clock fields remain separate. `ts` is the API timestamp, not the age of the quote. Protocol pings keep the connection alive without making a quiet quote newer.
+- On `degraded`, discard trust in the book. A later `live` status or open socket alone does not restore it: wait for a fresh snapshot. Reconnect with a fresh signature and backoff after a disconnection.
+
+This beta provides order books only, with no live-trades channel. It does not promise an uninterrupted feed, automatic contract rollover, a latency advantage over Kalshi, or complete historical coverage. [Native REST data](/api/market-data/kalshi-native) and [captured book history](/api/market-data/kalshi-history) have separate coverage contracts.

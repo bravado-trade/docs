@@ -1,7 +1,7 @@
 ---
-title: "Live order books on Polymarket and Predict.fun"
+title: "Live venue order books"
 sidebarTitle: "Multi-venue order books"
-description: "Subscribe to live Polymarket and Predict.fun order books with a shared WebSocket message format."
+description: "Read live Polymarket and Predict.fun books and the limited Kalshi beta through a shared WebSocket format."
 ---
 
 Connect using a Market Data credential with `stream.read` from an organisation with an eligible paid plan. Sign the upgrade with [HMAC](/authentication); your organisation must also have access to the venue. [Create an account](https://console.bravadotrade.com/signup) or manage access in [Console](https://console.bravadotrade.com/products/websockets).
@@ -10,14 +10,9 @@ Connect using a Market Data credential with `stream.read` from an organisation w
 | --- | --- |
 | Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` |
 | Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` |
-| Kalshi | `wss://partner-api.bravadotrade.com/stream/kalshi/partner` (not serving yet, see below) |
+| Kalshi | [Four-market beta](/api/market-data/kalshi-beta) |
 
-The Kalshi endpoint is published and **not serving yet**. `GET /stream/capabilities` is the live
-per-venue state and reports, for `kalshi`, `implemented: true` with `book_path` and `subscription`
-set, `upstream_registered: false`, and `reason: "upstream_not_registered"`. Read those fields
-rather than this page: the endpoint existing is not the same as data flowing, and `reason` is what
-tells the two apart. Kalshi carries order books only — there is no Kalshi live-trades feed
-(`trades_path` is `null`).
+Kalshi has a [limited four-market beta](/api/market-data/kalshi-beta), with market tickers as subscription identifiers. Check signed `GET /stream/capabilities` for your organisation before connecting. There is no Kalshi live-trades feed.
 
 ## Subscribe
 
