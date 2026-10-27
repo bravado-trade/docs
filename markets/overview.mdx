@@ -71,9 +71,12 @@ The mechanics are broadly the same across venues, which is what makes a shared A
   **The Kalshi endpoint is published and is not serving yet.** `GET /stream/capabilities` is the
   authoritative answer for what you can subscribe to today: for `kalshi` it reports
   `implemented: true` with `book_path` set, and `upstream_registered: false` with
-  `reason: "upstream_not_registered"` — the endpoint exists, the stream is not flowing. Check
-  those fields rather than this page before you build, and note that Kalshi access is a separate
-  read-only data entitlement from the trading venues.
+  `reason: "upstream_not_registered"`. The endpoint exists and its source is not attached — a
+  built endpoint alone does not mean data is flowing. Check those fields before connecting, and
+  note that Kalshi access is a separate read-only data entitlement from the trading venues.
+
+  [Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately
+  through the Data API for the published short windows and point observations.
 </Info>
 
 ## What differs between venues

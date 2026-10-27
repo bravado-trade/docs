@@ -20,6 +20,10 @@ Predict.fun core wallet history uses `/trader-analytics/predict/` in place of `/
 
 Price history returns `history` entries with `t` and `p`. Volume history returns `buckets` with `t` and `v`; `v` is summed trade size, not dollar notional. Neither proxy guarantees complete lifetime market history.
 
+## Captured Kalshi books
+
+[Captured Kalshi order-book history](/api/market-data/kalshi-history) is available through the authenticated `/market-data/v1` REST family with a Kalshi data grant. Discover generation coverage first: the currently verified dataset covers short windows and point observations, not full Kalshi history or live books.
+
 ## Historical L2 and bulk datasets
 
 Bravado maintains Polymarket archival infrastructure for order-book events and market data, including Parquet processing. Historical delivery is scoped directly with the team by market, source and date range. A live WebSocket snapshot is not historical replay.

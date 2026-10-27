@@ -18,8 +18,10 @@ identified by a market ticker rather than an on-chain token id.
   with `reason: "upstream_not_registered"`.
 
   Those two facts are different and the `reason` is what separates them: the endpoint exists and
-  is documented below, and no data is flowing through it. A subscription will not fail at
-  connect — it will simply never deliver a book. Read the fields rather than this page.
+  is documented below, and its source is not attached, so no data is flowing through it. A built
+  endpoint alone does not mean data is available. Check `implemented`, `upstream_registered` and
+  your organisation's `entitled` state before connecting — a subscription will not fail at
+  connect, it will simply never deliver a book.
 </Info>
 
 Kalshi is a **Market Data venue only**. There is no Kalshi trading, copy-trading or trader
@@ -69,13 +71,15 @@ Polymarket or Predict.fun access does not include it. Market Data connections ne
 with `stream.read` on an eligible paid plan — see [authentication](/authentication) and
 [API credits](/api-credits#authenticated-websocket-credits).
 
+[Native Kalshi market data](/api/market-data/kalshi-native) provides current books, catalogue metadata, public trades and native candles over REST. [Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately through REST with a Data credential and Kalshi data grant. Its published coverage is limited to retained short windows and point observations; it is not a live book feed.
+
 ## Product coverage
 
 | Bravado product | Status |
 | --- | --- |
 | [Order-book WebSockets](/api/market-data/venue-order-books) | In rollout |
 | [Enriched live trades](/api/market-data/trade-feed) | Not available |
-| [Data API](/products/data-api) | Not available |
+| [Data API](/products/data-api) | [Native market data](/api/market-data/kalshi-native) and [captured book history](/api/market-data/kalshi-history); no trader analytics |
 | [Trade API](/products/trade-api) | Not available |
 | [Copytrade API](/products/copytrade-api) | Not available |
 | [MCP Server](/products/mcp-server) | Not available |
