@@ -10,6 +10,11 @@ Connect using a Market Data credential with `stream.read` from an organisation w
 | --- | --- |
 | Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` |
 | Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` |
+| Kalshi | In rollout — no endpoint published yet |
+
+Kalshi order books are in rollout and are not callable yet. `GET /stream/capabilities` reports the
+live per-venue state and currently returns `implemented: false` for `kalshi`; read that field
+rather than this page. Kalshi carries order books only — there is no Kalshi live-trades feed.
 
 ## Subscribe
 

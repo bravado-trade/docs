@@ -19,6 +19,11 @@ Bravado connects to these venues so you integrate once instead of per-venue. Pro
   <Card title="Predict.fun" icon="/logo/predict-fun.png" href="/markets/predict-fun/overview">
     Supported for a subset of Bravado products. See the coverage table before you build.
   </Card>
+
+  <Card title="Kalshi" icon="chart-candlestick" href="#product-coverage-by-venue">
+    Order books are in rollout. No other Bravado product covers this venue. See the coverage
+    table before you build.
+  </Card>
 </CardGroup>
 
 ## How prediction markets work
@@ -45,22 +50,30 @@ The mechanics are broadly the same across venues, which is what makes a shared A
 
 ## Product coverage by venue
 
-| Bravado product | Polymarket | Predict.fun |
-| --- | --- | --- |
-| [Data API: trader analytics](/products/data-api) | Supported | Supported |
-| [Data API: Combos Data](/api/combos-data/overview) | Supported | Not applicable |
-| [Data API: PMWAS, tax and entity rollups](/products/data-api#accounting-coverage) | Supported for covered wallets | Not available |
-| [Market Data: order books](/api/market-data/venue-order-books) | Supported | Supported |
-| [Market Data: enriched live trades](/api/market-data/trade-feed) | Supported | Not available |
-| [Market Data: live combos](/api/combos-data/stream) | Supported | Not applicable |
-| [Market Data: UMA resolution](/products/uma-api) | Supported (paid plan, Market Data credential) | Not applicable |
-| [Trade API](/products/trade-api) | Supported | Supported (LIMIT, MARKET, PEGGED, TWAP, ICEBERG) |
-| [Trade API: Combos](/api/combos/overview) | Supported | Not applicable |
-| [Trade API: Copytrade](/products/copytrade-api) | Supported | Not available |
-| [MCP Server](/products/mcp-server) | Supported | Supported where the Data API is |
+| Bravado product | Polymarket | Predict.fun | Kalshi |
+| --- | --- | --- | --- |
+| [Data API: trader analytics](/products/data-api) | Supported | Supported | Not available |
+| [Data API: Combos Data](/api/combos-data/overview) | Supported | Not applicable | Not applicable |
+| [Data API: PMWAS, tax and entity rollups](/products/data-api#accounting-coverage) | Supported for covered wallets | Not available | Not available |
+| [Market Data: order books](/api/market-data/venue-order-books) | Supported | Supported | In rollout |
+| [Market Data: enriched live trades](/api/market-data/trade-feed) | Supported | Not available | Not available |
+| [Market Data: live combos](/api/combos-data/stream) | Supported | Not applicable | Not applicable |
+| [Market Data: UMA resolution](/products/uma-api) | Supported (paid plan, Market Data credential) | Not applicable | Not applicable |
+| [Trade API](/products/trade-api) | Supported | Supported (LIMIT, MARKET, PEGGED, TWAP, ICEBERG) | Not available |
+| [Trade API: Combos](/api/combos/overview) | Supported | Not applicable | Not applicable |
+| [Trade API: Copytrade](/products/copytrade-api) | Supported | Not available | Not available |
+| [MCP Server](/products/mcp-server) | Supported | Supported where the Data API is | Not available |
 
 <Info>
   Predict.fun is supported through the Trade API v2 by adding `"venue": "predictfun"` to a request. It runs on BNB Chain with USDT collateral. See the [Predict.fun overview](/markets/predict-fun/overview) for venue rules.
+</Info>
+
+<Info>
+  **Kalshi order books are in rollout and are not callable yet.** `GET /stream/capabilities`
+  reports the live per-venue state and is the authoritative answer for what you can subscribe to
+  today; it currently returns `implemented: false` for `kalshi`. Check that field rather than
+  this page before you build, and note that Kalshi access is a separate read-only data
+  entitlement from the trading venues.
 </Info>
 
 ## What differs between venues
