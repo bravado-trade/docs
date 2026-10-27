@@ -21,7 +21,7 @@ Bravado connects to these venues so you integrate once instead of per-venue. Pro
   </Card>
 
   <Card title="Kalshi" icon="/logo/kalshi.png" href="/markets/kalshi/overview">
-    Order books are in rollout. See the coverage table before you build.
+    Native REST data, captured history and a four-market order-book beta. See the coverage table before you build.
   </Card>
 </CardGroup>
 
@@ -54,7 +54,7 @@ The mechanics are broadly the same across venues, which is what makes a shared A
 | [Data API: trader analytics](/products/data-api) | Supported | Supported | Not available |
 | [Data API: Combos Data](/api/combos-data/overview) | Supported | Not applicable | Not applicable |
 | [Data API: PMWAS, tax and entity rollups](/products/data-api#accounting-coverage) | Supported for covered wallets | Not available | Not available |
-| [Market Data: order books](/api/market-data/venue-order-books) | Supported | Supported | In rollout |
+| [Market Data: order books](/api/market-data/venue-order-books) | Supported | Supported | [Four-market beta](/api/market-data/kalshi-beta) |
 | [Market Data: enriched live trades](/api/market-data/trade-feed) | Supported | Not available | Not available |
 | [Market Data: live combos](/api/combos-data/stream) | Supported | Not applicable | Not applicable |
 | [Market Data: UMA resolution](/products/uma-api) | Supported (paid plan, Market Data credential) | Not applicable | Not applicable |
@@ -68,15 +68,9 @@ The mechanics are broadly the same across venues, which is what makes a shared A
 </Info>
 
 <Info>
-  **The Kalshi endpoint is published and is not serving yet.** `GET /stream/capabilities` is the
-  authoritative answer for what you can subscribe to today: for `kalshi` it reports
-  `implemented: true` with `book_path` set, and `upstream_registered: false` with
-  `reason: "upstream_not_registered"`. The endpoint exists and its source is not attached — a
-  built endpoint alone does not mean data is flowing. Check those fields before connecting, and
-  note that Kalshi access is a separate read-only data entitlement from the trading venues.
+  **Kalshi order books are available in a [limited four-market beta](/api/market-data/kalshi-beta).** Check signed `GET /stream/capabilities` for `implemented`, `upstream_registered` and your organisation's `entitled` state before connecting. Coverage is limited to the four listed BTC and Fed tickers, with no automatic rollover. A connected socket alone does not establish a trustworthy book.
 
-  [Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately
-  through the Data API for the published short windows and point observations.
+  [Native Kalshi REST data](/api/market-data/kalshi-native) and [captured order-book history](/api/market-data/kalshi-history) are separate Data API surfaces with their own coverage limits.
 </Info>
 
 ## What differs between venues

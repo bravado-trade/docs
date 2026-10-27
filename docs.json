@@ -126,6 +126,7 @@
             "pages": [
               "api/market-data/order-book",
               "api/market-data/venue-order-books",
+              "api/market-data/kalshi-beta",
               "api/market-data/trade-feed",
               "api/combos-data/stream",
               "api/market-data/historical-data"
