@@ -12,10 +12,16 @@ it is not a conditional-token market on a public chain: contracts are exchange-l
 identified by a market ticker rather than an on-chain token id.
 
 <Info>
-  **Kalshi order-book WebSockets are in rollout and are not callable yet.** `GET /stream/capabilities`
-  reports the live per-venue state and is the authoritative answer for what you can subscribe to
-  today. Check `implemented`, `upstream_registered` and your organisation’s `entitled` state
-  before connecting; a built endpoint alone does not mean its source is available.
+  **The Kalshi endpoint is published and is not serving yet.** `GET /stream/capabilities` is the
+  authoritative answer for what you can subscribe to today. For `kalshi` it reports
+  `implemented: true` with `book_path` and `subscription` set, and `upstream_registered: false`
+  with `reason: "upstream_not_registered"`.
+
+  Those two facts are different and the `reason` is what separates them: the endpoint exists and
+  is documented below, and its source is not attached, so no data is flowing through it. A built
+  endpoint alone does not mean data is available. Check `implemented`, `upstream_registered` and
+  your organisation's `entitled` state before connecting — a subscription will not fail at
+  connect, it will simply never deliver a book.
 </Info>
 
 Kalshi is a **Market Data venue only**. There is no Kalshi trading, copy-trading or trader
@@ -23,14 +29,25 @@ analytics on Bravado, and none is in rollout — see [product coverage](#product
 
 ## What is in rollout
 
-Live order books. When the venue goes live, Kalshi books are served over the
-same authenticated WebSocket surface, in the same message envelope, as the venues already
-documented in [multi-venue order books](/api/market-data/venue-order-books): one socket, many
-assets multiplexed, prices and sizes as decimal strings.
+Live order books, over the same authenticated WebSocket surface and the same message envelope as
+the venues already documented in [multi-venue order books](/api/market-data/venue-order-books):
+one socket, many assets multiplexed, prices and sizes as decimal strings.
 
-No connection details are published here, because there is nothing to connect to yet. When there
-is, `GET /stream/capabilities` will carry the path and the subscription shape for `kalshi`
-alongside the other venues, and this page will name them.
+| | |
+| --- | --- |
+| WebSocket URL | `wss://partner-api.bravadotrade.com/stream/kalshi/partner` |
+| Subscription | `book:<asset>`, where `asset` is the Kalshi market ticker |
+| Required scope | `stream.read` |
+| Book deltas | `full_book_replacement` — snapshots and deltas each carry complete sides, as on the other venues |
+| Status today | published, **not serving** — `reason: "upstream_not_registered"` |
+
+Everything in [Connect](/api/market-data/venue-order-books#subscribe) and
+[Read the messages](/api/market-data/venue-order-books#read-the-messages) applies unchanged.
+
+**What "not serving" means in practice.** The route accepts an authenticated subscription and
+then delivers nothing, because no upstream is attached in this deployment. It does not answer
+with an error, so a client that treats a quiet socket as a quiet market will wait indefinitely.
+Poll `GET /stream/capabilities` and act on `upstream_registered`, not on the absence of frames.
 
 ## Checking the live state
 
