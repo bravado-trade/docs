@@ -1,7 +1,7 @@
 ---
-title: "Live order books on Polymarket and Predict.fun"
+title: "Live order books on Polymarket, Predict.fun and Kalshi"
 sidebarTitle: "Multi-venue order books"
-description: "Subscribe to live Polymarket and Predict.fun order books with a shared WebSocket message format."
+description: "Subscribe to live Polymarket, Predict.fun and Kalshi order books with a shared WebSocket message format."
 ---
 
 Connect using a Market Data credential with `stream.read` from an organisation with an eligible paid plan. Sign the upgrade with [HMAC](/authentication); your organisation must also have access to the venue. [Create an account](https://console.bravadotrade.com/signup) or manage access in [Console](https://console.bravadotrade.com/products/websockets).
@@ -10,10 +10,11 @@ Connect using a Market Data credential with `stream.read` from an organisation w
 | --- | --- |
 | Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` |
 | Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` |
+| Kalshi | `wss://partner-api.bravadotrade.com/stream/kalshi/partner` (books only, see [Kalshi](#kalshi)) |
 
 ## Subscribe
 
-Use the venue's outcome token ID, not its event or market ID. On Predict.fun this is the outcome's `onChainId`.
+Use the venue's outcome token ID, not its event or market ID. On Predict.fun this is the outcome's `onChainId`. On Kalshi it is the market ticker, see [Kalshi](#kalshi).
 
 Install `ws` (`npm install ws`), set `BRAVADO_API_KEY`, `BRAVADO_API_SECRET` and `BRAVADO_ASSET_ID`, then run this as a Node.js `.mjs` file. Keep the secret server-side.
 
@@ -21,7 +22,7 @@ Install `ws` (`npm install ws`), set `BRAVADO_API_KEY`, `BRAVADO_API_SECRET` and
 import WebSocket from "ws";
 import { createHash, createHmac } from "node:crypto";
 
-const venue = "polymarket"; // or "predictfun", if enabled for your organisation
+const venue = "polymarket"; // or "predictfun" / "kalshi", if enabled for your organisation
 const asset = process.env.BRAVADO_ASSET_ID;
 const key = process.env.BRAVADO_API_KEY;
 const secret = process.env.BRAVADO_API_SECRET;
@@ -79,8 +80,63 @@ Book frames include `channel: "book"`, `venue`, `asset`, `type`, `seq`, `ts` and
 
 Reconnect and resubscribe after a disconnection. Do not display a buffered book as fresh while the stream is degraded.
 
+## Kalshi
+
+Kalshi is a **book-only** venue on Bravado: order books and nothing else. There is no Kalshi trading, copytrade or trader-analytics surface, and there is no Kalshi live-trades feed. See [venue coverage](/markets/overview#product-coverage-by-venue).
+
+| | |
+| --- | --- |
+| WebSocket URL | `wss://partner-api.bravadotrade.com/stream/kalshi/partner` |
+| Subscription | `book:<asset>`, where `asset` is the Kalshi market ticker |
+| Prices and sizes | Decimal strings, as on the other venues |
+| Required scope | `stream.read` |
+| Entitlement | A Kalshi **data** grant, separate from the trading-venue entitlement |
+| Live trades | Not available |
+
+Everything in [Connect](#subscribe) and [Read the messages](#read-the-messages) applies unchanged: the same HMAC upgrade, the same `streams` array, the same `channel`/`venue`/`asset`/`type`/`seq`/`ts` envelope, and the same shared asset quota.
+
+<Note>
+  **`GET /stream/capabilities` is the contract.** Read it rather than hard-coding this page. The `kalshi` row, for an organisation holding the data grant:
+
+  ```json
+  {
+    "venue": "kalshi",
+    "implemented": true,
+    "entitled": true,
+    "upstream_registered": true,
+    "book_path": "/stream/kalshi/partner",
+    "subscription": "book:<asset>",
+    "trades_path": null,
+    "combos_path": null,
+    "book_delta_semantics": "<see the note below>",
+    "sequence_domain": "bravado_delivery_per_asset",
+    "snapshot_resets_sequence": true,
+    "upstream_history_completeness_attested": false,
+    "historical_depth_export_path": null,
+    "historical_depth_required_scope": null,
+    "fee_schedule_path": null,
+    "market_rules_path": null,
+    "reason": "check_per_asset_stream_status"
+  }
+  ```
+
+  Three of those fields are separate facts, and the `reason` names whichever is missing: `implemented` (Bravado built the endpoint), `upstream_registered` (this deployment has the upstream wired) and `entitled` (your organisation holds the grant). A `reason` of `check_per_asset_stream_status`, as above, means all three are satisfied and any remaining problem is per-asset.
+
+  `entitled` is driven by your Kalshi **data** grant, a different column from the trading-venue entitlement — holding Polymarket or Predict.fun access does not imply Kalshi. The `null` fields are not omissions: trades, combos and historical depth exports are Polymarket-only surfaces.
+</Note>
+
+<Info>
+  {/* TBD-CONTRACT — the one line of this page still to be settled. Fill in the
+      agreed value and delete this comment; everything else on the page is final. */}
+  **`book_delta_semantics` for Kalshi is pending.** On Polymarket and Predict.fun it is `full_book_replacement`, and both snapshots and deltas carry complete sides. The Kalshi value is subject to a joint decision on delta handling and may instead be incremental.
+
+  Read `book_delta_semantics` from `GET /stream/capabilities` rather than assuming the Polymarket behaviour, and do not ship a Kalshi book consumer that hard-codes replacement semantics until this line is settled.
+</Info>
+
 ## Coverage
 
-These routes serve live order books. Predict.fun subscriptions require an indexed binary market and its outcome token IDs. The [enriched trade feed](/api/market-data/trade-feed) is a separate Polymarket feed; book changes are not executions.
+These routes serve live order books. Predict.fun subscriptions require an indexed binary market and its outcome token IDs. Kalshi serves books only, see [Kalshi](#kalshi). The [enriched trade feed](/api/market-data/trade-feed) is a separate Polymarket feed; book changes are not executions.
+
+`GET /stream/capabilities` is the authoritative, per-organisation answer for every venue on this page. It separates three facts that are easy to conflate: `implemented` (Bravado built the endpoint), `upstream_registered` (this deployment has the venue's upstream wired), and `entitled` (your organisation bought it). Its `reason` field names which of the three is missing.
 
 For historical L2 or bulk extracts, see [historical data and custom delivery](/api/market-data/historical-data).

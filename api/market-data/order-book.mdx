@@ -7,12 +7,13 @@ icon:
   library: "lucide"
 ---
 
-For new Console integrations, use [authenticated venue order books](/api/market-data/venue-order-books). That guide includes HMAC connection code, subscriptions, limits and the shared Polymarket/Predict.fun message format.
+For new Console integrations, use [authenticated venue order books](/api/market-data/venue-order-books). That guide includes HMAC connection code, subscriptions, limits and the shared message format used across venues.
 
 | Venue | Authenticated WebSocket |
 | --- | --- |
 | Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` |
 | Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` |
+| Kalshi | `wss://partner-api.bravadotrade.com/stream/kalshi/partner` (books only) |
 
 Your organisation needs an eligible paid plan, venue access and a Market Data credential with `stream.read`. Create an account in [Console](https://console.bravadotrade.com/signup) and follow the [quickstart](/quickstart).
 

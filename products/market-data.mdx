@@ -90,6 +90,7 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 | [Mempool Fills](/api/market-data/mempool-feed) (low-latency) | `wss://stream.bravadotrade.com/ws` | Partner | Bidirectional |
 | [Polymarket order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` | HMAC | Bidirectional |
 | [Predict.fun order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` | HMAC | Bidirectional |
+| [Kalshi order books](/api/market-data/venue-order-books#kalshi) | `wss://partner-api.bravadotrade.com/stream/kalshi/partner` | HMAC | Bidirectional |
 
 <Note>
   Create an account in [Console](https://console.bravadotrade.com/signup), select an eligible paid plan with WebSockets access, and create a credential with `stream.read`. Sign the connection with [HMAC](/authentication). Usage belongs to the organisation that issued the key. The low-latency [Mempool Fills](/api/market-data/mempool-feed) feed is a partner tier — contact Bravado during onboarding to enable it.
