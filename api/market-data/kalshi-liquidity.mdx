@@ -1,0 +1,58 @@
+---
+title: "Kalshi current liquidity"
+sidebarTitle: "Kalshi liquidity"
+description: "Exact-decimal current mid, spread and near-touch depth from one full native REST book."
+---
+
+Read derived metrics with a **Data API** credential carrying `analytics.read` and your organisation’s Kalshi grant:
+
+```http
+GET /market-data/v1/computed/markets/{ticker}/liquidity?fresh=false
+```
+
+This is a computed endpoint. [Native REST](/api/market-data/kalshi-native) continues to return Kalshi’s values and field names unchanged. The [order-book beta](/api/market-data/kalshi-beta) has separate live coverage; this request is a current REST snapshot, not a WebSocket observation or historical statistic.
+
+## Request
+
+| Field | Meaning |
+| --- | --- |
+| `ticker` | Exact Kalshi market ticker |
+| `fresh` | `false` by default; `true` forces a new full native order-book acquisition |
+
+No depth parameter is accepted: the calculation always requests the complete native ladder. Unknown or repeated query parameters are refused. [Sign the exact path and query](/authentication-examples) with the usual Data API HMAC headers. Existing quotas and accounting apply.
+
+## Result
+
+The response identifies the requested `ticker`, `venue: "kalshi"`, `observation_type: "rest_snapshot"` and `historical: false`.
+
+Both `yes` and `no` contain:
+
+| Field | Value |
+| --- | --- |
+| `best_bid_dollars`, `best_ask_dollars` | Best outcome prices, decimal strings or null |
+| `best_bid_size_contracts`, `best_ask_size_contracts` | Available contracts at those prices |
+| `mid_dollars` | Exact midpoint when the book is two-sided and not crossed |
+| `spread_dollars` | Ask minus bid when both exist; can be negative on an explicitly crossed book |
+| `state` | `two_sided`, `one_sided`, `empty` or `crossed` |
+| `mid_unavailable_reason` | Reason for a null midpoint, otherwise null |
+| `depth_within_dollars` | `bid` and `ask` summaries keyed by `"0.01"`, `"0.05"`, `"0.1"` |
+
+Each depth summary contains separate `contracts` and `dollars` strings. The dollar amount is the sum of level price × contracts. Thresholds include levels exactly at the boundary and are measured from **that side’s best price**. A missing side has null depth and `reason: "side_absent"`, because it has no touch from which to measure distance.
+
+YES asks come from the complement of NO bids, and NO asks from YES bids. Quantities stay on their original level. All arithmetic uses exact decimals; no price or size passes through floating point. Derived strings are canonical decimals, so trailing zeros can differ from native formatting. This does not modify the native endpoint.
+
+Zero-size levels do not contribute liquidity. Duplicate numeric price levels, out-of-range prices and values outside the bounded calculation schema are refused rather than rounded. Each native ladder is limited to 10,000 levels; numeric strings support up to 38 integer digits and 18 fractional digits. Source replies remain bounded to 1 MiB.
+
+## Age and provenance
+
+- `observed_at` is the native service’s acquisition time, not a matching-engine timestamp
+- `computed_at` is when Bravado calculated this result
+- `source_observation_sha256` identifies the **input native JSON bytes**, not the computed response
+- `source_cache` is `hit`, `miss` or `refresh`; `max_age_ms` is 30,000
+- `venue_timestamp` is null with an explicit reason; it is not fabricated from receive time
+
+The input hash also appears in `X-Bravado-Source-Observation-Sha256`. `X-Bravado-Native-Request-Sha256` binds the exact full-book request. Responses are private and no-store. `fresh=true` requires a newly acquired observation and does not guarantee an atomic executable fill.
+
+An upstream failure, stale or mismatched observation, denied credential, missing grant or exhausted limit returns an explicit error. It never becomes an empty metric result. A valid source-empty book is returned with `state: "empty"` and null midpoint.
+
+Historical spread statistics, uptime, rolling depth and cost-to-fill are separate deliverables. This endpoint does not claim those calculations or the liquidity available when a future order executes.
