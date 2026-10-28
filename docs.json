@@ -57,6 +57,7 @@
             "group": "Kalshi market data",
             "pages": [
               "api/market-data/kalshi-native",
+              "api/market-data/kalshi-liquidity",
               "api/market-data/kalshi-history"
             ]
           },

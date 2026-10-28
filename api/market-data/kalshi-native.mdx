@@ -8,6 +8,8 @@ Base URL: `https://partner-api.bravadotrade.com/market-data/v1/native`
 
 Read Kalshi's native JSON through Bravado using a Data API credential. Field names, decimal strings and response bodies are preserved. Bravado adds freshness and provenance in response headers.
 
+For calculated mid, spread and depth within 1¢/5¢/10¢, use the separate [current liquidity endpoint](/api/market-data/kalshi-liquidity). Native responses below remain unchanged.
+
 ## Access
 
 Use a credential attached to an active **Data endpoint**, with `analytics.read` and an explicit **Kalshi data grant** for your organisation. Sign each GET using [HMAC authentication](/authentication#making-authenticated-requests) and the [signing helpers](/authentication-examples). Sign the exact canonical path and sorted query with an empty body. Keep your secret on your server. Normal quotas, key restrictions and credit accounting apply.
