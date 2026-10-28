@@ -74,7 +74,7 @@ The legacy `/stream/{venue}/market` and `/orderbook-feed/ws` routes have a separ
 Book frames include `channel: "book"`, `venue`, `asset`, `type`, `seq`, `ts` and, for snapshots and deltas, `bids` and `asks`.
 
 - Each price level is `[price, size]`, with both values encoded as decimal strings.
-- **Both snapshots and deltas contain complete sides**, not level patches. Replace the previous sides on each frame.
+- **Both snapshots and deltas contain complete sides**, not level patches. Replace the previous sides on each frame. `GET /stream/capabilities` states this per venue as `book_delta_semantics: "full_book_replacement"`, and it is the same on every venue that serves books today — including Kalshi, where it was settled by joint decision rather than inherited. Read the field rather than assuming it: a venue added later need not match.
 - Bids are descending; asks are ascending. A transient crossed book is possible during venue updates.
 - Sequence numbers are per venue and asset. A snapshot resets local book state; do not infer ordering across venues.
 - `ts` is Bravado's timestamp in milliseconds. `upstreamTs` is the venue timestamp when available, otherwise `null`.
