@@ -4,16 +4,13 @@ sidebarTitle: "Kalshi beta"
 description: "Connect to the limited Kalshi order-book beta with a Market Data credential."
 ---
 
-The Kalshi beta serves **four selected markets**, using the shared [order-book message format](/api/market-data/venue-order-books). It does not cover every open Kalshi market.
+The Kalshi beta serves **a selected, changing set of markets**, using the shared [order-book message format](/api/market-data/venue-order-books). It does not cover every open Kalshi market. BTC and ETH 15-minute contracts are included when present in the ready inventory.
 
-| Market ticker | Current beta window |
-| --- | --- |
-| `KXBTC-26OCT3017-B79750` | BTC contract closing 30 October 2026 |
-| `KXBTC-26OCT3017-B80250` | BTC contract closing 30 October 2026 |
-| `KXFEDDECISION-26DEC-H0` | Fed contract closing 9 December 2026 |
-| `KXFEDDECISION-26DEC-H26` | Fed contract closing 9 December 2026 |
+Discover the current tickers through signed `GET /stream/kalshi/partner/coverage`, using the same Market Data credential as the WebSocket. The response includes `scope`, `ready`, `pending`, `inactive` and `retired` lists, counts, `as_of`, cache age and the source generation. `all_open_markets` is explicitly `false`; a ready inventory does not prove that an individual quote is fresh. Check the stream status and quote timestamp too.
 
-These are fixed tickers, not rolling subscriptions. Read [native market metadata](/api/market-data/kalshi-native) for exact open, close and settlement times. A replacement contract is not subscribed automatically when one closes.
+The default page contains up to 500 market tickers. Follow `next_cursor` with a signed, canonically encoded query until it is null. If the inventory changes between pages, HTTP409 asks you to restart pagination. HTTP503 means coverage cannot currently be verified; do not treat it as an empty universe. Retired contracts and pending markets must not be treated as live books.
+
+Read [native market metadata](/api/market-data/kalshi-native) for exact open, close and settlement times. Re-read coverage to discover replacement tickers when short-duration contracts close; subscribing to one ticker does not subscribe you to its replacements.
 
 ## Check access first
 
@@ -23,7 +20,7 @@ Before connecting, make a signed `GET /stream/capabilities`. The `kalshi` row mu
 
 ## Server example
 
-Install `ws`, set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET`, and run this as a Node.js `.mjs` file. The example subscribes to one of the four beta tickers and closes after 30 seconds to bound usage.
+Install `ws`, set `BRAVADO_API_KEY` and `BRAVADO_API_SECRET`, and run this as a Node.js `.mjs` file. The example discovers a ready market, subscribes to it and closes after 30 seconds to bound usage.
 
 ```javascript Node.js
 import WebSocket from "ws";
@@ -53,7 +50,18 @@ const kalshi = capabilities.venues?.find(row => row.venue === "kalshi");
 if (!kalshi?.implemented || !kalshi.upstream_registered || !kalshi.entitled)
   throw new Error("Kalshi is not available for this organisation right now");
 
-const query = new URLSearchParams({ streams: "book:KXBTC-26OCT3017-B79750" });
+const coveragePath = "/stream/kalshi/partner/coverage";
+const coverageResponse = await fetch(`${origin}${coveragePath}`, {
+  headers: headers(coveragePath), redirect: "error",
+  signal: AbortSignal.timeout(8_000),
+});
+if (!coverageResponse.ok)
+  throw new Error(`Coverage unavailable (${coverageResponse.status})`);
+const coverage = await coverageResponse.json();
+const ticker = coverage.ready?.[0];
+if (!ticker || coverage.stale) throw new Error("No verified ready market on this page");
+
+const query = new URLSearchParams({ streams: `book:${ticker}` });
 const path = `/stream/kalshi/partner?${query}`;
 const ws = new WebSocket(`wss://partner-api.bravadotrade.com${path}`, {
   headers: headers(path), handshakeTimeout: 8_000,
@@ -71,7 +79,7 @@ const stop = setTimeout(() => ws.close(), 30_000);
 ws.once("close", () => clearTimeout(stop));
 ```
 
-Use the market ticker after `book:`, not an outcome token ID. You can request the four tickers on one connection. [Authentication helpers](/authentication-examples) cover signing; the [shared WebSocket guide](/api/market-data/venue-order-books) covers subscription commands, reconnection and credits. This example is server-side; never put its HMAC secret in browser code.
+Use the market ticker after `book:`, not an outcome token ID. You can request multiple ready tickers on one connection, within your account limits. [Authentication helpers](/authentication-examples) cover signing; the [shared WebSocket guide](/api/market-data/venue-order-books) covers subscription commands, reconnection and credits. This example is server-side; never put its HMAC secret in browser code.
 
 ## Use the book safely
 
@@ -81,4 +89,4 @@ Use the market ticker after `book:`, not an outcome token ID. You can request th
 - `quote.sourceWallUtc` is the source's receive time; `quote.venueTs` is the venue timestamp when present. Sending-clock fields remain separate. `ts` is the API timestamp, not the age of the quote. Protocol pings keep the connection alive without making a quiet quote newer.
 - On `degraded`, discard trust in the book. A later `live` status or open socket alone does not restore it: wait for a fresh snapshot. Reconnect with a fresh signature and backoff after a disconnection.
 
-This beta provides order books only, with no live-trades channel. It does not promise an uninterrupted feed, automatic contract rollover, a latency advantage over Kalshi, or complete historical coverage. [Native REST data](/api/market-data/kalshi-native) and [captured book history](/api/market-data/kalshi-history) have separate coverage contracts.
+This beta provides order books only, with no live-trades channel. It does not promise an uninterrupted feed, automatic replacement of client subscriptions, a latency advantage over Kalshi, or complete historical coverage. [Native REST data](/api/market-data/kalshi-native) and [captured book history](/api/market-data/kalshi-history) have separate coverage contracts.
