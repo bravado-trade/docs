@@ -1,0 +1,147 @@
+---
+title: "GET /perps/basis: Mark, Index and Basis"
+sidebarTitle: "GET /basis"
+api: "GET /perps/basis"
+description: "OHLC of Polymarket Perps mark, index and basis in basis points per bucket, at the interval you pick. Scope analytics.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+OHLC of the **mark price**, the **index price** and the **basis** (in basis points) for one instrument, bucketed at the interval you pick. `premium_recomputed` is `null` with provenance until the order-book layer exists; nothing is fabricated in its place. This endpoint takes the same parameters and the same interval-dependent ranges as [open-interest history](/api/perps-data/oi-history). Part of the [Perps Data](/products/perps-data) product; scope `analytics.read`.
+
+```text
+GET https://partner-api.bravadotrade.com/perps/basis
+```
+
+### Query Parameters
+
+<ParamField query="instrument" type="string" required>
+  The instrument, by its venue-native id (for example `6`) or its canonical symbol (for example `BTC`). Matches `[A-Za-z0-9._-]{1,32}`.
+</ParamField>
+
+<ParamField query="interval" type="string">
+  Bucket size: one of `1m`, `5m`, `15m`, `1h`, `4h`, `1d`. The interval sets the maximum window, below.
+</ParamField>
+
+<ParamField query="venue" type="string">
+  One of `polymarket`, `binance`, `bybit`, `hyperliquid`. Omit for the default. Polymarket is the covered venue.
+</ParamField>
+
+<ParamField query="from" type="string">
+  Start of the window. Accepts RFC3339, unix seconds or unix milliseconds.
+</ParamField>
+
+<ParamField query="to" type="string">
+  End of the window. Same formats as `from`. The maximum window depends on `interval` (below); a wider range is refused with `400 range_too_large`.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="1000">
+  Rows per page, `1`–`5000`.
+</ParamField>
+
+<Note>
+  The maximum window is set by `interval`: `1m` → 1 day, `5m` → 7 days, `15m` → 21 days, `1h` → 90 days, `4h` → 180 days, `1d` → 400 days.
+</Note>
+
+### Response
+
+Bars in `data`, one per interval, oldest first. When `has_more` is `true`, page forward by passing `next_from_s` (unix **seconds**) back as `from`.
+
+<ResponseField name="instrument" type="string">
+  The instrument the bars are for.
+</ResponseField>
+
+<ResponseField name="interval" type="string">
+  The bucket size actually used.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  <Expandable title="Bar fields">
+    <ResponseField name="ts" type="integer">
+      The bar's boundary timestamp.
+    </ResponseField>
+
+    <ResponseField name="mark_open" type="string">
+      Mark price at the start of the bar. `mark_high`, `mark_low` and `mark_close` complete the mark OHLC.
+    </ResponseField>
+
+    <ResponseField name="idx_open" type="string">
+      Index price at the start of the bar. `idx_high`, `idx_low` and `idx_close` complete the index OHLC.
+    </ResponseField>
+
+    <ResponseField name="basis_bps_open" type="string">
+      Basis in basis points at the start of the bar. `basis_bps_high`, `basis_bps_low` and `basis_bps_close` complete the basis OHLC.
+    </ResponseField>
+
+    <ResponseField name="mark_minus_idx_close" type="string">
+      Mark minus index at the close of the bar, in price units.
+    </ResponseField>
+
+    <ResponseField name="premium_recomputed" type="string | null">
+      Premium recomputed from the order book. `null` until the order-book layer exists — never a fabricated value.
+    </ResponseField>
+
+    <ResponseField name="ticks" type="integer">
+      How many source observations the bar aggregates.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean">
+  `true` when more rows remain beyond this page.
+</ResponseField>
+
+<ResponseField name="next_from_s" type="integer">
+  Present when `has_more` is `true`. Unix **seconds** — pass it back as `from` to read the next page.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/perps/basis \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d instrument=BTC \
+  -d interval=1h \
+  -d from=2026-10-01T00:00:00Z \
+  -d to=2026-10-02T00:00:00Z
+```
+
+```json Response (abbreviated)
+{
+  "instrument": "BTC",
+  "interval": "1h",
+  "data": [
+    {
+      "ts": 1759276800,
+      "mark_open": "90012.00",
+      "mark_high": "90280.00",
+      "mark_low": "89870.00",
+      "mark_close": "90120.00",
+      "idx_open": "90000.00",
+      "idx_high": "90250.00",
+      "idx_low": "89860.00",
+      "idx_close": "90100.00",
+      "basis_bps_open": "1.33",
+      "basis_bps_high": "3.32",
+      "basis_bps_low": "1.11",
+      "basis_bps_close": "2.22",
+      "mark_minus_idx_close": "20.00",
+      "premium_recomputed": null,
+      "ticks": 60
+    }
+  ],
+  "has_more": true,
+  "next_from_s": 1759363200
+}
+```
+
+</CodeGroup>
+
+## Related
+
+- [Open-interest history](/api/perps-data/oi-history) — OHLC of open interest with the same parameters and ranges.
+- [Perps Data overview](/products/perps-data) — the product, its credential and shared conventions.

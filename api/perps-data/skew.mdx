@@ -1,0 +1,160 @@
+---
+title: "GET /perps/skew: Long/Short Account Skew"
+sidebarTitle: "GET /skew"
+api: "GET /perps/skew"
+description: "Long and short account counts, exact contract sums and concentration for a Polymarket Perps instrument, point-in-time or as a series of 1-minute bars, over the observed account universe. Scope analytics.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Long and short account counts, exact contract sums, and top-10 / whale / rest concentration for one instrument, plus the size of the account universe the snapshot was built from and how old that sweep is. Request a **point-in-time** snapshot with `at`, or a **series of 1-minute bars** with `from` and `to`. Part of the [Perps Data](/products/perps-data) product; scope `analytics.read`.
+
+<Warning>
+  Skew is measured over the **observed (gated) account universe**, not every counterparty on the venue. `universe_size` is how many accounts the snapshot covers, and the completeness gap reports what it could not see. Read these as skew across the accounts Bravado observes, not as the whole market's positioning.
+</Warning>
+
+```text
+GET https://partner-api.bravadotrade.com/perps/skew
+```
+
+### Query Parameters
+
+<ParamField query="instrument" type="string" required>
+  The instrument, by its **venue-native id** (for example `6`). Skew takes the venue-native id only — it carries no canonical symbol. Matches `[A-Za-z0-9._-]{1,32}`.
+</ParamField>
+
+<ParamField query="at" type="string">
+  Point-in-time mode: the moment to read the snapshot as of. Accepts RFC3339, unix seconds or unix milliseconds. Defaults to now. Ignored when `from`/`to` are given.
+</ParamField>
+
+<ParamField query="from" type="string">
+  Series mode: start of the window. Returns 1-minute bars. Same formats as `at`.
+</ParamField>
+
+<ParamField query="to" type="string">
+  Series mode: end of the window. The window may span at most **3 days**; a wider range is refused with `400 range_too_large`.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="1000">
+  Rows per page in series mode, `1`–`5000`.
+</ParamField>
+
+### Response
+
+In point-in-time mode, one snapshot. In series mode, an array of 1-minute snapshots under `series`, oldest first. When no snapshot exists for the requested moment, the response is `available: false` with a `reason` — never a zeroed snapshot.
+
+<ResponseField name="available" type="boolean">
+  `false` when no snapshot exists for the requested moment; a `reason` accompanies it. `true` otherwise. A missing snapshot is never served as zeroed counts.
+</ResponseField>
+
+<ResponseField name="reason" type="string">
+  Present when `available` is `false`: why no snapshot could be served.
+</ResponseField>
+
+<ResponseField name="instrument" type="string">
+  The instrument the snapshot is for.
+</ResponseField>
+
+<ResponseField name="venue" type="string">
+  The venue.
+</ResponseField>
+
+<ResponseField name="at_ms" type="integer">
+  The requested point-in-time, in unix milliseconds (`at_offset_ms` is how far the served snapshot sits from it).
+</ResponseField>
+
+<ResponseField name="snapshot_ts_ms" type="integer">
+  When the served snapshot was taken, in unix milliseconds (`snapshot_ts` in seconds); `computed_ts_ms` / `computed_ts` is when it was computed.
+</ResponseField>
+
+<ResponseField name="universe_size" type="integer">
+  How many accounts the snapshot covers — the size of the observed (gated) universe, not the whole venue.
+</ResponseField>
+
+<ResponseField name="universe_class" type="string">
+  The class of the observed universe.
+</ResponseField>
+
+<ResponseField name="observed_universe_only" type="boolean">
+  Always `true`: the snapshot is over the observed account universe, not every counterparty.
+</ResponseField>
+
+<ResponseField name="sweep_age_ms" type="integer">
+  How old the underlying account sweep is, in milliseconds.
+</ResponseField>
+
+<ResponseField name="completeness" type="object">
+  What the snapshot could and could not observe, so you can judge how complete the skew is.
+</ResponseField>
+
+<ResponseField name="long_accounts" type="integer">
+  Number of accounts net long in the observed universe (`short_accounts` and `flat_accounts` complete the split).
+</ResponseField>
+
+<ResponseField name="long_contracts" type="string">
+  Exact sum of long contracts across the observed universe (`short_contracts`, `long_minus_short_contracts`, `long_share_of_oi_bps`, `long_vs_oi_gap_contracts`, `total_notional_usd` and `oi` complete the aggregate).
+</ResponseField>
+
+<ResponseField name="concentration" type="object">
+  `top10`, `whale` and `rest` buckets, each with `share_bps`, `contracts` and `accounts`.
+</ResponseField>
+
+<ResponseField name="series" type="array">
+  Series mode only: an array of 1-minute snapshots with the same per-snapshot fields.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/perps/skew \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d instrument=6 \
+  -d at=2026-10-01T12:00:00Z
+```
+
+```json Response (abbreviated)
+{
+  "available": true,
+  "instrument": "6",
+  "venue": "polymarket",
+  "at_ms": 1759320000000,
+  "snapshot_ts_ms": 1759319995800,
+  "universe_size": 3152,
+  "universe_class": "observed",
+  "observed_universe_only": true,
+  "sweep_age_ms": 4200,
+  "completeness": { "observed_accounts": 3152, "coverage_bps": 10000 },
+  "long_accounts": 1842,
+  "short_accounts": 1310,
+  "flat_accounts": 0,
+  "long_contracts": "58240.00",
+  "short_contracts": "49110.00",
+  "long_minus_short_contracts": "9130.00",
+  "total_notional_usd": "9654000000.00",
+  "oi": "107350.00",
+  "concentration": {
+    "top10": { "share_bps": 4100, "contracts": "44013.50", "accounts": 10 },
+    "whale": { "share_bps": 2200, "contracts": "23617.00", "accounts": 4 },
+    "rest": { "share_bps": 3700, "contracts": "39719.50", "accounts": 3138 }
+  }
+}
+```
+
+```json Response when no snapshot exists
+{
+  "instrument": "6",
+  "available": false,
+  "reason": "no_snapshot"
+}
+```
+
+</CodeGroup>
+
+## Related
+
+- [Liquidations](/api/perps-data/liquidations) — detected liquidations over the same observed account universe.
+- [Perps Data overview](/products/perps-data) — the product, its credential and shared conventions.

@@ -1,0 +1,141 @@
+---
+title: "GET /perps/funding/history: Funding History"
+sidebarTitle: "GET /funding/history"
+api: "GET /perps/funding/history"
+description: "Per-interval Polymarket Perps funding observations for one instrument, oldest first, with the venue-published rate kept exact plus hourly-normalised and annualised forms. Scope analytics.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Per-interval funding observations for one instrument, **oldest first**. Each observation carries the venue-published per-interval rate (kept as an exact decimal string), the interval it applies to and its provenance, plus the rate normalised to an hourly figure and expressed as an annualised percentage. This is analytics data, not tax-grade. Part of the [Perps Data](/products/perps-data) product; scope `analytics.read`.
+
+```text
+GET https://partner-api.bravadotrade.com/perps/funding/history
+```
+
+### Query Parameters
+
+<ParamField query="instrument" type="string" required>
+  The instrument, by its venue-native id (for example `6`) or its canonical symbol (for example `BTC`). Matches `[A-Za-z0-9._-]{1,32}`.
+</ParamField>
+
+<ParamField query="venue" type="string">
+  One of `polymarket`, `binance`, `bybit`, `hyperliquid`. Omit for the default. Polymarket is the covered venue; the others exist for the [funding comparison](/api/perps-data/funding-compare).
+</ParamField>
+
+<ParamField query="from" type="string">
+  Start of the window. Accepts RFC3339, unix seconds or unix milliseconds.
+</ParamField>
+
+<ParamField query="to" type="string">
+  End of the window. Same formats as `from`. The window may span at most **31 days**; a wider range is refused with `400 range_too_large`.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="1000">
+  Rows per page, `1`–`5000`.
+</ParamField>
+
+### Response
+
+Observations in `data`, oldest first. When `has_more` is `true`, page forward by passing `next_from_ms` back as `from`.
+
+<ResponseField name="instrument" type="string">
+  The instrument the observations are for.
+</ResponseField>
+
+<ResponseField name="interval_minutes" type="integer">
+  The funding interval requested, in minutes.
+</ResponseField>
+
+<ResponseField name="rate_basis" type="string">
+  The basis the per-interval rate is quoted on.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  <Expandable title="Observation fields">
+    <ResponseField name="funding_time_ms" type="integer">
+      When the funding applies, in unix milliseconds (`funding_time` carries the same instant in seconds).
+    </ResponseField>
+
+    <ResponseField name="funding_rate" type="string">
+      The venue-published per-interval funding rate, as an exact decimal string (`funding_rate_raw` is the unprocessed value).
+    </ResponseField>
+
+    <ResponseField name="hourly_rate" type="string">
+      The rate normalised to a per-hour figure, so observations on different intervals are comparable.
+    </ResponseField>
+
+    <ResponseField name="annualized_pct" type="string">
+      The rate expressed as an annualised percentage.
+    </ResponseField>
+
+    <ResponseField name="interval_minutes" type="integer">
+      The interval this observation applies to, in minutes.
+    </ResponseField>
+
+    <ResponseField name="interval_source" type="string">
+      How the interval was determined.
+    </ResponseField>
+
+    <ResponseField name="provenance" type="string">
+      Where the rate came from — the venue and how it was published.
+    </ResponseField>
+
+    <ResponseField name="funding_cap" type="string">
+      The venue's funding cap for the interval, when published.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean">
+  `true` when more rows remain beyond this page.
+</ResponseField>
+
+<ResponseField name="next_from_ms" type="integer">
+  Present when `has_more` is `true`. Pass it back as `from` to read the next page.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/perps/funding/history \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d instrument=BTC \
+  -d from=2026-10-01T00:00:00Z \
+  -d to=2026-10-02T00:00:00Z \
+  -d limit=1000
+```
+
+```json Response (abbreviated)
+{
+  "instrument": "BTC",
+  "interval_minutes": 60,
+  "rate_basis": "per_interval",
+  "data": [
+    {
+      "funding_time_ms": 1759276800000,
+      "funding_rate": "0.0000125",
+      "funding_rate_raw": "0.0000125",
+      "hourly_rate": "0.0000125",
+      "annualized_pct": "10.95",
+      "interval_minutes": 60,
+      "interval_source": "venue",
+      "provenance": "polymarket",
+      "funding_cap": "0.0075"
+    }
+  ],
+  "has_more": true,
+  "next_from_ms": 1759363200000
+}
+```
+
+</CodeGroup>
+
+## Related
+
+- [Funding comparison](/api/perps-data/funding-compare) — one symbol across Polymarket, Binance, Bybit and Hyperliquid.
+- [Perps Data overview](/products/perps-data) — the product, its credential and shared conventions.

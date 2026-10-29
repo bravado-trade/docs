@@ -241,6 +241,21 @@ The same Data API credential also serves market-wide data on Polymarket **Combos
 
 See the [Combos Data API reference](/api/combos-data/overview). To quote and buy combos, use the [Combos API](/api/combos/overview) instead.
 
+## Perps data
+
+The same Data API credential also serves read-only **market data for Polymarket Perps** (perpetual futures): funding history and cross-venue funding comparison, open-interest and mark-versus-index basis rollups, long/short account skew and detected liquidations. These routes live under `/perps` on the same host and cost 1 credit per successful response like the rest of the product. This is market data, not execution — to trade perps, use the [Polymarket Perps Trade API](/api/trade/perps) instead.
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /perps/funding/history` | Per-interval funding observations for one instrument, with hourly-normalised and annualised forms |
+| `GET /perps/funding/compare` | One symbol on the Polymarket perp against Binance, Bybit and Hyperliquid, interval-normalised |
+| `GET /perps/oi/history` | OHLC of open interest in contracts, plus closing USD notional per bucket |
+| `GET /perps/basis` | OHLC of mark, index and basis (bps) per bucket |
+| `GET /perps/skew` | Long/short account counts, contract sums and concentration over the observed account universe |
+| `GET /perps/liquidations` | Detected liquidations, each with its evidence class |
+
+See the [Perps Data overview](/products/perps-data).
+
 ## Tax statements
 
 Bravado generates formal accounting documents for tax reporting and financial reconciliation. Each statement type covers a specific aspect of wallet activity.

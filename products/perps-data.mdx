@@ -1,0 +1,105 @@
+---
+title: "Perps Data: Polymarket Perpetual-Futures Market Data"
+sidebarTitle: "Overview"
+description: "Read-only market data for Polymarket Perps: funding history, cross-venue funding comparison, open-interest and basis rollups, long/short account skew and detected liquidations — under one Data API credential."
+icon:
+  name: "trending-up"
+  library: "lucide"
+---
+
+Perps Data is read-only market data for Polymarket's perpetual-futures markets: funding rates, open interest, mark-versus-index basis, long/short account skew and detected liquidations, served over REST from `https://partner-api.bravadotrade.com`. It answers market-structure questions about the perp — what funding costs, how crowded a side is, where interest sits — without you running a venue indexer.
+
+<Info>
+  Perps Data is part of the [Data API](/products/data-api) product: the same key, the same HMAC gate and the same credit model as `/trader-analytics/*`. Sign every request with your **Data API** credential (`analytics.read`) on an active paid plan, using [HMAC authentication](/authentication). Each successful response costs **1 credit**, and the surface has its own per-key rate bucket. There is no separate Perps Data endpoint or key in Console. Coverage is Polymarket.
+</Info>
+
+<Warning>
+  This is **market data, not execution**, and it is a different surface from the [Polymarket Perps Trade API](/api/trade/perps) (`/v2/trade/perps/*`). These routes read market structure; they place no orders and need no trading scope. The figures are analytics-grade, not tax-grade — they describe the market, not a wallet's book.
+</Warning>
+
+## Why Bravado over reading the venue
+
+The venue publishes this data, so this is not about access. It is about not building and running an indexer to normalise funding intervals, bucket open interest, recompute basis and reconstruct skew from account snapshots — and to keep them aligned with the same instrument identifiers as the rest of Bravado.
+
+| | Reading the venue yourself | Bravado Perps Data |
+| --- | --- | --- |
+| Setup | Index funding, OI and account snapshots yourself | Query an endpoint |
+| Funding | Decode each venue's own interval and units | Per-interval rate kept exact, plus hourly-normalised and annualised |
+| Cross-venue | Reconcile Polymarket against Binance, Bybit, Hyperliquid by hand | One interval-normalised [comparison](/api/perps-data/funding-compare) |
+| Open interest / basis | Build OHLC buckets from the raw feed | OHLC rollups per [interval](/api/perps-data/oi-history) |
+| Skew and liquidations | Reconstruct from snapshots and infer liquidations | [Skew](/api/perps-data/skew) and [detected liquidations](/api/perps-data/liquidations) with explicit provenance |
+
+## Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Funding history" icon="percent" href="/api/perps-data/funding-history">
+    Per-interval funding observations for one instrument, oldest first — the venue-published rate kept exact, plus its hourly-normalised and annualised forms.
+  </Card>
+
+  <Card title="Funding comparison" icon="arrow-left-right" href="/api/perps-data/funding-compare">
+    One symbol on the Polymarket perp against Binance, Bybit and Hyperliquid, interval-normalised. A venue missing from a complete window is named, never shown a zero rate.
+  </Card>
+
+  <Card title="Open-interest history" icon="layers" href="/api/perps-data/oi-history">
+    OHLC of open interest in contracts, plus the closing USD notional per bucket, at the interval you pick.
+  </Card>
+
+  <Card title="Basis" icon="activity" href="/api/perps-data/basis">
+    OHLC of mark, index and basis in basis points per bucket, at the interval you pick.
+  </Card>
+
+  <Card title="Long/short skew" icon="scale" href="/api/perps-data/skew">
+    Long and short account counts, exact contract sums and concentration — point-in-time or as a series of 1-minute bars — over the observed account universe.
+  </Card>
+
+  <Card title="Liquidations" icon="triangle-alert" href="/api/perps-data/liquidations">
+    Detected liquidations, oldest first, each carrying its evidence class. Indeterminate fields are null, never a fabricated zero.
+  </Card>
+</CardGroup>
+
+<Note>
+  `GET /perps/book/asof` is **reserved and not yet available**: it answers `404 NOT_IMPLEMENTED` until the 1-second order-book layer (`perps_book_1s`) exists. Do not integrate against it yet.
+</Note>
+
+## Shared conventions
+
+- **Base URL** is `https://partner-api.bravadotrade.com`; every route lives under `/perps`.
+- **Time parameters** (`from`, `to`, `at`) accept **RFC3339**, **unix seconds** or **unix milliseconds**.
+- **`instrument`** is either the **venue-native id** (for example `6`) or the **canonical symbol** (for example `BTC`), matching `[A-Za-z0-9._-]{1,32}`. The [skew](/api/perps-data/skew) endpoint takes the venue-native id only.
+- **Provenance is explicit.** A value the venue did not publish is served as `null` with its reason, never as a fabricated `0` — `oi_usd_close`, `premium_recomputed`, each liquidation's indeterminate fields, and the whole skew snapshot when none exists.
+- **Empty windows are valid answers.** A window the venue published nothing for returns an empty result, not an error.
+
+## Endpoints at a glance
+
+| Endpoint | Required | Max range | Page size |
+| --- | --- | --- | --- |
+| [`GET /perps/funding/history`](/api/perps-data/funding-history) | `instrument` | 31 days | 1–5000 (default 1000) |
+| [`GET /perps/funding/compare`](/api/perps-data/funding-compare) | `symbol` | 31 days | 1–5000 (default 1000) |
+| [`GET /perps/oi/history`](/api/perps-data/oi-history) | `instrument` | by interval | 1–5000 (default 1000) |
+| [`GET /perps/basis`](/api/perps-data/basis) | `instrument` | by interval | 1–5000 (default 1000) |
+| [`GET /perps/skew`](/api/perps-data/skew) | `instrument` | 3 days (series) | 1–5000 (default 1000) |
+| [`GET /perps/liquidations`](/api/perps-data/liquidations) | `from`, `to` | 31 days | 1–1000 (default 200) |
+
+The interval-dependent ranges for open interest and basis are `1m`: 1 day, `5m`: 7 days, `15m`: 21 days, `1h`: 90 days, `4h`: 180 days, `1d`: 400 days.
+
+## Errors
+
+Every route signs and meters like the rest of the Data API, so it shares the product's status codes:
+
+| Status | Meaning |
+| --- | --- |
+| `400` | Invalid request — for example `range_too_large` (the window exceeds the endpoint's maximum) or `invalid_evidence` (an unknown liquidation evidence class). |
+| `401` | Missing or invalid HMAC signature. |
+| `402` | Out of credits — top up or upgrade your plan. |
+| `403` | The key lacks `analytics.read`, or the plan does not include the Data API. |
+| `404` | `NOT_IMPLEMENTED` — the reserved `GET /perps/book/asof` only. |
+| `429` | Per-key rate limit; see `Retry-After`. |
+| `503` | The Perps Data source is not configured or temporarily unavailable. |
+| `504` | The upstream timed out. |
+
+## Related
+
+- [Data API](/products/data-api) — the product this surface belongs to: wallet PnL, positions, history and Combos data on the same credential.
+- [Polymarket Perps Trade API](/api/trade/perps) — placing orders on the same perpetual-futures markets (a separate, enterprise-only surface).
+- [Market Data](/products/market-data) — realtime trades and order books over WebSockets.
+- [API credits](/api-credits) — how usage is metered.

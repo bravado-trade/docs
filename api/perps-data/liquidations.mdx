@@ -1,0 +1,157 @@
+---
+title: "GET /perps/liquidations: Liquidation History"
+sidebarTitle: "GET /liquidations"
+api: "GET /perps/liquidations"
+description: "Detected Polymarket Perps liquidations, oldest first, each carrying its evidence class. Indeterminate fields are null, never a fabricated zero. Scope analytics.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Detected liquidations, **oldest first**. Every row carries its `evidence` class — `confirmed`, `inferred` or `unknown` — so you can tell a liquidation observed directly from one reconstructed from account state. Fields that cannot be determined are `null`, never `0` or `false`. Detection covers the **gated account-snapshot universe only**. Part of the [Perps Data](/products/perps-data) product; scope `analytics.read`.
+
+```text
+GET https://partner-api.bravadotrade.com/perps/liquidations
+```
+
+### Query Parameters
+
+<ParamField query="from" type="string" required>
+  Start of the window. Accepts RFC3339, unix seconds or unix milliseconds.
+</ParamField>
+
+<ParamField query="to" type="string" required>
+  End of the window. Same formats as `from`. The window may span at most **31 days**; a wider range is refused with `400 range_too_large`.
+</ParamField>
+
+<ParamField query="instrument" type="string">
+  Only liquidations on this instrument, by its venue-native id. Matches `[A-Za-z0-9._-]{1,32}`. Omit for all instruments.
+</ParamField>
+
+<ParamField query="address" type="string">
+  Only liquidations for this account. A 40-hex address, with or without the `0x` prefix.
+</ParamField>
+
+<ParamField query="evidence" type="string">
+  A comma-separated subset of `confirmed`, `inferred`, `unknown`. Defaults to all three. `unknown` is never hidden, so a subset that omits it still returns `unknown` rows. An unrecognised value is refused with `400 invalid_evidence`.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="200">
+  Rows per page, `1`–`1000`.
+</ParamField>
+
+### Response
+
+Liquidations in `data`, oldest first, each with its evidence class. When `has_more` is `true`, page forward by passing `next_from_ms` back as `from`.
+
+<ResponseField name="data" type="array">
+  <Expandable title="Liquidation fields">
+    <ResponseField name="liq_id" type="string">
+      Stable id for the detected liquidation.
+    </ResponseField>
+
+    <ResponseField name="detected_ts_ms" type="integer">
+      When the liquidation was detected, in unix milliseconds (`detected_ts` in seconds).
+    </ResponseField>
+
+    <ResponseField name="instrument" type="string">
+      The instrument liquidated, by its venue-native id.
+    </ResponseField>
+
+    <ResponseField name="venue" type="string">
+      The venue.
+    </ResponseField>
+
+    <ResponseField name="address" type="string">
+      The liquidated account.
+    </ResponseField>
+
+    <ResponseField name="evidence" type="string">
+      How the liquidation was established: `confirmed` (observed directly), `inferred` (reconstructed from account state), or `unknown`.
+    </ResponseField>
+
+    <ResponseField name="position_side" type="string | null">
+      The side liquidated, or `null` when it cannot be determined — never a guessed value.
+    </ResponseField>
+
+    <ResponseField name="closed_size" type="string | null">
+      Size closed by the liquidation, or `null` when indeterminate — never `0`. Related sizing fields (`fill_size`, `size_before`, `size_after`) follow the same null-not-zero rule, as do the price and equity fields (`entry_price`, `fill_price`, `mark_before`, `mark_extreme`, `equity_before_usd`, `equity_after_usd`, `equity_drop_usd`, `liq_price_est`, `notional_usd`) and the fee fields (`liq_fee_bps`, `expected_liq_fee_usd`, `fill_fee_usd`).
+    </ResponseField>
+
+    <ResponseField name="adl" type="boolean | null">
+      Whether the liquidation was an auto-deleverage, or `null` when indeterminate.
+    </ResponseField>
+
+    <ResponseField name="change_kind" type="string">
+      The kind of position change observed (`fills_source` records where the fills came from; `rule_version` the detection rule).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="completeness" type="object">
+  What the detection could and could not observe over the window.
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean">
+  `true` when more rows remain beyond this page.
+</ResponseField>
+
+<ResponseField name="next_from_ms" type="integer">
+  Present when `has_more` is `true`. Pass it back as `from` to read the next page.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/perps/liquidations \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d from=2026-10-01T00:00:00Z \
+  -d to=2026-10-02T00:00:00Z \
+  -d evidence=confirmed,inferred
+```
+
+```json Response (abbreviated)
+{
+  "data": [
+    {
+      "liq_id": "6:0xef3990a7:1759276920000",
+      "detected_ts_ms": 1759276920000,
+      "instrument": "6",
+      "venue": "polymarket",
+      "address": "0xef3990a7c8fa92d84dce0e7816ca3410820c1d36",
+      "evidence": "confirmed",
+      "position_side": "long",
+      "closed_size": "12.50",
+      "notional_usd": "1125375.00",
+      "adl": false,
+      "change_kind": "liquidation"
+    },
+    {
+      "liq_id": "6:0x7c80413d:1759277500000",
+      "detected_ts_ms": 1759277500000,
+      "instrument": "6",
+      "venue": "polymarket",
+      "address": "0x7c80413d2b9a1f5e6d3c4b2a1908f7e6d5c4b3a2",
+      "evidence": "inferred",
+      "position_side": null,
+      "closed_size": null,
+      "notional_usd": null,
+      "adl": null,
+      "change_kind": "liquidation"
+    }
+  ],
+  "completeness": { "observed_universe_only": true },
+  "has_more": true,
+  "next_from_ms": 1759363200000
+}
+```
+
+</CodeGroup>
+
+## Related
+
+- [Long/short skew](/api/perps-data/skew) — positioning over the same observed account universe.
+- [Perps Data overview](/products/perps-data) — the product, its credential and shared conventions.

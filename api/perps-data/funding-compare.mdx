@@ -1,0 +1,143 @@
+---
+title: "GET /perps/funding/compare: Funding Comparison"
+sidebarTitle: "GET /funding/compare"
+api: "GET /perps/funding/compare"
+description: "One symbol on the Polymarket perp against Binance, Bybit and Hyperliquid, interval-normalised. A venue with no rows in a complete window is named, never shown a zero rate. Scope analytics.read."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+One symbol compared across venues: the Polymarket perp against Binance, Bybit and Hyperliquid, with every venue's funding normalised to the same interval so the rates line up. A venue that published **no rows** in an otherwise complete window is listed in `missing_venues` — it is never represented by a zero rate, because absent funding and zero funding are different facts. Part of the [Perps Data](/products/perps-data) product; scope `analytics.read`.
+
+```text
+GET https://partner-api.bravadotrade.com/perps/funding/compare
+```
+
+### Query Parameters
+
+<ParamField query="symbol" type="string" required>
+  The canonical symbol to compare, for example `BTC`. Matches `[A-Za-z0-9._-]{1,32}`. This endpoint takes a symbol, not a venue-native id, because it spans venues.
+</ParamField>
+
+<ParamField query="from" type="string">
+  Start of the window. Accepts RFC3339, unix seconds or unix milliseconds.
+</ParamField>
+
+<ParamField query="to" type="string">
+  End of the window. Same formats as `from`. The window may span at most **31 days**; a wider range is refused with `400 range_too_large`.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="1000">
+  Rows per page, `1`–`5000`.
+</ParamField>
+
+### Response
+
+Interval-normalised funding for the symbol across venues in `series`, plus the venues that had nothing to show.
+
+<ResponseField name="symbol" type="string">
+  The symbol being compared.
+</ResponseField>
+
+<ResponseField name="series" type="object">
+  Per-venue observations, keyed by venue (`polymarket`, `binance`, `bybit`, `hyperliquid`). Each value is an array of points.
+
+  <Expandable title="Point fields">
+    <ResponseField name="funding_time_ms" type="integer">
+      When the funding applies, in unix milliseconds (`funding_time` carries the same instant in seconds).
+    </ResponseField>
+
+    <ResponseField name="funding_rate" type="string">
+      The venue-published per-interval funding rate, as an exact decimal string (`funding_rate_raw` is the unprocessed value).
+    </ResponseField>
+
+    <ResponseField name="hourly_rate" type="string">
+      The rate normalised to a per-hour figure, so venues on different intervals are comparable.
+    </ResponseField>
+
+    <ResponseField name="annualized_pct" type="string">
+      The rate expressed as an annualised percentage.
+    </ResponseField>
+
+    <ResponseField name="interval_minutes" type="integer">
+      The interval this observation applies to, in minutes.
+    </ResponseField>
+
+    <ResponseField name="interval_source" type="string">
+      How the interval was determined.
+    </ResponseField>
+
+    <ResponseField name="provenance" type="string">
+      Where the rate came from.
+    </ResponseField>
+
+    <ResponseField name="funding_cap" type="string">
+      The venue's funding cap for the interval, when published.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="missing_venues" type="array">
+  Venues with no rows in the window. A venue here is omitted from `series` entirely; it is **not** served as a zero rate.
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean">
+  `true` when more rows remain beyond this page.
+</ResponseField>
+
+<ResponseField name="next_from_ms" type="integer">
+  Present when `has_more` is `true`. Pass it back as `from` to read the next page.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/perps/funding/compare \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d symbol=BTC \
+  -d from=2026-10-01T00:00:00Z \
+  -d to=2026-10-02T00:00:00Z
+```
+
+```json Response (abbreviated)
+{
+  "symbol": "BTC",
+  "series": {
+    "polymarket": [
+      {
+        "funding_time_ms": 1759276800000,
+        "funding_rate": "0.0000125",
+        "hourly_rate": "0.0000125",
+        "annualized_pct": "10.95",
+        "interval_minutes": 60,
+        "interval_source": "venue",
+        "provenance": "polymarket"
+      }
+    ],
+    "binance": [
+      {
+        "funding_time_ms": 1759276800000,
+        "funding_rate": "0.0000100",
+        "hourly_rate": "0.0000100",
+        "annualized_pct": "8.76",
+        "interval_minutes": 60,
+        "interval_source": "venue",
+        "provenance": "binance"
+      }
+    ]
+  },
+  "missing_venues": ["hyperliquid"],
+  "has_more": false
+}
+```
+
+</CodeGroup>
+
+## Related
+
+- [Funding history](/api/perps-data/funding-history) — the per-interval observations for a single instrument.
+- [Perps Data overview](/products/perps-data) — the product, its credential and shared conventions.

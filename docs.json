@@ -98,6 +98,18 @@
             ]
           },
           {
+            "group": "Perps data",
+            "pages": [
+              "products/perps-data",
+              "api/perps-data/funding-history",
+              "api/perps-data/funding-compare",
+              "api/perps-data/oi-history",
+              "api/perps-data/basis",
+              "api/perps-data/skew",
+              "api/perps-data/liquidations"
+            ]
+          },
+          {
             "group": "By venue",
             "pages": [
               "markets/polymarket/data-api",
