@@ -30,6 +30,9 @@ Bravado's Market Data layer streams realtime prediction-market data over WebSock
     The low-latency tier: fills decoded from the Polygon mempool, ~1–2s ahead of the venue feed, with the full pending→settled→reverted lifecycle and the owner wallet behind each proxy. Partner tier, separate feed token.
   </Card>
 
+  <Card title="Open Orders" icon="clipboard-list" href="/api/market-data/open-orders">
+    A normalized, self-reconciling stream of one user's own open Polymarket orders. Per-user — connect once instead of running Polymarket's REST and WebSocket yourself.
+  </Card>
 </CardGroup>
 
 <Note>
@@ -90,9 +93,11 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 | [Mempool Fills](/api/market-data/mempool-feed) (low-latency) | `wss://stream.bravadotrade.com/ws` | Partner | Bidirectional |
 | [Polymarket order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` | HMAC | Bidirectional |
 | [Predict.fun order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` | HMAC | Bidirectional |
+| [Open Orders](/api/market-data/open-orders) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` → `open_orders:all` | HMAC (per-user) | Bidirectional |
 
 <Note>
-  Create an account in [Console](https://console.bravadotrade.com/signup), select an eligible paid plan with WebSockets access, and create a credential with `stream.read`. Sign the connection with [HMAC](/authentication). Usage belongs to the organisation that issued the key. The low-latency [Mempool Fills](/api/market-data/mempool-feed) feed is a partner tier — contact Bravado during onboarding to enable it.
+  Create an account in [Console](https://console.bravadotrade.com/signup), select an eligible paid plan with WebSockets access, and create a credential with `stream.read`. Sign the connection with [HMAC](/authentication). Usage belongs to the organisation that issued the key. [Open Orders](/api/market-data/open-orders) is additionally **per-user** — it resolves to one bound user (a master key names them with `X-Partner-User-Id`). The low-latency [Mempool Fills](/api/market-data/mempool-feed) feed is a partner tier — contact Bravado during onboarding to enable it.
+</Note>
 </Note>
 
 ## Historical data and custom delivery

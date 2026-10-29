@@ -130,6 +130,7 @@
               "api/market-data/kalshi-beta",
               "api/market-data/trade-feed",
               "api/combos-data/stream",
+              "api/market-data/open-orders",
               "api/market-data/historical-data"
             ]
           },

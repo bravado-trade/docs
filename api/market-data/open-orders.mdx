@@ -1,0 +1,261 @@
+---
+title: "Open Orders WebSocket"
+sidebarTitle: "Open Orders"
+description: "Stream a user's own open Polymarket orders — normalized, authoritative and self-reconciling — over the authenticated Bravado partner WebSocket. Connect once and receive a reliable order-state stream without running Polymarket's REST and WebSocket yourself."
+icon:
+  name: "clipboard-list"
+  library: "lucide"
+---
+
+Connect to the authenticated partner door `wss://partner-api.bravadotrade.com/stream/polymarket/partner` and subscribe to `open_orders:all` to receive a live, normalized view of **one user's own open Polymarket orders**. Bravado maintains the authoritative state for you — an initial REST snapshot merged under Polymarket's user WebSocket, reconciled automatically after any disconnect — so you integrate against one stream instead of Polymarket's REST **and** WebSocket, their auth, their heartbeats and their reconnect logic.
+
+<Info>
+  This is **private, account-level data**. Where the [Live Trades](/api/market-data/trade-feed) and [Order Books](/api/market-data/order-book) feeds are market-wide, this one is **per-user**: the request must resolve to one bound user — see [Authentication](#authentication). It is part of the [Market Data](/products/market-data) product (`stream.read` scope), and Bravado's own client never sees the user's Polymarket credentials.
+</Info>
+
+## Authentication
+
+The upgrade is signed with the same **HMAC-SHA256** scheme as every other partner request — `X-BRAVADO-API-KEY`, `X-BRAVADO-TIMESTAMP` and `X-BRAVADO-SIGNATURE` over the canonical path, hashing the empty body of the bodyless `GET`. See [Authentication](/authentication) for the signing rules.
+
+Because the channel is per-user, the request must resolve to **one bound user**:
+
+- A **per-user key** carries its binding — nothing more is needed.
+- A **master key** must name the user with an `X-Partner-User-Id` header (the `partner_user_id` you provisioned the user under). This header is **not** part of the signed payload; it travels alongside the signed headers.
+
+Without a bound user the channel answers a typed `BINDING_REQUIRED` error and does not open a session. (The public book channel on the same door needs no user and is unaffected.)
+
+<Warning>
+  Authentication runs on the upgrade. A bad credential ends the request as an **HTTP status** (for example `401`) before the WebSocket exists — it is never delivered as a frame.
+</Warning>
+
+## Connect
+
+Sign the bare partner-door path, pass `X-Partner-User-Id` for a master key, then subscribe in-band once the socket is open. (You may instead pass `?streams=open_orders:all` on the URL; if you do, sign the path **with** that query.)
+
+<CodeGroup>
+
+```bash wscat
+# Set BRAVADO_API_SECRET to the secret saved when you created the key.
+KEY='<YOUR_PUBLIC_KEY>'
+USER_ID='<YOUR_PARTNER_USER_ID>'   # omit for a per-user key
+TS=$(date +%s000)
+SIG=$(printf '%s\nGET\n/stream/polymarket/partner\n%s' "$TS" \
+      "$(printf '' | shasum -a 256 | cut -d' ' -f1)" \
+      | openssl dgst -sha256 -hmac "$BRAVADO_API_SECRET" -hex | awk '{print $NF}')
+
+wscat -c "wss://partner-api.bravadotrade.com/stream/polymarket/partner" \
+  -H "X-BRAVADO-API-KEY: $KEY" \
+  -H "X-BRAVADO-TIMESTAMP: $TS" \
+  -H "X-BRAVADO-SIGNATURE: $SIG" \
+  -H "X-Partner-User-Id: $USER_ID"
+
+# Once connected, send:
+# {"op":"sub","streams":["open_orders:all"]}
+# {"op":"unsub","streams":["open_orders:all"]}
+```
+
+```python Python
+import asyncio, hashlib, hmac, json, time
+import websockets  # pip install websockets
+
+HOST = "partner-api.bravadotrade.com"
+PATH = "/stream/polymarket/partner"
+KEY, SECRET = "<YOUR_PUBLIC_KEY>", "<YOUR_SECRET>"
+USER_ID = "<YOUR_PARTNER_USER_ID>"  # omit for a per-user key
+
+async def main():
+    ts = str(int(time.time() * 1000))
+    body_hash = hashlib.sha256(b"").hexdigest()
+    payload = f"{ts}\nGET\n{PATH}\n{body_hash}"
+    sig = hmac.new(SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    headers = {
+        "X-BRAVADO-API-KEY": KEY,
+        "X-BRAVADO-TIMESTAMP": ts,
+        "X-BRAVADO-SIGNATURE": sig,
+        "X-Partner-User-Id": USER_ID,
+    }
+    async with websockets.connect(f"wss://{HOST}{PATH}", additional_headers=headers) as ws:
+        await ws.send(json.dumps({"op": "sub", "streams": ["open_orders:all"]}))
+        async for message in ws:
+            frame = json.loads(message)
+            print(frame["type"], frame.get("order") or frame.get("orders") or frame.get("order_id"))
+
+asyncio.run(main())
+```
+
+</CodeGroup>
+
+The only subscription key today is **`all`** — every open order for the account. Market, asset and side filters are a later addition; the `open_orders:<…>` namespace is reserved for them. `open_orders` is **not** an asset and holds no quota, so it does not count against the [per-organisation asset limit](/api/market-data/order-book#limits) — a book subscription and `open_orders` can share one socket.
+
+## Frames
+
+Every frame carries `channel: "open_orders"`, `venue`, `seq` (ours, monotonic per session — a `snapshot` resets it) and `ts` (our clock, in milliseconds). **Sizes and prices are exact decimal strings, never JSON numbers** — parse them with a decimal-safe type, not a float.
+
+| `type` | When | Carries |
+| --- | --- | --- |
+| `snapshot` | On connect, and after a reconnect completes | `orders[]` — the full current open-order set, merged with any events buffered during startup |
+| `order_opened` | A new resting order | `order`, `source` (`"live"` or `"reconcile"`) |
+| `order_updated` | An order changed | `order`, `event` — `"partial_fill"` when the cumulative matched size advanced, `"updated"` for a price or venue-status change with no new fill |
+| `order_closed` | Filled, cancelled or expired | `order_id`, `status`, `event`, `close_source` (`"event"` or `"reconcile"`), `filled_size`, `remaining_size`, `size_matched_final` |
+| `reconciled` | After every reconcile pass | `source` (`"reconnect"`, `"periodic"` or `"verify"`), `opened`, `updated`, `closed`, `open_count` |
+| `error` | A problem | `code`, `message` — never a credential or raw venue detail |
+
+An order is **removed from active state** once its `order_closed` frame is emitted.
+
+### `snapshot`
+
+```json
+{
+  "type": "snapshot",
+  "channel": "open_orders",
+  "venue": "polymarket",
+  "seq": 1,
+  "ts": 1793236103955,
+  "orders": [ /* array of normalized order objects, see below */ ]
+}
+```
+
+### `order_opened` / `order_updated`
+
+```json
+{
+  "type": "order_opened",
+  "channel": "open_orders",
+  "venue": "polymarket",
+  "seq": 2,
+  "ts": 1793236107664,
+  "source": "live",
+  "order": {
+    "order_id": "0xf39ea8a4ed47468d7d58995a7d331a5a7f4abc1d4357f497fac0077fbd5f1dc6",
+    "market_id": "0x0b4cc3b739e1dfe5d73274740e7308b6fb389c5af040c3a174923d928d134bee",
+    "asset_id": "69324317355037271422943965141382095011871956039434394956830818206664869608517",
+    "outcome": "Yes",
+    "side": "BUY",
+    "price": "0.006",
+    "original_size": "200",
+    "filled_size": "0",
+    "remaining_size": "200",
+    "order_type": "GTC",
+    "status": "OPEN",
+    "venue_status": "LIVE",
+    "created_at": 1793236107000,
+    "updated_at": 1793236107652
+  }
+}
+```
+
+### `order_closed`
+
+```json
+{
+  "type": "order_closed",
+  "channel": "open_orders",
+  "venue": "polymarket",
+  "seq": 4,
+  "ts": 1793236118143,
+  "event": "cancelled",
+  "close_source": "event",
+  "order_id": "0x35225eb526c03a66afea3bfdfe221cb87d1347be485a1eebc3e2447399fdb908",
+  "status": "CANCELLED",
+  "venue_status": "CANCELED",
+  "filled_size": "0",
+  "remaining_size": "30",
+  "size_matched_final": false
+}
+```
+
+### `reconciled`
+
+```json
+{
+  "type": "reconciled",
+  "channel": "open_orders",
+  "venue": "polymarket",
+  "seq": 3,
+  "ts": 1793236109225,
+  "source": "verify",
+  "opened": 0,
+  "updated": 0,
+  "closed": 0,
+  "open_count": 2
+}
+```
+
+## The normalized order
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `order_id` | string | The order's id. The stable key — track state by it. |
+| `market_id` | string | Market condition ID. |
+| `asset_id` | string | Outcome token ID. |
+| `outcome` | string | The outcome traded, for example `"Yes"`. |
+| `side` | string | `"BUY"` or `"SELL"`. |
+| `price` | string | Limit price as a decimal probability between 0 and 1. |
+| `original_size` | string | The order's size in outcome tokens. |
+| `filled_size` | string | **Cumulative** matched size. The venue's authoritative total — it is set, never accumulated. |
+| `remaining_size` | string | `original_size − filled_size`. |
+| `order_type` | string | Venue order type, for example `"GTC"`. |
+| `status` | string | Normalized Bravado status — see below. |
+| `venue_status` | string | The raw venue status, carried verbatim so no venue detail is lost. |
+| `created_at` | number | Order creation time, Unix milliseconds. |
+| `updated_at` | number | Last update time, Unix milliseconds. |
+
+### Status model
+
+The normalized `status` moves `OPEN → PARTIALLY_FILLED → (FILLED | CANCELLED | EXPIRED)` and is **derived from sizes** (`filled_size` against `original_size`), never from a venue string — a cancellation `event` is what sets `CANCELLED`. The raw venue status always rides along in `venue_status`, so an unrecognized venue status never silently changes the normalized one, and no venue information is lost.
+
+| Normalized `status` | Condition |
+| --- | --- |
+| `OPEN` | `filled_size == 0` |
+| `PARTIALLY_FILLED` | `0 < filled_size < original_size` |
+| `FILLED` | `remaining_size == 0` |
+| `CANCELLED` | A cancellation event |
+| `EXPIRED` | The order's expiry was reached |
+
+<Note>
+  Polymarket's own order statuses are `live` / `matched` / `delayed` / `unmatched` (the last two are sports matching-delay states), spelled both bare (`LIVE`) and prefixed (`ORDER_STATUS_LIVE`), case varying — all of which you receive verbatim in `venue_status`. `delayed` and `unmatched` are reported as a size-derived `OPEN` (an unmatched order is resting on the book, so it is open — we do not guess it cancelled).
+</Note>
+
+### `size_matched_final`
+
+On `order_closed`, this flags whether `filled_size` is the final, event-confirmed value. An **event-driven** close carries `true`. A close **inferred by reconcile** — an order that vanished from a fresh snapshot while the upstream was disconnected — carries `false`, because `filled_size` is the last value we saw and may be stale. Unknown is labelled, never guessed as zero.
+
+## Reconnect and reconcile
+
+The upstream Polymarket connection is managed for you. On an upstream drop the session emits one `error` with `code: "UPSTREAM_DISCONNECTED"` (your downstream socket stays open), reconnects with jittered backoff, re-fetches the REST snapshot to completeness, diffs it against local state, emits the resulting `order_opened` / `order_updated` / `order_closed` frames, and closes with one `reconciled` summary.
+
+A periodic reconcile — and a verify reconcile shortly after a subscription goes live — runs even on a healthy connection and **always** emits `reconciled`. So a client that stops seeing `reconciled` frames knows its data may be stale.
+
+Reconnect and resubscribe if your own socket drops; you will receive a fresh `snapshot`. The server pings and closes a connection after missed pings; most WebSocket clients answer automatically.
+
+## Error codes
+
+Error frames carry only `{ code, message }` and never expose Polymarket credentials or raw upstream errors.
+
+| Code | Meaning |
+| --- | --- |
+| `BINDING_REQUIRED` | The request did not resolve to a bound user — send `X-Partner-User-Id` with a master key. |
+| `AUTH_FAILED` | The Bravado credential was rejected. |
+| `POLYMARKET_NOT_CONNECTED` | The user has no connected Polymarket account. |
+| `UPSTREAM_AUTH_FAILED` | Bravado could not authenticate to Polymarket for this user. |
+| `UPSTREAM_DISCONNECTED` | The upstream dropped; a reconnect and reconcile follow. |
+| `SUBSCRIPTION_FAILED` | A subscription could not be attached; retry it. |
+| `RATE_LIMITED` | Too many requests. |
+| `INTERNAL_ERROR` | An unexpected server-side error. |
+
+## Coverage
+
+Polymarket only. Predict.fun publishes no order feed of this shape, so `open_orders` is absent from the Predict.fun channel table and a subscription there answers `UNKNOWN_STREAM`.
+
+## Guarantees
+
+- **No Polymarket credential ever reaches you or a log** — the wire shape has no credential field, and upstream identity fields (`owner`, `maker_address`) are dropped.
+- **No double-counting of fills** — `filled_size` is the venue's authoritative cumulative; trade events refine fill tracking but never move it.
+- **No leak onto a market-wide route** — `open_orders` lives only in the authenticated partner door's per-user channel table; no public or market-wide route can address it.
+
+## Related
+
+- [Market Data overview](/products/market-data).
+- [Authentication](/authentication) — the HMAC signing rules and master vs. user keys.
+- [Trade API](/products/trade-api) — place and cancel the orders you are watching.
+- [Order Books WebSocket](/api/market-data/order-book), live depth on the same door.
