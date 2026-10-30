@@ -1,10 +1,10 @@
 ---
-title: "Kalshi order-book beta"
+title: "Kalshi live data beta"
 sidebarTitle: "Kalshi beta"
-description: "Connect to the limited Kalshi order-book beta with a Market Data credential."
+description: "Connect to selected Kalshi books and native trade and lifecycle beta feeds with a Market Data WebSocket credential."
 ---
 
-The Kalshi beta serves **a selected, changing set of markets**, using the shared [order-book message format](/api/market-data/venue-order-books). It does not cover every open Kalshi market. BTC and ETH 15-minute contracts are included when present in the ready inventory.
+The Kalshi order-book beta serves **a selected, changing set of markets**, using the shared [order-book message format](/api/market-data/venue-order-books). It does not cover every open Kalshi market. BTC and ETH 15-minute contracts are included when present in the ready inventory.
 
 Discover the current tickers through signed `GET /stream/kalshi/partner/coverage`, using the same Market Data credential as the WebSocket. The response includes `scope`, `ready`, `pending`, `inactive` and `retired` lists, counts, `as_of`, cache age and the source generation. `all_open_markets` is explicitly `false`; a ready inventory does not prove that an individual quote is fresh. Check the stream status and quote timestamp too.
 
@@ -89,4 +89,94 @@ Use the market ticker after `book:`, not an outcome token ID. You can request mu
 - `quote.sourceWallUtc` is the source's receive time; `quote.venueTs` is the venue timestamp when present. Sending-clock fields remain separate. `ts` is the API timestamp, not the age of the quote. Protocol pings keep the connection alive without making a quiet quote newer.
 - On `degraded`, discard trust in the book. A later `live` status or open socket alone does not restore it: wait for a fresh snapshot. Reconnect with a fresh signature and backoff after a disconnection.
 
-This beta provides order books only, with no live-trades channel. It does not promise an uninterrupted feed, automatic replacement of client subscriptions, a latency advantage over Kalshi, or complete historical coverage. [Native REST data](/api/market-data/kalshi-native) and [captured book history](/api/market-data/kalshi-history) have separate coverage contracts.
+The book feed does not promise automatic replacement of client subscriptions, an uninterrupted connection, a latency advantage over Kalshi, or complete historical coverage. [Native REST data](/api/market-data/kalshi-native) and [captured book history](/api/market-data/kalshi-history) have separate coverage contracts.
+
+## Native trades and lifecycle
+
+These are separate authenticated WebSocket connections:
+
+| Channel | WebSocket URL |
+| --- | --- |
+| Public trades | `wss://partner-api.bravadotrade.com/stream/kalshi/partner/trades` |
+| Market and event lifecycle | `wss://partner-api.bravadotrade.com/stream/kalshi/partner/lifecycle` |
+
+Use the same eligible Market Data WebSocket credential and `stream.read` scope as the book feed. Sign each connection's exact GET path with an empty body and a fresh HMAC timestamp. A signature for `/trades` does not authenticate `/lifecycle`. A REST Data key or trading key is not a substitute.
+
+Check signed `GET /stream/capabilities` first. The Kalshi row must advertise the requested `trades_path` or `lifecycle_path`, alongside `implemented`, `upstream_registered` and `entitled`. It also identifies `trades_wire_format: "kalshi_native_event_v1"`, `native_events_ring_only: true` and `native_events_historical_replay: false`. An advertised path confirms access and configuration; it does not establish a healthy feed. Inspect the channel's current health after connecting.
+
+The native source subscribes to Kalshi's global `trade`, `market_lifecycle_v2` and `multivariate_market_lifecycle` channels. Trades are routed to `/trades`; both lifecycle subscriptions are routed to `/lifecycle`. This scope is independent of selected book coverage: a trade or lifecycle message for a ticker does not mean its order book is available through Bravado. These are native public-market messages, not portfolio fills or order-placement APIs.
+
+Credentials and permissions apply to the environment in which they were issued. Use the credentials and environment limits agreed for your organisation; access in production does not automatically provision staging, additional keys or another organisation.
+
+### Frame types
+
+All three frame types carry `venue: "kalshi"`, `channel: "trades"` or `"lifecycle"`, `ring_only: true`, `historical_replay: false` and `cursor_domain: "source_global_across_channels"`.
+
+| `type` | Meaning |
+| --- | --- |
+| `snapshot` | Recent retained **events**, not a book. Contains `events`, the ring's current `cursor` and `health`. The initial cursor may be null while connecting. |
+| `native_event` | One newly delivered native event in `event`. |
+| `status` | Updated source health in `health`. This does not refresh a trade's timestamp. |
+
+A snapshot's recent events may overlap observations you already received. The ring holds at most 256 events and 4 MiB across the source channels; it is not a time-based retention promise. A newly connected API process may initially return a degraded snapshot while it connects to the source.
+
+Each event preserves Kalshi's native fields under `event.native`, including its `type` and `msg`. JSON whitespace and transport framing are not a byte-for-byte copy of the captured message. Lifecycle frames can include native event lifecycle or fee-update messages as well as market updates. Bravado adds:
+
+| Field | Meaning |
+| --- | --- |
+| `event.cursor` | Position in this source's capture domain; suitable for identifying a delivery, not a durable replay token. |
+| `event.source_epoch`, `source_sid`, `source_sequence` | Source session and subscription sequence metadata, represented as strings. |
+| `event.received_at` | UTC time Bravado received the source frame. It is not a substituted Kalshi timestamp. |
+| `event.capture_run_id`, `capture_session_id` | Capture provenance. A new run creates a new cursor domain. |
+| `event.source_frame_sha256` | Digest identifying the original captured frame, not a digest to recompute from re-encoded public JSON. |
+
+Read Kalshi's own clocks from the preserved native fields when supplied. Some native message types do not provide an exchange timestamp. Keep it unknown in that case; do not present `received_at` as exchange time. Preserve decimal strings and any native JSON numeric tokens exactly. JavaScript's ordinary `JSON.parse` can round large integers or high-precision numeric tokens; use a lossless parser when processing them. Python's `json.loads(raw, parse_float=Decimal, parse_int=int)` is one option for exact numeric parsing.
+
+### Health and reconnects
+
+Treat `degraded`, `resyncing` or `stopped` health as a reason to pause decisions that depend on a current feed. A quiet market is not a dead connection: inspect channel health separately from the time of its last trade. `live` reports source subscription health, not a promise that an individual market traded recently.
+
+Native event cursors are global across channels. A consumer of `/trades` alone can see skipped positions because intervening lifecycle events went to the other route. Do not apply the book feed's per-asset `seq + 1` rule to these cursors. Preserve the source domain, subscription sequence metadata, status transitions and your own receive time when assessing continuity.
+
+After a disconnect, sign a new connection and reconnect with backoff. The new snapshot contains only the retained live ring. These routes reject query parameters, including historical cursors, with HTTP 400. They cannot recover an arbitrary offline interval and are not a durable settlement log. If your application missed an event, reconcile current market/result state through [native REST data](/api/market-data/kalshi-native); that read does not reconstruct every intermediate status change.
+
+### Server example for native events
+
+Install `ws`, save the [signing helper](/authentication-examples) as `bravado-auth.mjs`, and place this example beside it. Set your Market Data WebSocket key and secret only on the server. The example checks capabilities and prints original text frames for 30 seconds without parsing their native numbers.
+
+```javascript Node.js
+import WebSocket from "ws";
+import { signHeaders } from "./bravado-auth.mjs";
+
+const channel = "trades"; // Use "lifecycle" for market and event changes.
+const origin = "https://partner-api.bravadotrade.com";
+const path = `/stream/kalshi/partner/${channel}`;
+const key = process.env.BRAVADO_API_KEY;
+const secret = process.env.BRAVADO_API_SECRET;
+if (!key || !secret) throw new Error("Set your Market Data WebSocket key and secret");
+const headers = target => signHeaders(`${origin}${target}`, "GET", "", key, secret);
+const response = await fetch(`${origin}/stream/capabilities`, {
+  headers: headers("/stream/capabilities"), redirect: "error",
+  signal: AbortSignal.timeout(8_000),
+});
+if (!response.ok) throw new Error(`Capabilities refused (${response.status})`);
+const capabilities = await response.json();
+const kalshi = capabilities.venues?.find(row => row.venue === "kalshi");
+const advertised = channel === "trades" ? kalshi?.trades_path : kalshi?.lifecycle_path;
+if (!kalshi?.implemented || !kalshi.upstream_registered || !kalshi.entitled || advertised !== path)
+  throw new Error("This native channel is not available for your organisation right now");
+const socket = new WebSocket(`wss://partner-api.bravadotrade.com${path}`, {
+  headers: headers(path), handshakeTimeout: 8_000,
+  followRedirects: false, rejectUnauthorized: true,
+  perMessageDeflate: false, maxPayload: 8 * 1024 * 1024,
+});
+socket.on("message", (raw, binary) => {
+  if (binary) { socket.close(1003, "Text frames required"); return; }
+  console.log(raw.toString("utf8")); // Keep native numeric lexemes intact.
+});
+socket.on("error", () => console.error("WebSocket connection failed"));
+const stop = setTimeout(() => socket.close(), 30_000);
+socket.once("close", () => clearTimeout(stop));
+```
+
+This example demonstrates transport and signing. Your consumer must handle the frame types and health transitions above, preserve precision, deduplicate retained events where appropriate, and apply the agreed usage limits. Keep HMAC secrets out of browser code. Historical trade queries and retained order-book depth remain separate REST products.
