@@ -31,7 +31,7 @@ curl 'https://partner-api.bravadotrade.com/market-data/v1/generations?limit=100'
 3. Read `/coverage?generation=<generation>` and `/instruments?generation=<generation>`. Choose a ticker and a valid anchored capture interval actually reported there.
 4. Query `/books/<ticker>` or `/history/<ticker>` using that generation. Keep it fixed across pages so the dataset cannot change underneath your request.
 
-The default generation currently exposes only the newest ETH point. To discover the full retained set, enumerate generations and select each explicitly. Do not infer all-generation coverage from the default `/instruments` response.
+Select a generation explicitly for reproducible queries. The default can change as captures are published, and its `/instruments` response does not describe every retained generation. Enumerate generations and check coverage for each one you need.
 
 ## Endpoints and query parameters
 
@@ -68,7 +68,13 @@ Pages have a 2 MiB response bound and can contain fewer entries than `limit`. Th
 
 Coverage is reported per generation, ticker and capture interval. Use `/generations` and `/coverage` for the current available dataset rather than assuming one start date or continuous coverage for every market.
 
-Input-digest checks verify retained input integrity. They do not establish complete exchange history or verified upstream manifests. A point observation does not establish a continuous interval around it. Additional archived captures become queryable when their verified generation and index are published.
+### Retained October 28 capture
+
+A published capture window contains 128 retained markets with book lookups at `2026-10-28T23:06:20.000000000Z`. These lookups were checked through the public Data API against independent book references. To explore this window, select generation `rh-ab2cb8f8bf5e8a400e5d02b50c9e734a39cc32ab8de6226a57596fe372669738`, read its coverage and instruments, then query a returned ticker with that generation and capture time.
+
+These books have observed-sequence quality (`replayed_observed_sequence`), with `historical_complete: false` and `live: false`. The retained window does not establish continuous recording of those markets or coverage of every open Kalshi market. Follow discovery and coverage for additional published captures.
+
+Input-digest checks verify retained input integrity. They do not establish complete exchange history or verified upstream manifests. A point observation does not establish a continuous interval around it. Additional archived captures become queryable when their validated generation and index are published.
 
 ## Errors
 
