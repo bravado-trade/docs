@@ -154,6 +154,12 @@
             ]
           },
           {
+            "group": "Perps",
+            "pages": [
+              "api/market-data/perps-data"
+            ]
+          },
+          {
             "group": "Mempool Fills",
             "pages": [
               "api/market-data/mempool-feed"
