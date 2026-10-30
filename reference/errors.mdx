@@ -32,7 +32,7 @@ The `error` value is a human-readable string. Your code should branch on the HTT
 | 404 Not Found | Resource doesn't exist | An `order_id` that doesn't belong to your account |
 | 409 Conflict | Duplicate resource | Creating a copytrade for a leader where one already exists |
 | 410 Gone | Quote expired | Accepting a combo quote after its `expires_at` timestamp |
-| 422 Unprocessable Entity | Business rule violation | Insufficient balance, no liquidity, order crosses the book |
+| 422 Unprocessable Entity | Business rule violation | Insufficient balance, no liquidity, order crosses the book, Polymarket Protocol V2 market |
 | 429 Too Many Requests | Rate limit exceeded | Too many requests per minute for your API key |
 | 500 Internal Server Error | Server-side error | Unexpected server fault, retry with exponential backoff |
 | 503 Service Unavailable | Service temporarily unavailable | Data not yet available for this wallet; retry later |
@@ -63,6 +63,10 @@ The table above covers status codes. These are the specific `error` string value
 
 <Accordion title='"NO_LIQUIDITY"'>
   No maker could be found to quote the requested combo legs at the time of the request. Retry after a short delay or reduce the size of your combo request.
+</Accordion>
+
+<Accordion title='"MARKET_PROTOCOL_UNSUPPORTED" (422)'>
+  The order's `symbol` belongs to a Polymarket Protocol V2 market, which Bravado cannot trade yet. Every new Polymarket market is a V2 market from 2 November 2026, with a small canary set before that. The Trade API (`/v1/trade` and `/v2/trade`) refuses it on every order type before anything is signed or stored, so no order or strategy exists. **Do not retry**: the same request gets the same answer until V2 trading support ships. Skip the market, or hide trading for it in your UI. Markets on protocol v1 are unaffected. See Polymarket's [Protocol V2 migration](https://docs.polymarket.com/protocol-v2-migration) guide.
 </Accordion>
 
 <Accordion title='"available=false" (503 response body)'>
