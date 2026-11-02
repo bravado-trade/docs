@@ -87,6 +87,16 @@
             ]
           },
           {
+            "group": "Polymarket analytics",
+            "pages": [
+              "api/polymarket/overview",
+              "api/polymarket/leaderboard",
+              "api/polymarket/wallet",
+              "api/polymarket/wallets-profiles",
+              "api/polymarket/smart-activity"
+            ]
+          },
+          {
             "group": "Combos Data",
             "pages": [
               "api/combos-data/overview",

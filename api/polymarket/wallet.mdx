@@ -1,0 +1,52 @@
+---
+title: "GET /wallet/{wallet}: Wallet Profile"
+sidebarTitle: "/wallet/{wallet}"
+api: "GET /v2/polymarket/wallet/{wallet}"
+description: "One Polymarket wallet's analytics across four windows, with trading-style flags."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Returns one Polymarket wallet's analytics across four windows (`one_day`, `seven_day`, `thirty_day`, `all_time`) plus trading-style flags and lifetime fields. Fixed to Polymarket (no `venue` parameter). See [response conventions](/api/polymarket/overview) for the number, timestamp and null rules.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/polymarket/wallet/{wallet}
+```
+
+### Path Parameters
+
+<ParamField path="wallet" type="string" required>
+  Wallet address: `0x` followed by 40 hex characters.
+</ParamField>
+
+This endpoint takes no query parameters.
+
+### Response
+
+<ResponseField name="user" type="string">Wallet address.</ResponseField>
+
+<ResponseField name="metrics" type="object">
+  <Expandable title="metrics">
+    <ResponseField name="one_day" type="object">The window metric set (see below).</ResponseField>
+    <ResponseField name="seven_day" type="object">The window metric set.</ResponseField>
+    <ResponseField name="thirty_day" type="object">The window metric set.</ResponseField>
+    <ResponseField name="all_time" type="object">
+      The window metric set plus `avg_hold_time_seconds`, `wallet_age_days`, `total_positions`, `active_positions`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="trading_styles" type="object">
+  `is_whale`, `is_market_maker`, `is_active_trader`, `is_buy_and_hold`, `is_degen`, `is_high_conviction`, `is_contrarian`, `is_value_hunter` (booleans) and `primary_style` (string or `null`).
+</ResponseField>
+
+<ResponseField name="entry_edge" type="string">Decimal string; `null` when unknown.</ResponseField>
+<ResponseField name="unrealized_pnl" type="string">USD decimal string; `null` when unknown.</ResponseField>
+<ResponseField name="total_pnl" type="string">USD decimal string; `null` when unknown.</ResponseField>
+<ResponseField name="first_trade_at" type="integer">Unix seconds; `null` when unknown.</ResponseField>
+<ResponseField name="last_trade_at" type="integer">Unix seconds; `null` when unknown.</ResponseField>
+<ResponseField name="computed_at" type="integer">Unix seconds the snapshot was computed.</ResponseField>
+
+<Info>
+The **window metric set** is: `realized_pnl`, `total_pnl`, `volume` (USD decimal strings); `roi`, `win_rate` (`0`–`1` decimals); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_refunded`. Each is a decimal string or `null`. Per the [conventions](/api/polymarket/overview), `fees_paid` is `null` on the day windows and `fees_refunded` is `null` on every window.
+</Info>

@@ -1,0 +1,33 @@
+---
+title: "GET /wallets/profiles: Batch Wallet Profiles"
+sidebarTitle: "/wallets/profiles"
+api: "GET /v2/polymarket/wallets/profiles"
+description: "The wallet-profile metric set for a batch of Polymarket wallets in one call."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Returns the full wallet profile — the same per-wallet computation as [`GET /wallet/{wallet}`](/api/polymarket/wallet) — for a batch of addresses in a single request. Fixed to Polymarket (no `venue` parameter).
+
+```text
+GET https://partner-api.bravadotrade.com/v2/polymarket/wallets/profiles?addresses=0x...,0x...
+```
+
+### Query Parameters
+
+<ParamField query="addresses" type="string" required>
+  Comma-separated wallet addresses, each `0x` followed by 40 hex characters. Duplicates are de-duplicated.
+</ParamField>
+
+### Response
+
+A JSON **array** of wallet-profile objects — each element has exactly the shape returned by [`GET /wallet/{wallet}`](/api/polymarket/wallet) (`user`, four-window `metrics`, `trading_styles`, `entry_edge`, `unrealized_pnl`, `total_pnl`, `first_trade_at`, `last_trade_at`, `computed_at`). There is no surrounding envelope.
+
+```json
+[
+  { "user": "0x...", "metrics": { "one_day": { }, "seven_day": { }, "thirty_day": { }, "all_time": { } }, "trading_styles": { }, "computed_at": 1730000000 },
+  { "user": "0x...", "metrics": { }, "trading_styles": { }, "computed_at": 1730000000 }
+]
+```
+
+See [response conventions](/api/polymarket/overview) for the number, timestamp and null rules that apply to every field.

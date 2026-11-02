@@ -1,0 +1,77 @@
+---
+title: "GET /leaderboard: Wallet Leaderboard"
+sidebarTitle: "/leaderboard"
+api: "GET /v2/polymarket/leaderboard"
+description: "Polymarket wallets ranked for a rolling window, with trading-style filters and metric floors. Cursor-paginated."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Ranks Polymarket wallets for the requested window by the chosen metric, with trading-style include/exclude and volume/trade floors. Fixed to Polymarket (no `venue` parameter). See [response conventions](/api/polymarket/overview) for the number, timestamp and null rules.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/polymarket/leaderboard
+```
+
+### Query Parameters
+
+<ParamField query="window" type="string" default="all_time">
+  Rolling window: one of `1d`, `7d`, `30d`, `all_time`.
+</ParamField>
+
+<ParamField query="sort_by" type="string">
+  Rank metric: one of `total_pnl`, `roi`, `win_rate`, `volume`, `trades`.
+</ParamField>
+
+<ParamField query="order" type="string">
+  Sort direction: `asc` or `desc`.
+</ParamField>
+
+<ParamField query="style" type="string">
+  Include only wallets carrying this trading style (e.g. `WHALE`, `MARKET_MAKER`). Case-insensitive.
+</ParamField>
+
+<ParamField query="exclude_style" type="string">
+  Exclude wallets carrying this trading style.
+</ParamField>
+
+<ParamField query="min_volume" type="number">
+  Minimum volume in USD.
+</ParamField>
+
+<ParamField query="min_trades" type="integer">
+  Minimum trade count.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Rows per page, up to 100.
+</ParamField>
+
+<ParamField query="pagination_key" type="string">
+  Opaque cursor from the previous page's `pagination.pagination_key`.
+</ParamField>
+
+### Response
+
+<ResponseField name="entries" type="array">
+  <Expandable title="entry">
+    <ResponseField name="user" type="string">Wallet address.</ResponseField>
+    <ResponseField name="rank" type="integer">1-based rank within this page's ordering.</ResponseField>
+    <ResponseField name="entry_edge" type="string">Decimal string; `null` when unknown.</ResponseField>
+    <ResponseField name="first_trade_at" type="integer">Unix seconds; `null` when unknown.</ResponseField>
+    <ResponseField name="metrics" type="object">
+      Window metrics. `realized_pnl`, `total_pnl`, `volume` (USD decimal strings); `roi`, `win_rate` (`0`–`1` decimals); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_refunded`. Every field is a decimal string or `null` (see [conventions](/api/polymarket/overview) — `fees_paid` is `null` on day windows, `fees_refunded` is always `null`).
+    </ResponseField>
+    <ResponseField name="trading_styles" type="object">
+      `is_whale`, `is_market_maker`, `is_active_trader`, `is_buy_and_hold`, `is_degen`, `is_high_conviction`, `is_contrarian`, `is_value_hunter` (booleans) and `primary_style` (string or `null`).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  `limit`, `count`, `has_more` (boolean), `pagination_key` (string or `null`).
+</ResponseField>
+
+<ResponseField name="computed_at" type="integer">
+  Unix seconds the snapshot was computed.
+</ResponseField>

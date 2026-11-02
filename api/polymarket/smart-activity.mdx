@@ -1,0 +1,78 @@
+---
+title: "GET /markets/smart-activity: Smart-Activity Markets"
+sidebarTitle: "/markets/smart-activity"
+api: "GET /v2/polymarket/markets/smart-activity"
+description: "Per-market aggregates over the smart-money cohort on Polymarket: volume, PnL, ROI, win rate and net buying. Cursor-paginated."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Returns per-market aggregates computed over the **smart-money cohort** — a fixed, all-time cohort of wallets selected by PnL / volume / trade floors. One row per market. Fixed to Polymarket (no `venue` parameter). See [response conventions](/api/polymarket/overview) for the number, timestamp and null rules.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/polymarket/markets/smart-activity
+```
+
+### Query Parameters
+
+<ParamField query="sort_by" type="string" default="smart_volume">
+  One of `smart_volume`, `smart_wallet_count`, `smart_realized_pnl`, `smart_total_pnl`, `avg_smart_roi`, `avg_smart_win_rate`, `net_buyers_pct`.
+</ParamField>
+
+<ParamField query="order" type="string">
+  Sort direction: `asc` or `desc`.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Market status filter (e.g. `open`).
+</ParamField>
+
+<ParamField query="min_total_pnl" type="string">
+  Cohort floor, USD. Must equal the served cohort's value (echoed back under `cohort`).
+</ParamField>
+
+<ParamField query="min_volume" type="string">
+  Cohort floor, USD. Must equal the served cohort's value.
+</ParamField>
+
+<ParamField query="min_trades" type="integer">
+  Cohort floor. Must equal the served cohort's value.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="50">
+  Rows per page, up to 200.
+</ParamField>
+
+<ParamField query="pagination_key" type="string">
+  Opaque cursor from the previous page's `pagination.pagination_key`.
+</ParamField>
+
+### Response
+
+<ResponseField name="markets" type="array">
+  <Expandable title="market">
+    <ResponseField name="condition_id" type="string">Market condition id; `null` when unknown.</ResponseField>
+    <ResponseField name="title" type="string">Market title; `null` when unknown.</ResponseField>
+    <ResponseField name="market_slug" type="string">Market slug; `null` when unknown.</ResponseField>
+    <ResponseField name="smart_wallet_count" type="integer">Smart-cohort wallets active in the market.</ResponseField>
+    <ResponseField name="smart_volume" type="string">Cohort volume, USD decimal string.</ResponseField>
+    <ResponseField name="smart_realized_pnl" type="string">Cohort realized PnL, USD decimal string.</ResponseField>
+    <ResponseField name="smart_total_pnl" type="string">Cohort total PnL, USD decimal string.</ResponseField>
+    <ResponseField name="avg_smart_roi" type="string">Average cohort ROI, `0`–`1` decimal; `null` when uncovered.</ResponseField>
+    <ResponseField name="avg_smart_win_rate" type="string">Average cohort win rate, `0`–`1` decimal; `null` when uncovered.</ResponseField>
+    <ResponseField name="net_buyers_pct" type="string">Net buying share, `0`–`1` decimal; `null` when unknown.</ResponseField>
+    <ResponseField name="total_pnl_known" type="boolean">Whether every cohort wallet's total PnL was resolvable for this market.</ResponseField>
+    <ResponseField name="smart_total_pnl_unknown_wallets" type="integer">Cohort wallets whose total PnL could not be resolved (the rest still aggregate).</ResponseField>
+    <ResponseField name="roi_covered_wallets" type="integer">Cohort wallets whose ROI was computable (the denominator behind `avg_smart_roi`).</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  `limit`, `count`, `has_more` (boolean), `pagination_key` (string or `null`).
+</ResponseField>
+
+<ResponseField name="computed_at" type="integer">Unix seconds the snapshot was computed.</ResponseField>
+
+<ResponseField name="cohort" type="object">
+  The cohort these aggregates are over, echoed back: `window`, `min_total_pnl`, `min_volume`, `min_trades`, `cohort_version`, `excluded_other_cohort_rows`, `roi_basis`. Pass the three `min_*` values back verbatim to page through a stable cohort.
+</ResponseField>
