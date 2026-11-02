@@ -17,6 +17,10 @@ Returns position **state** across all wallets Bravado indexes, not just one wall
 GET https://partner-api.bravadotrade.com/trader-analytics/positions
 ```
 
+<Note>
+The same endpoint is also served on the Polymarket surface at `GET /v2/polymarket/positions`, where the venue is fixed to Polymarket (the `venue` parameter is not accepted). Filters, response fields, honest-unknown marks and cursor pagination are identical.
+</Note>
+
 This endpoint is the canonical, integer-exact positions surface: amounts are computed from integer micro-units, cost basis comes from the position's lot records only (a position with no lot record has a `null` cost, never an estimate), and marks are resolution-aware. The per-wallet [`/traders/{address}/positions`](/api/analytics/trader-positions) endpoints use a different calculation path (floating-point arithmetic, a fills-based cost fallback, and a separate treatment of some accounting-cohort wallets), so their figures can legitimately differ from this endpoint's. Do not expect the two to match to the last digit; use this endpoint as the source of record.
 
 <Warning>
