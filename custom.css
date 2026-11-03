@@ -115,3 +115,20 @@ html.dark #sidebar a[aria-current="page"] {
 div:has(> #search-bar-entry) {
   flex-grow: 1.25;
 }
+
+/* The official Kalshi wordmark keeps its wide aspect ratio in cards and navigation. */
+img[src*="/logo/kalshi-light.svg"] {
+  object-fit: contain;
+  width: 44px !important;
+  height: 16px !important;
+  border-radius: 0 !important;
+}
+#content-container .card div:has(> img[src*="/logo/kalshi-light.svg"]),
+#content-container .card img[src*="/logo/kalshi-light.svg"] {
+  width: 64px !important;
+  height: 44px !important;
+  border-radius: 0;
+}
+html.dark img[src*="/logo/kalshi-light.svg"] {
+  content: url("/logo/kalshi-dark.svg");
+}
