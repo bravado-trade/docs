@@ -160,7 +160,8 @@
             "group": "UMA resolution",
             "pages": [
               "products/uma-api",
-              "markets/polymarket/uma-resolution"
+              "api/market-data/uma-rest",
+              "api/market-data/uma-websocket"
             ]
           },
           {
@@ -372,6 +373,10 @@
     {
       "source": "/concepts/copytrade",
       "destination": "/products/copytrade-api"
+    },
+    {
+      "source": "/markets/polymarket/uma-resolution",
+      "destination": "/products/uma-api"
     }
   ]
 }

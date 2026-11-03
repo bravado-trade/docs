@@ -1,6 +1,6 @@
 ---
 title: "UMA API: Optimistic Oracle Resolution Data"
-sidebarTitle: "UMA resolution"
+sidebarTitle: "Overview"
 description: "Query and stream how Polymarket markets resolve through UMA's Optimistic Oracle — proposals, disputes, and final settlement outcomes — over REST and WebSocket."
 icon: "/logo/uma.png"
 ---
@@ -10,34 +10,40 @@ Polymarket markets do not settle themselves. When a market's event concludes, th
 <Info>
   UMA resolution is part of the [Market Data](/products/market-data) product. The REST endpoints and stream are served from `partner-api.bravadotrade.com`,
   the same host as the rest of the Bravado API, and take your Market Data credential (`stream.read`) on an active paid plan,
-  signed with [HMAC authentication](/authentication). There is no separate UMA endpoint or key in Console.
+  signed with [HMAC authentication](/authentication). Create or reuse a Market Data credential in Console; you do not need a separate UMA key.
   Coverage today is Polymarket.
 </Info>
 
-## Why Bravado over reading the chain
+## Choose your interface
 
-Resolution data exists on-chain, so this is not about access. It is about not having to build an indexer to answer a question every prediction market application eventually has to answer: **is this position actually finished?**
+UMA is one capability within Market Data. REST and WebSocket use the same credential; they are not separate products.
 
-| | Reading the chain yourself | Bravado UMA API |
-| --- | --- | --- |
-| Setup | Index the UMA oracle + adapter events yourself | Query an endpoint / subscribe to a stream |
-| Lifecycle state | Decode `ProposePrice` / `DisputePrice` / `Settle` logs | `stage` returned as data |
-| Answer | Interpret the raw `int256` price | `answer` classified (`yes` / `no` / `50-50` / `too-early`) |
-| Correlation to positions | Map oracle events back to your holdings | `condition_id` aligned with the same market identifiers as the rest of Bravado |
-| Freshness | Wait for the confirmed resolution | The **proposal** streams from the mempool ~1 s **before** it is mined (`seen_pending`), then confirms with the block |
+| You want to… | Use |
+| --- | --- |
+| Look up the captured resolution state of one question or market | [REST API](/api/market-data/uma-rest) — `/uma/question` or `/uma/market` |
+| Read recently updated questions | [REST API](/api/market-data/uma-rest#get-/uma/recent) — `/uma/recent` |
+| Receive new proposals, disputes and settlements as they occur | [WebSocket](/api/market-data/uma-websocket) — `/uma/ws` |
 
-The practical payoff is that a "concluded" event and a redeemable position stop being the same thing in your data model. An application that conflates them will show users balances they cannot access, and book PnL that has not been realised.
+## Coverage and history
 
-## How UMA resolution works
+Coverage is Polymarket resolutions captured by Bravado's UMA feed. A lookup returns the stage data captured and still retained for that question; it does not fetch an arbitrary question's complete history from the chain.
 
-Bravado decodes UMA's Optimistic Oracle V2 directly, so you see each step as it happens.
+<Note>
+  The REST API is a resolution-state lookup and recent-activity feed, not a complete historical archive. It has no date-range query, cursor or pagination through older resolutions. Retention is limited, and these endpoints do not guarantee a fixed historical coverage window. A `404` means the requested record is unavailable in the retained dataset; it does not prove that the question or market does not exist on-chain.
+</Note>
+
+If you need older records or complete event history for a backtest, [contact support](mailto:support@bravadotrade.com) to confirm coverage before relying on these endpoints. Store the updates you receive if your application needs its own event history; consuming the live stream does not backfill earlier events.
+
+## The resolution lifecycle
+
+The captured record can contain a proposal, an optional dispute and a final settlement.
 
 <Steps>
   <Step title="Proposal">
-    Once the event concludes, a proposer posts the outcome to the oracle with a bond. This is the `proposed` stage; `answer` carries the proposed result. Bravado decodes the proposer's transaction straight from the mempool, so the proposal is delivered with `"seen_pending":true` ~0.3–1.4 s before it is mined, then a confirming frame follows with the `block` and `tx`.
+    A proposer posts an outcome to the oracle with a bond. This is the `proposed` stage; `answer` carries the proposed result. A proposal observed before mining carries `seen_pending: true` and is provisional.
   </Step>
   <Step title="Challenge window">
-    The proposal stays open for a fixed liveness period. If nobody disputes it, it settles automatically on the proposed answer.
+    The proposal stays open for a fixed liveness period. If nobody disputes it, it becomes eligible to settle on the proposed answer.
   </Step>
   <Step title="Dispute (optional)">
     Any party may dispute within the window by posting their own bond (`disputed` stage). A disputed request escalates to UMA's token-holder vote rather than settling on the proposer's word.
@@ -60,183 +66,14 @@ Every lifecycle record carries two ids:
 
 The `answer` field classifies the oracle's `int256` price: `yes`, `no`, `50-50`, `too-early`, or `other`; `price_raw` preserves the exact value.
 
-## REST — query resolution state
+## Build around final settlement
 
-Base URL: `https://partner-api.bravadotrade.com`. Sign every REST request with HMAC, including its sorted query parameters. JSON; ids are hex, `payout` is an integer micro-USDC string.
+- Treat a concluded event and a redeemable position as different states. Confirm `settled: true` before presenting a resolution as final.
+- Allow for disputes: a proposed answer can change before final settlement.
+- Redeem positions only after settlement through the [Trade API](/api/trade/positions).
 
-### `GET /uma/question`
+## Next steps
 
-The full lifecycle of one question.
-
-```text
-GET https://partner-api.bravadotrade.com/uma/question?id=<0x questionId>
-```
-
-<ParamField query="id" type="string" required>
-  The `0x` 32-byte `question_id`.
-</ParamField>
-
-<ResponseField name="question_id" type="string">Hex question id (`keccak256(ancillaryData)`).</ResponseField>
-<ResponseField name="condition_id" type="string">Hex CTF condition id for the market.</ResponseField>
-<ResponseField name="title" type="string">Human-readable market question (from the ancillary data).</ResponseField>
-<ResponseField name="answer" type="string">Latest answer: `yes` · `no` · `50-50` · `too-early` · `other`.</ResponseField>
-<ResponseField name="settled" type="boolean">Whether the resolution has finalized on-chain.</ResponseField>
-<ResponseField name="proposed" type="object">
-  <Expandable title="stage fields">
-    <ResponseField name="proposer" type="string">Address that posted the proposal.</ResponseField>
-    <ResponseField name="answer" type="string">Answer classified from the proposed price.</ResponseField>
-    <ResponseField name="price_raw" type="string">Exact `int256` price, hex.</ResponseField>
-    <ResponseField name="request_ts" type="integer">Oracle request timestamp (unix seconds).</ResponseField>
-    <ResponseField name="block" type="integer">Polygon block.</ResponseField>
-    <ResponseField name="tx" type="string">Transaction hash.</ResponseField>
-    <ResponseField name="log_index" type="integer">Log index within the block.</ResponseField>
-    <ResponseField name="seen_pending" type="boolean">Present and `true` while this proposal/dispute is known only from the mempool (`block` is `0`); cleared once mined.</ResponseField>
-  </Expandable>
-</ResponseField>
-<ResponseField name="disputed" type="object">Same shape as `proposed`, plus `disputer`. Present only if the proposal was disputed.</ResponseField>
-<ResponseField name="settled_at" type="object">Same shape, plus `payout` (micro-USDC string). Present once `settled`.</ResponseField>
-<ResponseField name="updated_ms" type="integer">When Bravado last updated this record (unix ms).</ResponseField>
-
-```json Example response
-{
-  "question_id": "0x3281d5f64c96c007212bdc90b29cb51581058dac59a57fc2b98a31fd7abe0538",
-  "condition_id": "0x19c79788f1288b497b5305f81b71c3f20db1ae338b049d733dcb09b5d5d352f6",
-  "title": "Will Ben Shelton win the 2026 Men's US Open?",
-  "answer": "no",
-  "settled": true,
-  "proposed": {
-    "proposer": "0xef3990a7c8fa92d84dce0e7816ca3410820c1d36",
-    "answer": "no", "price_raw": "0x00…00",
-    "request_ts": 1767385181, "block": 93012001, "tx": "0x42879bd3…", "log_index": 5
-  },
-  "settled_at": {
-    "answer": "no", "price_raw": "0x00…00", "payout": "500800000",
-    "request_ts": 1767385181, "block": 93012040, "tx": "0x7c80413d…", "log_index": 9
-  },
-  "updated_ms": 1789253500123
-}
-```
-
-### `GET /uma/market`
-
-The same record, keyed by the market's CTF condition id.
-
-```text
-GET https://partner-api.bravadotrade.com/uma/market?condition_id=<0x conditionId>
-```
-
-<ParamField query="condition_id" type="string" required>The `0x` 32-byte CTF condition id.</ParamField>
-
-### `GET /uma/recent`
-
-Recently-updated questions, newest first — a feed of live proposals, disputes, and settlements.
-
-```text
-GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100
-```
-
-<ParamField query="stage" type="string">Filter by current stage: `proposed` · `disputed` · `settled`. Omit for all.</ParamField>
-<ParamField query="limit" type="integer" default="100">Max records (1–500).</ParamField>
-
-<ResponseField name="questions" type="array">Array of question records (same shape as `GET /uma/question`).</ResponseField>
-<ResponseField name="count" type="integer">Number of records returned.</ResponseField>
-
-## WebSocket — stream the lifecycle
-
-For push instead of poll, connect to `wss://partner-api.bravadotrade.com/uma/ws`.
-Authenticate the upgrade with HMAC. Connecting without a subscription message pushes
-every Polymarket proposal, dispute, and settlement to you as a `uma` frame — the full
-stream. To receive only the markets or events you care about, apply a
-[server-side subscription filter](#server-side-subscription-filters) instead of
-filtering client-side.
-
-```javascript Node.js
-// npm install ws
-import WebSocket from "ws";
-import { createHash, createHmac } from "node:crypto";
-const timestamp = String(Date.now());
-const payload = [timestamp, "GET", "/uma/ws", createHash("sha256").update("").digest("hex")].join("\n");
-const ws = new WebSocket("wss://partner-api.bravadotrade.com/uma/ws", {
-  headers: {
-    "X-Bravado-API-Key": process.env.BRAVADO_API_KEY,
-    "X-Bravado-Timestamp": timestamp,
-    "X-Bravado-Signature": createHmac("sha256", process.env.BRAVADO_API_SECRET).update(payload).digest("hex"),
-  },
-});
-ws.on("message", data => console.log(JSON.parse(data.toString())));
-```
-
-For browser clients, have your server sign `GET /uma/ticket` and return the ticket
-only to an authorised user. Connect to `/uma/ws?ticket=...`. Tickets expire after
-60 seconds and can be redeemed once. Each reconnect needs a new ticket. Never
-put the API secret in browser code. The Console playground handles this flow.
-
-Successful REST reads cost **1 credit per response**. Under unified billing,
-the stream costs **0.75 credit per delivered UMA data message**; heartbeats, errors,
-tickets and idle time are unbilled. Pending and confirmed updates are separate
-messages, even if your application combines them into one displayed record.
-See [UMA stream credits](/api-credits#uma-stream-credits).
-
-Missing credentials are rejected; the Free plan cannot access UMA. A pending
-proposal is not a final settlement. If the connection is interrupted, acquire a
-new ticket before reconnecting. A credit or access refusal requires resolving
-that refusal before retrying.
-
-
-The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
-
-## Server-side subscription filters
-
-By default a connection receives every resolution event — connecting without a subscription returns the full stream. To narrow it, send one or more `sub` messages after connecting; the server delivers (and bills) only matching frames.
-
-```json
-{ "op": "sub", "streams": ["uma:filtered"],
-  "filters": {
-    "condition_ids": ["0x..."],
-    "question_ids": ["0x..."],
-    "proposers": ["0x..."],
-    "disputers": ["0x..."],
-    "requesters": ["0x..."],
-    "event_types": ["proposed", "disputed", "settled"]
-  } }
-```
-
-The server replies with a `subscribed` ack carrying a `subscription_id`, then matching `uma` frames as they occur. Subscribe to the whole stream explicitly with `{ "op": "sub", "streams": ["uma:all"] }`.
-
-### Filter fields
-
-Every field is optional and matches the same `uma` frame fields documented above.
-
-| Field | Matches | Notes |
-| --- | --- | --- |
-| `condition_ids` / `market_ids` | `condition_id` | The CTF market id; the two fields are combined. |
-| `question_ids` | `question_id` | The UMA adapter question id. |
-| `proposers` | `proposer` | Compared case-insensitively. |
-| `disputers` | `disputer` | Only disputed events carry a `disputer`, so this filter selects disputes. |
-| `requesters` | `requester` | |
-| `event_types` | `stage` | Any of `proposed`, `disputed`, `settled`. |
-
-Multiple values **within one field** are OR; **different fields** are AND. Hex ids and addresses are matched case-insensitively. There is no `assertion_id` filter — the frame does not carry one; use `question_id`, the stable exact key.
-
-### Multiple subscriptions and live updates
-
-One connection may hold several subscriptions, each with its own `subscription_id`; a frame matching any is delivered once. Change one without reconnecting:
-
-```json
-{ "op": "update_subscription", "subscription_id": "sub_1", "add": { "proposers": ["0x..."] }, "remove": { "proposers": ["0x..."] } }
-```
-
-```json
-{ "op": "unsub", "subscription_id": "sub_1" }
-```
-
-The server acks each change (`filter_updated`, `unsubscribed`). An invalid filter returns an `error` frame (`code: "INVALID_FILTER"`) and leaves existing subscriptions untouched; an unknown op or stream returns `UNKNOWN_OP` / `UNKNOWN_STREAM`. Filters are a delivery gate — a filtered frame is byte-for-byte the same payload, you just receive fewer. Unsubscribing every subscription leaves the connection silent until you `sub` again.
-
-Acks are sent ahead of the data stream, so for a brief moment right after a `subscribed` or `filter_updated` ack you may still receive a few frames that match your *previous* subscription state (events already in flight when the change took effect). Treat the ack as "applied going forward," not as a hard boundary on the last matching frame.
-
-## Related
-
-- [Trade API](/products/trade-api) — order execution; redeem settled positions via [`POST /v2/trade/positions/redeem`](/api/trade/positions)
-- [Data API](/products/data-api) — wallet PnL, trade logs, and tax statements
-- [Market Data](/products/market-data) — realtime trades and order books over WebSockets
-- [Polymarket](/markets/polymarket/overview) — market coverage and supported features
+- [REST API](/api/market-data/uma-rest) — lookups, recent state, a signed request and response fields.
+- [WebSocket](/api/market-data/uma-websocket) — connect, filter subscriptions and recover after disconnecting.
+- [Market Data](/products/market-data) — credentials and the other available feeds.

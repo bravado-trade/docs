@@ -30,7 +30,7 @@ POST /combo/quote  →  POST /combo/accept (within ~8.5 s)  →  (events resolve
 ## Polymarket specifics
 
 - **Legs are position token IDs.** Each leg in `leg_position_ids` is a Polymarket YES outcome token id, the same identifier used as `symbol` on the [Trade API](/markets/polymarket/trade-api).
-- **Resolution is per leg.** Every leg must resolve YES for the combo to pay out, and each leg settles through [UMA resolution](/markets/polymarket/uma-resolution). A combo is only redeemable once all of its legs have settled.
+- **Resolution is per leg.** Every leg must resolve YES for the combo to pay out, and each leg settles through [UMA resolution](/products/uma-api). A combo is only redeemable once all of its legs have settled.
 - **Collateral is USDC**, with `notional_usd` expressed in US dollars.
 
 ## Scope requirement
