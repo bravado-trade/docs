@@ -144,9 +144,11 @@ GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100
 ## WebSocket — stream the lifecycle
 
 For push instead of poll, connect to `wss://partner-api.bravadotrade.com/uma/ws`.
-Authenticate the upgrade with HMAC. No subscription message is needed — every Polymarket
-proposal, dispute, and settlement is pushed to you as a `uma` frame. To follow a
-single market, filter on `question_id` (or `condition_id`) client-side.
+Authenticate the upgrade with HMAC. Connecting without a subscription message pushes
+every Polymarket proposal, dispute, and settlement to you as a `uma` frame — the full
+stream. To receive only the markets or events you care about, apply a
+[server-side subscription filter](#server-side-subscription-filters) instead of
+filtering client-side.
 
 ```javascript Node.js
 // npm install ws
@@ -182,6 +184,55 @@ that refusal before retrying.
 
 
 The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
+
+## Server-side subscription filters
+
+By default a connection receives every resolution event — connecting without a subscription returns the full stream. To narrow it, send one or more `sub` messages after connecting; the server delivers (and bills) only matching frames.
+
+```json
+{ "op": "sub", "streams": ["uma:filtered"],
+  "filters": {
+    "condition_ids": ["0x..."],
+    "question_ids": ["0x..."],
+    "proposers": ["0x..."],
+    "disputers": ["0x..."],
+    "requesters": ["0x..."],
+    "event_types": ["proposed", "disputed", "settled"]
+  } }
+```
+
+The server replies with a `subscribed` ack carrying a `subscription_id`, then matching `uma` frames as they occur. Subscribe to the whole stream explicitly with `{ "op": "sub", "streams": ["uma:all"] }`.
+
+### Filter fields
+
+Every field is optional and matches the same `uma` frame fields documented above.
+
+| Field | Matches | Notes |
+| --- | --- | --- |
+| `condition_ids` / `market_ids` | `condition_id` | The CTF market id; the two fields are combined. |
+| `question_ids` | `question_id` | The UMA adapter question id. |
+| `proposers` | `proposer` | Compared case-insensitively. |
+| `disputers` | `disputer` | Only disputed events carry a `disputer`, so this filter selects disputes. |
+| `requesters` | `requester` | |
+| `event_types` | `stage` | Any of `proposed`, `disputed`, `settled`. |
+
+Multiple values **within one field** are OR; **different fields** are AND. Hex ids and addresses are matched case-insensitively. There is no `assertion_id` filter — the frame does not carry one; use `question_id`, the stable exact key.
+
+### Multiple subscriptions and live updates
+
+One connection may hold several subscriptions, each with its own `subscription_id`; a frame matching any is delivered once. Change one without reconnecting:
+
+```json
+{ "op": "update_subscription", "subscription_id": "sub_1", "add": { "proposers": ["0x..."] }, "remove": { "proposers": ["0x..."] } }
+```
+
+```json
+{ "op": "unsub", "subscription_id": "sub_1" }
+```
+
+The server acks each change (`filter_updated`, `unsubscribed`). An invalid filter returns an `error` frame (`code: "INVALID_FILTER"`) and leaves existing subscriptions untouched; an unknown op or stream returns `UNKNOWN_OP` / `UNKNOWN_STREAM`. Filters are a delivery gate — a filtered frame is byte-for-byte the same payload, you just receive fewer. Unsubscribing every subscription leaves the connection silent until you `sub` again.
+
+Acks are sent ahead of the data stream, so for a brief moment right after a `subscribed` or `filter_updated` ack you may still receive a few frames that match your *previous* subscription state (events already in flight when the change took effect). Treat the ack as "applied going forward," not as a hard boundary on the last matching frame.
 
 ## Related
 
