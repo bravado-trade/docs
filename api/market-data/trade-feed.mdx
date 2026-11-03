@@ -16,7 +16,7 @@ No subscription message is needed.
 The legacy Terminal `/trade-feed/ws` route has a separate access contract. New Console integrations must use the authenticated route above; adding an API key header to a different route does not select this usage-accounted feed.
 
 <Info>
-  Coverage today is Polymarket. The feed carries **every trade on every market**, not a selection of the active ones, and the rate varies with market activity — on the order of tens of trades per second (samples measured 20–50/s). Size your buffers and your UI for the whole hose, and filter client-side for the markets you care about. To follow a specific market's book instead, use the [Order Books](/api/market-data/order-book) feed.
+  Coverage today is Polymarket. By default the feed carries **every trade on every market**, not a selection of the active ones, and the rate varies with market activity — on the order of tens of trades per second (samples measured 20–50/s). Size your buffers and your UI for the whole hose. To receive only the trades your application needs, apply a [server-side subscription filter](#server-side-subscription-filters) instead of filtering client-side. To follow a specific market's book, use the [Order Books](/api/market-data/order-book) feed.
 </Info>
 
 ## Connect with usage tracking
@@ -126,9 +126,81 @@ The trade object in a `trade` frame and every element of the `snapshot` array sh
   `assetId` links the two feeds. Watch the trade stream to discover which outcome tokens are active right now, then pass those IDs to the [Order Books](/api/market-data/order-book) feed to see depth for them. And `trader` links Market Data to [Data API](/products/data-api): take a wallet you see filling and pull its PnL, positions, and history.
 </Tip>
 
+## Server-side subscription filters
+
+By default a connection receives every trade — connecting without any subscription message returns the full feed, exactly as before. To narrow the stream, send one or more `sub` messages after connecting. The server evaluates the filter and delivers only matching trades, so you receive (and, on the authenticated route, are billed for) just the data your application needs.
+
+Subscribe to the whole tape explicitly, or to a filtered view:
+
+```json
+{ "op": "sub", "streams": ["trades:all"] }
+```
+
+```json
+{
+  "op": "sub",
+  "streams": ["trades:filtered"],
+  "filters": {
+    "market_ids": ["0x..."],
+    "token_ids": ["6136..."],
+    "wallets": ["0x..."],
+    "side": "BUY",
+    "min_size": 10,
+    "min_notional": 5000
+  }
+}
+```
+
+The server replies with a `subscribed` ack carrying a `subscription_id`, then a filtered `snapshot` of recent matching trades, then matching `trade` frames as they occur:
+
+```json
+{ "type": "subscribed", "subscription_id": "sub_1", "stream": "trades:filtered", "filters": { "wallets": ["0x..."], "min_notional": 5000 } }
+```
+
+### Filter fields
+
+Every field is optional. All are evaluated against the same trade object documented above.
+
+| Field | Matches | Notes |
+| --- | --- | --- |
+| `market_ids` / `condition_ids` | `conditionId` | On Polymarket the market id and condition id are the same value; the two fields are combined. A trade with no `conditionId` never matches a market/condition filter. |
+| `token_ids` | `assetId` | The outcome token. |
+| `wallets` | `trader` | Compared case-insensitively. |
+| `side` | `side` | `"BUY"` or `"SELL"`. |
+| `min_size` | `size` | Inclusive floor on outcome tokens filled. |
+| `min_notional` | `amount` | Inclusive floor on notional (`price × size`), in USD. |
+
+### Filter logic
+
+Multiple values **within one field** are OR; **different fields** are AND. So:
+
+```json
+{ "wallets": ["A", "B"], "min_notional": 5000 }
+```
+
+means `(wallet A OR wallet B) AND notional >= 5000`.
+
+### Multiple subscriptions and live updates
+
+One connection may hold several subscriptions at once; each `sub` returns its own `subscription_id`, and a trade matching any of them is delivered once. Change a subscription without reconnecting:
+
+```json
+{ "op": "update_subscription", "subscription_id": "sub_1", "add": { "wallets": ["0xabc"] }, "remove": { "wallets": ["0xdef"] } }
+```
+
+```json
+{ "op": "unsub", "subscription_id": "sub_1" }
+```
+
+The server acks each change (`filter_updated`, `unsubscribed`). An invalid filter — an unknown field, a bad value, or an empty `trades:filtered` filter — returns an `error` frame (`code: "INVALID_FILTER"`) and leaves any existing subscriptions untouched; an unknown op or stream returns `UNKNOWN_OP` / `UNKNOWN_STREAM`.
+
+<Note>
+  Filters are a delivery gate: a filtered `trade` frame is byte-for-byte the same payload as an unfiltered one, you simply receive fewer of them. Unsubscribing every subscription leaves the connection silent — reconnect, or `sub` to `trades:all`, to resume the full tape.
+</Note>
+
 ## Keep-alive and reconnect
 
-The authenticated route sends heartbeat pings; clients must respond with protocol pongs (most libraries do this automatically). This trade route does not accept subscription commands. If the socket drops, reconnect to receive a fresh `snapshot`; authenticated reconnects require a fresh timestamp and signature.
+The authenticated route sends heartbeat pings; clients must respond with protocol pongs (most libraries do this automatically). If the socket drops, reconnect to receive a fresh `snapshot` and re-send any `sub` messages (subscriptions are per-connection and are not resumed across a reconnect); authenticated reconnects require a fresh timestamp and signature.
 
 Dedupe against trades already on screen using **`transactionHash`**, not `id`. `id` is built from a counter that lives in the serving process: it restarts from zero when the process does, and two instances give the same fill different ids. `transactionHash` identifies the fill itself.
 
