@@ -186,6 +186,59 @@ Beyond the query string, manage subscriptions over the socket. `replay=N` (0–5
 {"type":"ping"}
 ```
 
+## Filtered subscriptions
+
+The stream names above route by a single dimension (token, market, or wallet). For a compound query — a wallet **and** a minimum size, or only settled fills in a set of markets — subscribe with a `filters` object instead. `op` is accepted as a synonym of `type`.
+
+```json
+{"op":"sub","streams":["fills:filtered"],"replay":100,
+ "filters":{
+   "token_ids":["7132…"],
+   "condition_ids":["0x…"],
+   "wallets":["0x…"],
+   "min_size":"10",
+   "min_notional":"5000",
+   "status":["settled"]
+ }}
+```
+
+The server replies with a `subscribed` ack carrying a `subscription_id`; every fill matching that subscription then arrives as a normal `fill` frame whose **`stream` is the `subscription_id`**:
+
+```json
+{"type":"subscribed","subscription_id":"sub_1","stream":"fills:filtered","filters":{…}}
+```
+
+### Filter fields
+
+| Field | Matches | Notes |
+| --- | --- | --- |
+| `token_ids` | a leg's `token_id` | decimal uint256, as in the stream grammar |
+| `condition_ids` / `market_ids` | a leg's `condition_id` | `0x` hex; the two fields are combined. A leg with no condition never matches |
+| `wallets` | any wallet the fill touches | `0x` address (maker / signer / taker / sender), case-insensitive |
+| `min_size` | a leg's `shares` | **shares, human units** (e.g. `"10"` or `"0.25"`); inclusive floor, compared exactly |
+| `min_notional` | a leg's `usdc` | **USDC, human units** (e.g. `"5000"`); inclusive floor, compared exactly |
+| `status` | the fill's lifecycle | tokens below |
+
+`status` accepts the raw lifecycle tokens `pending`, `mined`, `reverted`, `finalized`, `dropped`, `replaced`, `reorged`, `matched`, plus three coarse aliases: **`settled`** = mined + finalized, **`reverted`** = reverted + dropped + reorged, **`pending`** = pending + matched.
+
+### Logic and semantics
+
+- **OR within a field, AND across fields:** `{"wallets":["A","B"],"min_notional":"5000"}` means `(A or B) AND notional ≥ 5000`.
+- **Any-leg:** a settlement matches a token / wallet / `min_*` clause when **some** leg satisfies it (the same any-leg rule the stream names use). `status` is the settlement's single lifecycle state.
+- **Amounts are exact integers** — compared against the fill's base-unit `shares` / `usdc`, never a float.
+- **Multiple subscriptions per connection,** each with its own `subscription_id` and sequence; a fill matching several of your subscriptions arrives once per matching subscription. Filtered and stream-name subscriptions share the 120-per-connection cap.
+
+### Managing a filtered subscription
+
+Replace a subscription's filter (not reconnecting) or drop it by id:
+
+```json
+{"op":"update_subscription","subscription_id":"sub_1","filters":{"status":["settled"],"min_notional":"10000"}}
+{"op":"unsub","subscription_id":"sub_1"}
+```
+
+`update_subscription` **replaces** the whole filter; the mempool feed does not take `add`/`remove` deltas (a delta is rejected with `INVALID_REQUEST` rather than silently ignored). Acks: `filter_updated`, `unsubscribed`. A bad filter returns `INVALID_FILTER` and leaves existing subscriptions untouched.
+
 ## Stream health and errors
 
 A `status` frame is sent on subscribe and whenever a stream's health changes:
@@ -196,7 +249,7 @@ A `status` frame is sent on subscribe and whenever a stream's health changes:
 
 `state` is `live` or `degraded`; on `degraded`, `reason` is one of `upstream_disconnected`, `heads_stale`, `pending_silent`, `reorg_depth_exceeded`.
 
-`error` frames carry a `code`: `TOO_MANY_STREAMS`, `BAD_STREAM`, `UNAUTHORIZED`, `SLOW_CONSUMER`, `BAD_MESSAGE`. A client whose send queue backs up is disconnected (`SLOW_CONSUMER`, close `1013`) rather than buffered — one slow consumer never delays another.
+`error` frames carry a `code`: `TOO_MANY_STREAMS`, `BAD_STREAM`, `UNAUTHORIZED`, `SLOW_CONSUMER`, `BAD_MESSAGE`, and — for filtered subscriptions — `INVALID_FILTER`, `INVALID_REQUEST`, `UNKNOWN_SUBSCRIPTION`. A client whose send queue backs up is disconnected (`SLOW_CONSUMER`, close `1013`) rather than buffered — one slow consumer never delays another.
 
 ## Related
 
