@@ -1,0 +1,114 @@
+---
+title: "UMA WebSocket"
+sidebarTitle: "WebSocket"
+description: "Receive live Polymarket UMA proposals, disputes and settlements using your Market Data credential."
+---
+
+Use the same Market Data credential (`stream.read`) as the [REST API](/api/market-data/uma-rest), with HMAC authentication and an active paid plan. There is no separate UMA key. See the [UMA overview](/products/uma-api) for the lifecycle and coverage.
+
+<Note>
+  This stream delivers live updates, not historical replay. A new connection or subscription does not backfill past events. After a disconnect, use the [REST API](/api/market-data/uma-rest) to refresh retained state; this cannot guarantee recovery of every missed transition.
+</Note>
+
+## Connect
+
+
+For push instead of poll, connect to `wss://partner-api.bravadotrade.com/uma/ws`.
+Authenticate the upgrade with HMAC. Connecting without a subscription message pushes
+every Polymarket proposal, dispute, and settlement to you as a `uma` frame — the full
+stream. To receive only the markets or events you care about, apply a
+[server-side subscription filter](#server-side-subscription-filters) instead of
+filtering client-side.
+
+```javascript Node.js
+// npm install ws
+import WebSocket from "ws";
+import { createHash, createHmac } from "node:crypto";
+const timestamp = String(Date.now());
+const payload = [timestamp, "GET", "/uma/ws", createHash("sha256").update("").digest("hex")].join("\n");
+const ws = new WebSocket("wss://partner-api.bravadotrade.com/uma/ws", {
+  headers: {
+    "X-Bravado-API-Key": process.env.BRAVADO_API_KEY,
+    "X-Bravado-Timestamp": timestamp,
+    "X-Bravado-Signature": createHmac("sha256", process.env.BRAVADO_API_SECRET).update(payload).digest("hex"),
+  },
+});
+ws.on("message", data => console.log(JSON.parse(data.toString())));
+```
+
+For browser clients, have your server sign `GET /uma/ticket` and return the ticket
+only to an authorised user. Connect to `/uma/ws?ticket=...`. Tickets expire after
+60 seconds and can be redeemed once. Each reconnect needs a new ticket. Never
+put the API secret in browser code. The Console playground handles this flow.
+
+Under unified billing,
+the stream costs **0.75 credit per delivered UMA data message**; heartbeats, errors,
+tickets and idle time are unbilled. Pending and confirmed updates are separate
+messages, even if your application combines them into one displayed record.
+See [UMA stream credits](/api-credits#uma-stream-credits).
+
+Missing credentials are rejected; the Free plan cannot access UMA. A pending
+proposal is not a final settlement. If the connection is interrupted, acquire a
+new ticket before reconnecting. A credit or access refusal requires resolving
+that refusal before retrying.
+
+
+The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
+
+## Server-side subscription filters
+
+By default a connection receives every resolution event — connecting without a subscription returns the full stream. To narrow it, send one or more `sub` messages after connecting; the server delivers (and bills) only matching frames.
+
+```json
+{ "op": "sub", "streams": ["uma:filtered"],
+  "filters": {
+    "condition_ids": ["0x..."],
+    "question_ids": ["0x..."],
+    "proposers": ["0x..."],
+    "disputers": ["0x..."],
+    "requesters": ["0x..."],
+    "event_types": ["proposed", "disputed", "settled"]
+  } }
+```
+
+The server replies with a `subscribed` ack carrying a `subscription_id`, then matching `uma` frames as they occur. Subscribe to the whole stream explicitly with `{ "op": "sub", "streams": ["uma:all"] }`.
+
+### Filter fields
+
+Every field is optional and matches the same `uma` frame fields documented above.
+
+| Field | Matches | Notes |
+| --- | --- | --- |
+| `condition_ids` / `market_ids` | `condition_id` | The CTF market id; the two fields are combined. |
+| `question_ids` | `question_id` | The UMA adapter question id. |
+| `proposers` | `proposer` | Compared case-insensitively. |
+| `disputers` | `disputer` | Only disputed events carry a `disputer`, so this filter selects disputes. |
+| `requesters` | `requester` | |
+| `event_types` | `stage` | Any of `proposed`, `disputed`, `settled`. |
+
+Multiple values **within one field** are OR; **different fields** are AND. Hex ids and addresses are matched case-insensitively. There is no `assertion_id` filter — the frame does not carry one; use `question_id`, the stable exact key.
+
+### Multiple subscriptions and live updates
+
+One connection may hold several subscriptions, each with its own `subscription_id`; a frame matching any is delivered once. Change one without reconnecting:
+
+```json
+{ "op": "update_subscription", "subscription_id": "sub_1", "add": { "proposers": ["0x..."] }, "remove": { "proposers": ["0x..."] } }
+```
+
+```json
+{ "op": "unsub", "subscription_id": "sub_1" }
+```
+
+The server acks each change (`filter_updated`, `unsubscribed`). An invalid filter returns an `error` frame (`code: "INVALID_FILTER"`) and leaves existing subscriptions untouched; an unknown op or stream returns `UNKNOWN_OP` / `UNKNOWN_STREAM`. Filters are a delivery gate — a filtered frame is byte-for-byte the same payload, you just receive fewer. Unsubscribing every subscription leaves the connection silent until you `sub` again.
+
+Acks are sent ahead of the data stream, so for a brief moment right after a `subscribed` or `filter_updated` ack you may still receive a few frames that match your *previous* subscription state (events already in flight when the change took effect). Treat the ack as "applied going forward," not as a hard boundary on the last matching frame.
+
+## Pending coverage
+
+Direct Oracle proposal and dispute calls may be observed in the mempool before mining. Routed calls can instead be observed through mined logs. Pending coverage and lead time are not guaranteed for every event. Treat `seen_pending: true` as provisional, and settlements as mined events.
+
+## Related
+
+- [UMA overview](/products/uma-api) — lifecycle, identifiers and coverage limits.
+- [REST API](/api/market-data/uma-rest) — retained-state lookups and recent questions.
