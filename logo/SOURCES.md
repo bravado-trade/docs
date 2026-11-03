@@ -1,0 +1,1 @@
+https://docs.kalshi.com (retrieved 2026-11-03), logo-light.svg and logo-dark.svg from https://mintcdn.com/kalshi-b198743e/koRHzlv9fsyF-jSm/. The original Kalshi path and approved colors are unchanged; the separate API Docs label and outer empty space are omitted. Guidance: https://kalshi.com/brandkit.
