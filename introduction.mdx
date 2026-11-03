@@ -118,8 +118,8 @@ We are building toward historical market-data infrastructure, historical trades 
 
 | Product | Base URL | Credential |
 | --- | --- | --- |
-| **Data API** | `https://partner-api.bravadotrade.com/trader-analytics`, `https://partner-api.bravadotrade.com/v2/data` | HMAC, `analytics.read` |
-| **Market Data** | `wss://partner-api.bravadotrade.com/stream/{venue}/partner`, `/stream/polymarket/partner/trades`, `/stream/polymarket/partner/combos`, UMA at `/uma` | HMAC, `stream.read` |
+| **Data API** | `https://partner-api.bravadotrade.com/trader-analytics`, `https://partner-api.bravadotrade.com/v2/data`, `https://partner-api.bravadotrade.com/uma` (UMA REST) | HMAC, `analytics.read` |
+| **Market Data** | `wss://partner-api.bravadotrade.com/stream/{venue}/partner`, `/stream/polymarket/partner/trades`, `/stream/polymarket/partner/combos`, UMA stream at `/uma/ws` | HMAC, `stream.read` |
 | **Trade API** | `https://partner-api.bravadotrade.com/v2/trade` (Combos at `/v2/trade/combo`, Copytrade at `/v2/trade/copytrade`) | HMAC, `trade.*` |
 | **MCP Server** | `https://mcp.bravadotrade.com` | OAuth |
 
