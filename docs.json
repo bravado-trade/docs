@@ -168,7 +168,8 @@
           {
             "group": "Mempool Fills",
             "pages": [
-              "api/market-data/mempool-feed"
+              "api/market-data/mempool-feed",
+              "api/market-data/onchain-events"
             ]
           }
         ]
