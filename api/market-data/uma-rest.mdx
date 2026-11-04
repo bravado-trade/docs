@@ -1,22 +1,29 @@
 ---
 title: "UMA REST API"
 sidebarTitle: "REST API"
-description: "Look up captured UMA resolution state by question or condition ID, or read recently updated questions."
+description: "Look up UMA resolution state by question or condition ID over all history, with time ranges and paging, or read the live recently-updated window."
 ---
 
-Use REST to read the resolution state already captured by Bravado for Polymarket. Read the [UMA overview](/products/uma-api) for the lifecycle and [coverage limits](/products/uma-api#coverage-and-history).
+Use REST to read how Polymarket markets resolve through UMA's Optimistic Oracle. There are two sets of routes with the same response shape:
+
+| Routes | Coverage | Use it for |
+| --- | --- | --- |
+| [`/uma/history/*`](#full-history) | **All history** from `pm_uma_oracle_events`, with `from` / `to`, paging and provenance | Backtests, audits, dashboards, anything older than the live window |
+| [`/uma/question`, `/uma/market`, `/uma/recent`](#live-window) | The **live window**: recent questions held by the realtime feed (about 7 days settled, 14 days open) | Lowest-latency reads of what is resolving right now |
+
+Read the [UMA overview](/products/uma-api) for the lifecycle and [coverage](/products/uma-api#coverage-and-history).
 
 <Info>
-  Use the same Market Data credential (`stream.read`) as the UMA WebSocket, with HMAC authentication and an active paid plan. There is no separate UMA key. Successful REST reads cost **1 API credit per response**, including cached reads.
+  UMA REST is part of the [Data API](/products/data-api): sign every request with your **Data API** credential (`analytics.read`) using [HMAC authentication](/authentication). Each successful response costs **1 API credit**, and the surface has its own per-key rate bucket. The UMA **WebSocket** is different: it stays on the Market Data credential (`stream.read`). There is no separate UMA key.
 </Info>
 
-<Note>
-  These endpoints do not provide a full historical archive. There is no date-range filter, cursor, offset or backfill endpoint. Question and market lookups cover captured records still retained by the service. `/uma/recent` returns at most 500 current question records, not a paginated event log.
-</Note>
+<Warning>
+  A key that carries only `stream.read` can no longer read the UMA REST routes: they answer `403 INSUFFICIENT_SCOPE`. Use a Data API credential for REST and keep the Market Data credential for [`/uma/ws`](/api/market-data/uma-websocket).
+</Warning>
 
 ## Make a signed request
 
-Use your existing Market Data key and secret from [Console](https://console.bravadotrade.com/keys), on an active paid plan. This example makes one REST request. A successful response costs **1 API credit**. Keep the secret on your server.
+Use your Data API key and secret from [Console](https://console.bravadotrade.com/keys). This example makes one REST request. A successful response costs **1 API credit**. Keep the secret on your server.
 
 ```javascript Node.js
 import { createHash, createHmac } from "node:crypto";
@@ -43,12 +50,110 @@ console.log("HTTP", response.status);
 console.log(await response.json());
 ```
 
-A `200` with `questions` confirms that your authenticated REST read succeeded. An empty `questions` array reports no matching recent records; it does not establish complete historical coverage. A `401` only confirms an authentication refusal, not a successful read of resolution data.
-
-## Endpoints
-
+A `200` with `questions` confirms that your authenticated REST read succeeded. An empty `questions` array reports no matching recent records. A `401` only confirms an authentication refusal, not a successful read of resolution data.
 
 Base URL: `https://partner-api.bravadotrade.com`. Sign every REST request with HMAC, including its sorted query parameters. JSON; ids are hex, `payout` is an integer micro-USDC string.
+
+## Full history
+
+`GET /uma/history/question`, `GET /uma/history/market` and `GET /uma/history/recent` serve the same fields as the live routes below, from the complete record of Polymarket's UMA requests, proposals, disputes and settlements. Only Polymarket's UMA adapters asking the `YES_OR_NO_QUERY` identifier are included; other protocols that use the same oracle are not.
+
+### `GET /uma/history/question`
+
+```text
+GET https://partner-api.bravadotrade.com/uma/history/question?id=<0x questionId>
+```
+
+<ParamField query="id" type="string" required>The `0x` 32-byte `question_id`.</ParamField>
+<ParamField query="from" type="string">Search window start: RFC3339, unix seconds or unix milliseconds. Default: all history.</ParamField>
+<ParamField query="to" type="string">Search window end. Default: now.</ParamField>
+
+Response fields are those of [`GET /uma/question`](#get-/uma/question), plus:
+
+<ResponseField name="resolution_source" type="string">How `condition_id` was established. `derived`: computed from the question and confirmed against the condition map. `derived_unverified`: the same computation, **not** confirmed, and wrong for NegRisk markets; use `/uma/history/market` for the real condition id.</ResponseField>
+<ResponseField name="lifecycles" type="integer">How many lifecycles of this question have proposal, dispute or settlement events in the window. `1` is normal. A question that is re-requested after it finished has more than one, and the **latest** is served. A dispute re-requests the price in the same transaction and stays one lifecycle, so a disputed question keeps its `disputed` stage and the final settlement that follows the token-holder vote.</ResponseField>
+
+`updated_ms` is the on-chain time of the latest event, and `seen_pending` is never present: history has no mempool pre-image. A `404` with code `not_found` means no proposal, dispute or settlement for that id exists in the window.
+
+### `GET /uma/history/market`
+
+The same body, looked up by the market's CTF condition id.
+
+```text
+GET https://partner-api.bravadotrade.com/uma/history/market?condition_id=<0x conditionId>
+```
+
+<ParamField query="condition_id" type="string" required>The `0x` 32-byte CTF condition id.</ParamField>
+<ParamField query="from" type="string">Pin the search window start. Default: derived from the market.</ParamField>
+<ParamField query="to" type="string">Pin the search window end. Default: now.</ParamField>
+
+`condition_id` is always the **real** condition id, including for NegRisk markets. `resolution_source` says how the market was tied to its oracle request:
+
+| `resolution_source` | Meaning |
+| --- | --- |
+| `derived` | Found through the condition map (standard markets). |
+| `gamma_join` | Found by matching the market's Gamma id to the oracle request (covers NegRisk). |
+| `unknown` | Neither join found an oracle request. |
+
+When the answer is `unknown`, the response is **HTTP 200** with an explicit marker, not an empty success and not a `404`:
+
+```json Unknown example
+{
+  "condition_id": "0x…",
+  "question_id": null,
+  "resolution_source": "unknown",
+  "reason": "no_oo_request_found",
+  "searched_from_ms": 1792000000000,
+  "searched_to_ms": 1792600000000
+}
+```
+
+`reason` is one of `condition_not_in_pm_tokens`, `market_time_unknown`, `no_oo_request_found` or `no_stage_events` (an oracle request exists but nothing has been proposed yet; `question_id` is then set). An unknown carries no `settled`, `answer` or stage field: do not read it as an unsettled market.
+
+### `GET /uma/history/recent`
+
+Questions with proposal, dispute or settlement activity in a time range, newest activity first, one entry per question, paged with a cursor.
+
+```text
+GET https://partner-api.bravadotrade.com/uma/history/recent?stage=settled&limit=100&from=1792000000
+```
+
+<ParamField query="stage" type="string">Filter on the question's state within the range: `proposed` (proposed, not disputed or settled) · `disputed` (disputed, not settled) · `settled`. Omit for all.</ParamField>
+<ParamField query="limit" type="integer" default="100">Questions per page, 1–500.</ParamField>
+<ParamField query="from" type="string">Range start: RFC3339, unix seconds or unix milliseconds. Default: `to` minus 24 hours.</ParamField>
+<ParamField query="to" type="string">Range end. Default: now.</ParamField>
+<ParamField query="cursor" type="string">The `next_cursor` of the previous page.</ParamField>
+
+<ResponseField name="questions" type="array">Question records (same shape as `GET /uma/history/question`). Each carries `resolution_source: "derived_unverified"`.</ResponseField>
+<ResponseField name="count" type="integer">Records in this page.</ResponseField>
+<ResponseField name="from_ms" type="integer">Resolved range start (unix ms).</ResponseField>
+<ResponseField name="to_ms" type="integer">Resolved range end (unix ms).</ResponseField>
+<ResponseField name="limit" type="integer">Page size applied.</ResponseField>
+<ResponseField name="has_more" type="boolean">Whether another page exists.</ResponseField>
+<ResponseField name="next_cursor" type="string">Pass as `cursor` to read the next page; `null` on the last page.</ResponseField>
+
+The range is at most **7 days**. A wider one is refused with `400 range_too_large` rather than silently shortened, so page a long period with consecutive `from` / `to` windows. Paging is keyset-based on the block time, block number and log index of each question's latest event in the range, so a page never repeats or skips a question.
+
+<Note>
+  For stable paging, pin `to` (an explicit timestamp) on every page request. With the default `to=now` the window moves between requests, and a question can be skipped across a page boundary. Each response echoes the resolved `to_ms` so you can reuse it.
+</Note>
+
+### Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_id`, `invalid_condition_id`, `invalid_from`, `invalid_to`, `invalid_range`, `invalid_stage`, `invalid_limit`, `invalid_cursor`, `range_too_large` | The request is malformed, or the range is wider than 7 days. |
+| `404` | `not_found` | `/uma/history/question`: no event for that id in the window. |
+| `401` / `403` / `402` / `429` | | Signature, scope (`INSUFFICIENT_SCOPE`), credit allowance, rate limit. |
+| `503` | `data_source_unavailable` | The history store is unavailable; retry. |
+
+## Live window
+
+The three routes below are the live window: the captured, retained state held by the realtime feed. They are best for what is resolving right now; use [full history](#full-history) for anything older.
+
+<Note>
+  The live routes have no date-range filter, cursor, offset or backfill. Question and market lookups cover captured records still retained by the service. `/uma/recent` returns at most 500 current question records, not a paginated event log.
+</Note>
 
 ### `GET /uma/question`
 
@@ -129,13 +234,15 @@ GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100
 
 ## Missing records and freshness
 
+On the live routes:
+
 - A `404` from a question or market lookup means no retained record is available for that ID. It does not establish that the market never existed, never resolved or never had a dispute.
 - A missing `proposed`, `disputed` or `settled_at` object means that stage is absent from the captured record. Do not infer a complete event history from omitted fields.
 - `updated_ms` is the record's last update time, not the time of your request. Responses can be cached; a cached response may also be served during an upstream interruption. Check this timestamp before relying on freshness.
 - A `502` can indicate that the resolution feed is unavailable. Do not interpret it as an empty result or an unresolved market.
 
-For access refusals, check your signature (`401`), credential scope and active paid plan (`403`), and credit allowance (`402`). See [HMAC authentication](/authentication) and [API credits](/api-credits).
+For access refusals, check your signature (`401`), that your credential carries `analytics.read` (`403`), and your credit allowance (`402`). See [HMAC authentication](/authentication) and [API credits](/api-credits).
 
 ## Continue with live updates
 
-Use the [WebSocket](/api/market-data/uma-websocket) for new events. REST can refresh a retained question's state after a disconnect, but neither interface guarantees recovery of every intermediate event you missed.
+Use the [WebSocket](/api/market-data/uma-websocket) for new events. After a disconnect, [`/uma/history/recent`](#get-/uma/history/recent) with `from` set to your last event recovers the questions that changed while you were away, in order, with no gap.

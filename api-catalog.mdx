@@ -22,7 +22,7 @@ An endpoint groups a product's credentials, usage and settings. There is one end
 | Product | Console endpoint | Credential | Build with it | Documentation |
 | --- | --- | --- | --- | --- |
 | **Data API** | Data API | HMAC key, `analytics.read` | Trader PnL, positions, leaderboards, tax statements; market-wide Combos data | [Data API](/products/data-api) |
-| **Market Data** | Market Data | HMAC key, `stream.read` (paid plan) | Live order books, trades and combo fills; UMA resolution; mempool fills (partner tier) | [Market Data](/products/market-data) |
+| **Market Data** | Market Data | HMAC key, `stream.read` (paid plan) | Live order books, trades and combo fills; UMA resolution stream; mempool fills (partner tier) | [Market Data](/products/market-data) |
 | **Trade API** | Trade API | HMAC key, `trade.*` scopes | Orders, strategies, positions, withdrawals, sub-accounts | [Trade API](/products/trade-api) |
 | **MCP Server** | MCP Server | OAuth connection | Analytics and SQL tools for Claude and other agents | [MCP Server](/products/mcp-server) |
 
@@ -36,7 +36,8 @@ These are not separate endpoints or keys. Each one uses the credential of the pr
 | Combos Data (`/v2/data/combos/*`) | Data API | `analytics.read` | [Combos Data](/api/combos-data/overview) |
 | Perps data (`/perps/*`, REST) | Data API | `analytics.read`, paid plan | [Perps Data](/products/perps-data) |
 | Live trades, order books, combo trades | Market Data | `stream.read` | [Feeds](/products/market-data#feeds) |
-| UMA resolution (REST and stream) | Market Data | `stream.read`, paid plan | [UMA resolution](/products/uma-api) |
+| UMA resolution (REST: `/uma/*`, `/uma/history/*`) | Data API | `analytics.read` | [UMA REST](/api/market-data/uma-rest) |
+| UMA resolution stream (`/uma/ws`) | Market Data | `stream.read`, paid plan | [UMA resolution](/products/uma-api) |
 | Mempool Fills | Market Data | Partner feed token | [Mempool Fills](/api/market-data/mempool-feed) |
 | Combos (RFQ, accept, redeem) | Trade API | `trade.combos` | [Combos](/api/combos/overview) |
 | Copytrade | Trade API | `trade.copytrade` | [Copytrade](/products/copytrade-api) |
