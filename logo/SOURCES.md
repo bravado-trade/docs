@@ -1,1 +1,1 @@
-Kalshi symbol: restored the existing K asset from this repository (commit a043345, logo/kalshi.png), at the user’s request on 2026-11-03. The artwork is unchanged and uses the standard square venue-icon dimensions.
+Kalshi icon: site favicon retrieved 2026-11-04 via https://www.google.com/s2/favicons?domain=kalshi.com&sz=128 (favicon cache for https://kalshi.com). Original 128×128 JPEG artwork preserved: black K on green background. Used at standard square venue-icon sizes; no wordmark resizing overrides.
