@@ -134,6 +134,10 @@ GET https://partner-api.bravadotrade.com/uma/history/recent?stage=settled&limit=
 
 The range is at most **7 days**. A wider one is refused with `400 range_too_large` rather than silently shortened, so page a long period with consecutive `from` / `to` windows. Paging is keyset-based on the block time, block number and log index of each question's latest event in the range, so a page never repeats or skips a question.
 
+<Note>
+  For stable paging, pin `to` (an explicit timestamp) on every page request. With the default `to=now` the window moves between requests, and a question can be skipped across a page boundary. Each response echoes the resolved `to_ms` so you can reuse it.
+</Note>
+
 ### Errors
 
 | Status | Code | Meaning |
