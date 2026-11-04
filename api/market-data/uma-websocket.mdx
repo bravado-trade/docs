@@ -4,10 +4,10 @@ sidebarTitle: "WebSocket"
 description: "Receive live Polymarket UMA proposals, disputes and settlements using your Market Data credential."
 ---
 
-Use the same Market Data credential (`stream.read`) as the [REST API](/api/market-data/uma-rest), with HMAC authentication and an active paid plan. There is no separate UMA key. See the [UMA overview](/products/uma-api) for the lifecycle and coverage.
+Use your **Market Data** credential (`stream.read`) with HMAC authentication and an active paid plan. The UMA REST API is a separate [Data API](/products/data-api) surface on the `analytics.read` credential — see the [live window](/api/analytics/uma-live) and [history](/api/analytics/uma-history) pages. There is no separate UMA key. See the [UMA overview](/products/uma-api) for the lifecycle and coverage.
 
 <Note>
-  This stream delivers live updates, not historical replay. A new connection or subscription does not backfill past events. After a disconnect, use the [REST API](/api/market-data/uma-rest) to refresh retained state; this cannot guarantee recovery of every missed transition.
+  This stream delivers live updates, not historical replay. A new connection or subscription does not backfill past events. After a disconnect, use the [history REST API](/api/analytics/uma-history#recover-after-a-disconnect) to refresh retained state; this cannot guarantee recovery of every missed transition.
 </Note>
 
 ## Connect
@@ -111,4 +111,5 @@ Direct Oracle proposal and dispute calls may be observed in the mempool before m
 ## Related
 
 - [UMA overview](/products/uma-api) — lifecycle, identifiers and coverage limits.
-- [REST API](/api/market-data/uma-rest) — retained-state lookups and recent questions.
+- [REST — live window](/api/analytics/uma-live) — lowest-latency retained-state lookups and recent questions (Data API).
+- [REST — history](/api/analytics/uma-history) — all history, time ranges, paging and provenance (Data API).

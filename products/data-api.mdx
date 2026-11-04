@@ -256,6 +256,17 @@ The same Data API credential also serves read-only **market data for Polymarket 
 
 See the [Perps Data overview](/products/perps-data).
 
+## UMA resolution
+
+The same Data API credential also serves **UMA resolution data** — how Polymarket markets settle through UMA's Optimistic Oracle (proposals, disputes and final settlement outcomes). These routes live under `/uma` on the same host and cost 1 credit per successful response like the rest of the product. They come in two surfaces:
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /uma/question`, `/uma/market`, `/uma/recent` | The [live window](/api/analytics/uma-live) — lowest-latency reads of what is resolving right now (about 7 days settled, 14 days open) |
+| `GET /uma/history/question`, `/uma/history/market`, `/uma/history/recent` | [All history](/api/analytics/uma-history) from `pm_uma_oracle_events`, with `from` / `to`, cursor paging and `resolution_source` provenance |
+
+The live push **stream** (`/uma/ws`) is a separate [Market Data](/products/market-data) surface on the `stream.read` credential. See the [UMA overview](/products/uma-api).
+
 ## Tax statements
 
 Bravado generates formal accounting documents for tax reporting and financial reconciliation. Each statement type covers a specific aspect of wallet activity.

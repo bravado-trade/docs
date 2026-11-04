@@ -1,0 +1,152 @@
+---
+title: "UMA live window (REST)"
+sidebarTitle: "Live window"
+description: "Lowest-latency REST reads of the UMA resolutions that are happening right now — look up one question or market, or list recently updated questions, from the realtime feed's retained window."
+---
+
+Use these routes for the **lowest-latency reads of what is resolving right now**: the captured, retained state held by Bravado's realtime UMA feed — about 7 days for settled questions and 14 days for open ones. For anything older, or for `from` / `to` ranges, paging and provenance, use the [UMA history API](/api/analytics/uma-history).
+
+Read the [UMA overview](/products/uma-api) for the lifecycle and [coverage](/products/uma-api#coverage-and-history).
+
+<Info>
+  UMA REST is part of the [Data API](/products/data-api): sign every request with your **Data API** credential (`analytics.read`) using [HMAC authentication](/authentication). Each successful response costs **1 API credit**, and the surface has its own per-key rate bucket. The UMA **WebSocket** is different: it stays on the Market Data credential (`stream.read`) — see [UMA WebSocket](/api/market-data/uma-websocket). There is no separate UMA key.
+</Info>
+
+<Warning>
+  A key that carries only `stream.read` can no longer read the UMA REST routes: they answer `403 INSUFFICIENT_SCOPE`. Use a Data API credential for REST and keep the Market Data credential for [`/uma/ws`](/api/market-data/uma-websocket).
+</Warning>
+
+<Note>
+  The live routes have no date-range filter, cursor, offset or backfill. Question and market lookups cover captured records still retained by the service. `/uma/recent` returns at most 500 current question records, not a paginated event log. For a backfillable, paged event log use the [history API](/api/analytics/uma-history).
+</Note>
+
+## Make a signed request
+
+Use your Data API key and secret from [Console](https://console.bravadotrade.com/keys). This example makes one REST request. A successful response costs **1 API credit**. Keep the secret on your server.
+
+```javascript Node.js
+import { createHash, createHmac } from "node:crypto";
+
+const key = process.env.BRAVADO_API_KEY;
+const secret = process.env.BRAVADO_API_SECRET;
+if (!key || !secret) throw new Error("Set BRAVADO_API_KEY and BRAVADO_API_SECRET");
+
+const url = new URL("https://partner-api.bravadotrade.com/uma/recent");
+url.searchParams.set("limit", "1");
+url.searchParams.sort();
+const timestamp = String(Date.now());
+const requestTarget = url.pathname + url.search;
+const bodyHash = createHash("sha256").update("").digest("hex");
+const payload = [timestamp, "GET", requestTarget, bodyHash].join("\n");
+const response = await fetch(url, {
+  headers: {
+    "X-Bravado-API-Key": key,
+    "X-Bravado-Timestamp": timestamp,
+    "X-Bravado-Signature": createHmac("sha256", secret).update(payload).digest("hex"),
+  },
+});
+console.log("HTTP", response.status);
+console.log(await response.json());
+```
+
+A `200` with `questions` confirms that your authenticated REST read succeeded. An empty `questions` array reports no matching recent records. A `401` only confirms an authentication refusal, not a successful read of resolution data.
+
+Base URL: `https://partner-api.bravadotrade.com`. Sign every REST request with HMAC, including its sorted query parameters. JSON; ids are hex, `payout` is an integer micro-USDC string.
+
+## `GET /uma/question`
+
+The captured, retained lifecycle state of one question. Stage objects are present only when Bravado has captured that stage; a record is not a guarantee of complete event history.
+
+```text
+GET https://partner-api.bravadotrade.com/uma/question?id=<0x questionId>
+```
+
+<ParamField query="id" type="string" required>
+  The `0x` 32-byte `question_id`.
+</ParamField>
+
+<ResponseField name="question_id" type="string">Hex question id (`keccak256(ancillaryData)`).</ResponseField>
+<ResponseField name="condition_id" type="string">Hex CTF condition id for the market. Derived from the question and **not reliable for NegRisk markets** — use [`/uma/history/market`](/api/analytics/uma-history#get-/uma/history/market) for the real id.</ResponseField>
+<ResponseField name="title" type="string">Human-readable market question (from the ancillary data).</ResponseField>
+<ResponseField name="answer" type="string">Latest answer: `yes` · `no` · `50-50` · `too-early` · `other`.</ResponseField>
+<ResponseField name="settled" type="boolean">Whether the resolution has finalized on-chain.</ResponseField>
+<ResponseField name="proposed" type="object">
+  <Expandable title="stage fields">
+    <ResponseField name="proposer" type="string">Address that posted the proposal.</ResponseField>
+    <ResponseField name="answer" type="string">Answer classified from the proposed price.</ResponseField>
+    <ResponseField name="price_raw" type="string">Exact `int256` price, hex.</ResponseField>
+    <ResponseField name="request_ts" type="integer">Oracle request timestamp (unix seconds).</ResponseField>
+    <ResponseField name="block" type="integer">Polygon block.</ResponseField>
+    <ResponseField name="tx" type="string">Transaction hash.</ResponseField>
+    <ResponseField name="log_index" type="integer">Log index within the block.</ResponseField>
+    <ResponseField name="seen_pending" type="boolean">Present and `true` while this proposal/dispute is known only from the mempool (`block` is `0`); cleared once mined.</ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="disputed" type="object">Same shape as `proposed`, plus `disputer`. Present only if the proposal was disputed.</ResponseField>
+<ResponseField name="settled_at" type="object">Same shape, plus `payout` (micro-USDC string). Present once `settled`.</ResponseField>
+<ResponseField name="updated_ms" type="integer">When Bravado last updated this record (unix ms).</ResponseField>
+
+```json Example response
+{
+  "question_id": "0x3281d5f64c96c007212bdc90b29cb51581058dac59a57fc2b98a31fd7abe0538",
+  "condition_id": "0x19c79788f1288b497b5305f81b71c3f20db1ae338b049d733dcb09b5d5d352f6",
+  "title": "Will Ben Shelton win the 2026 Men's US Open?",
+  "answer": "no",
+  "settled": true,
+  "proposed": {
+    "proposer": "0xef3990a7c8fa92d84dce0e7816ca3410820c1d36",
+    "answer": "no", "price_raw": "0x00…00",
+    "request_ts": 1767385181, "block": 93012001, "tx": "0x42879bd3…", "log_index": 5
+  },
+  "settled_at": {
+    "answer": "no", "price_raw": "0x00…00", "payout": "500800000",
+    "request_ts": 1767385181, "block": 93012040, "tx": "0x7c80413d…", "log_index": 9
+  },
+  "updated_ms": 1789253500123
+}
+```
+
+## `GET /uma/market`
+
+The same retained record as `/uma/question`, looked up by the market's CTF condition id. It has the same coverage and retention limits.
+
+```text
+GET https://partner-api.bravadotrade.com/uma/market?condition_id=<0x conditionId>
+```
+
+<ParamField query="condition_id" type="string" required>The `0x` 32-byte CTF condition id.</ParamField>
+
+## `GET /uma/recent`
+
+Recently updated question records, newest first by last update. Each question appears with its current captured state, not as one row per proposal, dispute or settlement event. The `stage` filter selects the current stage: a question that has settled is not returned as `proposed` even if its record includes an earlier proposal.
+
+```text
+GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100
+```
+
+<ParamField query="stage" type="string">Filter by current stage: `proposed` · `disputed` · `settled`. Omit for all.</ParamField>
+<ParamField query="limit" type="integer" default="100">Max question records in this response (1–500). This is a result cap, not a page size: there is no cursor, offset or next page. To page an event log over a time range, use [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent).</ParamField>
+
+<ResponseField name="questions" type="array">Array of question records (same shape as `GET /uma/question`).</ResponseField>
+<ResponseField name="count" type="integer">Number of records returned.</ResponseField>
+
+## Missing records and freshness
+
+On the live routes:
+
+- A `404` from a question or market lookup means no retained record is available for that ID. It does not establish that the market never existed, never resolved or never had a dispute. For anything older than the live window, query the [history API](/api/analytics/uma-history).
+- A missing `proposed`, `disputed` or `settled_at` object means that stage is absent from the captured record. Do not infer a complete event history from omitted fields.
+- `updated_ms` is the record's last update time, not the time of your request. Responses can be cached; a cached response may also be served during an upstream interruption. Check this timestamp before relying on freshness.
+- A `502` can indicate that the resolution feed is unavailable. Do not interpret it as an empty result or an unresolved market.
+
+For access refusals, check your signature (`401`), that your credential carries `analytics.read` (`403`), and your credit allowance (`402`). See [HMAC authentication](/authentication) and [API credits](/api-credits).
+
+## Continue with live updates
+
+Use the [WebSocket](/api/market-data/uma-websocket) for new events. After a disconnect, [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent) with `from` set to your last event recovers the questions that changed while you were away, in order, with no gap.
+
+## Related
+
+- [UMA history (REST)](/api/analytics/uma-history) — all history, `from` / `to`, paging and `resolution_source` provenance.
+- [UMA WebSocket](/api/market-data/uma-websocket) — the live `stream.read` stream of new proposals, disputes and settlements.
+- [UMA overview](/products/uma-api) — lifecycle, identifiers and coverage limits.
