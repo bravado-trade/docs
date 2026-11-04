@@ -1,0 +1,695 @@
+---
+title: "On-chain Events"
+sidebarTitle: "On-chain events"
+description: "Versioned Polymarket position and settlement events with separate family permissions."
+---
+
+<Warning>
+  This page describes the release candidate. Self-service activation, recent replay,
+  historical delivery and coverage certification are not generally available yet.
+  A captured range is not automatically an audited range.
+</Warning>
+
+## Access
+
+On-chain Events uses your organisation's **WebSockets key**, an active Build plan
+or above, and explicit grants for the event families you select. Book and fills
+access does not grant these families. API secrets remain in your backend.
+
+The Console candidate provides **On-chain Events → Activate access → Connect**.
+An owner or administrator enables new organisation families. Developers may
+configure keys within the organisation's enabled families. Billing membership
+does not grant credential access.
+
+| Family | Events |
+| --- | --- |
+| `collateral` | Splits, merges, redemptions and NegRisk conversions |
+| `resolutions` | Condition payout vectors |
+| `conditions` | CTF preparation and supported native preparation events |
+| `token_registrations` | CTF exchange token registration |
+
+The token-registration family targets the legacy CTF exchanges that emit
+`TokenRegistered`. The inspected current CTF Exchange V2 ABIs do not declare
+that event. Native preparation events are a separate family; they must not be
+relabeled as CTF token-registration logs.
+
+Stream and historical grants are independent. Coverage is declared separately
+for CTF and Protocol V2. Native Protocol V2 does not emit a CTF preparation event
+for every condition.
+
+The candidate covers historical and current declarations for combo condition/event
+splits and merges, event conversion, and YES-basket conversion/merge. The four
+inspected implementation epochs use 14 distinct signatures for these operations.
+The candidate additionally decodes inspected position-migration, compression,
+extract/inject, wrap/unwrap, bridge, migration-registration and result-reporting
+declarations. This completes software support for the selected implementation ABI
+inventory; full native lifecycle coverage over a historical range is not certified.
+
+Combo transformations use the existing `collateral` family with `kind` equal to
+`split`, `merge` or `convert`. `payload.operation` distinguishes
+`split_on_condition`, `merge_on_condition`, `split_on_event`, `merge_on_event`,
+`convert_on_event`, `convert_to_yes_basket` and `merge_from_yes_basket`.
+Their `amount_unit` is `position_base_units`: transforming an existing position
+does not represent a new collateral deposit, trade volume or fee revenue.
+`condition_id` is the parent/full condition carried by the log;
+`parent_condition_id`, child YES/NO condition IDs and `native_event_id` are
+preserved where declared. Market filtering matches that primary condition;
+it does not expand the event into underlying legs or child-market activity.
+
+Current declarations carry a recipient, two recipients or an ordered `recipients`
+array. Arrays preserve repeated addresses and their original order. Historical
+declarations without recipient fields leave them absent. The candidate limits
+recipient arrays to 256 entries; an oversized or malformed event halts capture
+without advancing its checkpoint. This is a decoder limit, not an asserted
+protocol maximum. With a pinned implementation, a signature not declared for
+that implementation is rejected. These are software guarantees; the deployment
+registry, historical range and on-chain occurrences still require certification.
+
+The candidate decoder also supports `MigrationResolved` on the binary and
+NegRisk modules. These frames use `type: "resolution"` and
+`kind: "migration_resolved"`. `condition_id` identifies the native condition;
+`legacy_condition_id` identifies its linked CTF condition. `legacy_payouts`
+preserves the two original payout numerators and `legacy_payout_denominator`
+their sum. `payouts` preserves the normalized native numerators with
+`payout_denominator: "1000000"`. These are resolution ratios, not trade volume
+or collateral amounts. Distinct logs for the same condition retain distinct
+event IDs; do not count multiple resolution logs as multiple market settlements.
+Software acceptance does not certify the historical completeness of these frames.
+
+## Additional native lifecycle operations
+
+These operations share the existing family grants; they do not create new token
+types or change the byte tariff. The operation names below identify
+`payload.operation`, rather than always matching the top-level `kind`:
+
+- Compression, extract/inject and wrap/unwrap use `kind: "convert"`.
+- Bridge mint/burn use `kind: "bridge"`.
+- Position migration uses `kind: "migrate"` and `operation: "migrate_position"`.
+- Legacy collateral settlement uses `kind: "settle"` and
+  `operation: "legacy_collateral_settlement"`.
+- The preparation and result-availability operations below use their operation
+  name as `kind`.
+
+Use both fields when classifying transformations. A conversion frame does not,
+by itself, prove a NegRisk conversion or a collateral deposit.
+
+| Family | Operation | Quantity semantics |
+| --- | --- | --- |
+| `collateral` | `compress` | `amount` is input positions; `output_position_amount` is output positions; `collateral_amount` is collateral base units. Keep all three separate. |
+| `collateral` | `extract`, `inject`, `wrap`, `unwrap` | Position base units. Reduced/residual condition IDs or input/output position IDs preserve the transformation direction. |
+| `collateral` | `migrate_position` | Position base units with condition ID, position ID and outcome index; not a new trade. |
+| `collateral` | `bridge_mint` | Recipient, position ID and minted position units. Does not certify the remote chain or a funding transfer. |
+| `collateral` | `bridge_burn` | Parallel `position_ids` and `position_amounts` arrays. Empty arrays remain explicit; no source wallet is inferred. |
+| `collateral` | `legacy_collateral_settlement` | Actual `asset_address`, vault `recipient` and collateral base units. Decimals are included only when verified for that token. |
+| `conditions` | `migration_registered` | Native and legacy condition IDs; no financial quantity. |
+| `resolutions` | `result_reported` | Resolver and normalized payout numerators. A report log and a final condition-resolution log remain separate occurrences. |
+| `resolutions` | `derived_no_available`, `synthetic_yes_available` | Result availability with event/condition identifiers carried by the log; no payout vector is fabricated. |
+
+The decoder uses 18 additional exact signatures from 52 inspected declarations,
+including historical recipient-less forms. Historical combo ABIs declare bridge
+events that the current combo ABI does not; implementation/ABI guards preserve
+that distinction. Bridge arrays are canonical, paired and bounded to 256 entries.
+Malformed, mismatched, oversized or unrecognized-epoch input halts capture.
+
+Condition filtering matches explicit condition attribution. A log carrying only
+position IDs does not acquire an inferred Polymarket market identity. Such logs
+remain in the firehose and, where an actor/recipient is declared, wallet output;
+complete per-market coverage also requires a verified position-to-market registry.
+Likewise, logs without a declared wallet cannot be presented as wallet flows.
+Administrative role/ownership/initialization events are outside these lifecycle
+families; ERC1155 transfers are not implicitly included. Do not interpret absence
+from a filtered response as proof of no activity.
+
+## Candidate connection contract
+
+The API candidate accepts a signed `GET /mempool/token?families=...` request and
+returns a short-lived grant. Use the edge address configured for the same
+environment, at `/ws/onchain`. Reconnecting requires a fresh grant. Never reuse
+production destinations as a staging fallback.
+
+```json
+{
+  "type": "sub",
+  "streams": ["collateral:polymarket:*", "resolutions:polymarket:*"]
+}
+```
+
+The versioned socket is separate from legacy `/ws` so legacy collateral frames
+cannot be confused with the new schema. A revoked or expired credential loses
+access. The candidate uses a maximum 30-second revocation recheck interval;
+expiry has a deadline timer.
+
+## Capabilities and API reference
+
+Use the same signed request format as the other Bravado market-data endpoints:
+`GET /v1/polymarket/onchain/capabilities`. The response reports your current plan
+access, independent stream/history permissions for all four families, the effective
+bytes tariff, canonical endpoint paths and whether recent replay is enabled.
+An unknown tariff or an unavailable capability is not permission to assume free access.
+
+The Console reads this contract through its server-side organisation scope; API
+secrets are never returned to your browser. Changing keys refreshes permissions
+and stops the previous connection.
+
+The API candidate publishes its market-data OpenAPI contract at
+`/stream/openapi.json` and the interactive reference at `/docs/market-data`.
+Internal ingestion and Console administration routes are excluded. On-chain
+customer routes are omitted when the corresponding release flags are disabled.
+
+## Run a signed connection
+
+This example requires the release-candidate destinations to be enabled for your
+environment and organisation. It uses Node.js 22 or above with no dependencies.
+Run it on your backend, with a WebSockets key (`ws_stream`, `stream.read`) whose selected stream families
+are enabled. Your secret signs the grant request and is never sent to the feed.
+
+Save the [connection example](https://github.com/bravado-trade/docs/blob/main/examples/polymarket-feed.mjs)
+as `polymarket-feed.mjs`, then set `BRAVADO_API_KEY` and
+`BRAVADO_API_SECRET` in your environment. Run:
+
+```bash
+node polymarket-feed.mjs
+```
+
+The example requests all four families and prints real received frames for 60
+seconds. For collateral and resolutions only, set
+`BRAVADO_EVENT_FAMILIES=collateral,resolutions`. To test the separate fills
+socket, set `BRAVADO_FEED_MODE=fills`. No trades or on-chain operations are
+submitted. Quiet families may produce no events during a short observation.
+
+Sign the canonical path: query keys are sorted and values use RFC 3986 percent encoding. In this single-parameter example, the commas are encoded as `%2C`:
+
+```javascript
+const path = "/mempool/token?families=collateral%2Cresolutions";
+const timestamp = String(Date.now());
+const payload = [timestamp, "GET", path,
+  createHash("sha256").update("").digest("hex")].join("\n");
+const signature = createHmac("sha256", process.env.BRAVADO_API_SECRET)
+  .update(payload).digest("hex");
+```
+
+For staging, set both `BRAVADO_API_ORIGIN` and `BRAVADO_FEED_ORIGIN` to that
+environment. Do not exchange a staging grant against the production edge.
+Never paste a secret or a token into a support message. A 404 on `/ws/onchain`
+means that route has not been deployed there; it is not fixed by rotating a key.
+A 403 during grant issuance requires checking scope, family grants, plan and
+available credits. Reconnect with a new signed grant after expiry or a gap.
+
+## Recent replay
+
+When capabilities report replay available, add `"replay": 100` to the subscription
+message or `replay=100` to the initial connection query. The candidate retains the
+latest **500 transitions across all families**, reconstructed from its local durable
+retained journal on restart. Verified local-cache retirement can leave fewer than
+500 transitions available after a restart; the current implementation does not
+load old bucket objects into the live replay buffer. The requested count is applied to transitions matching your
+subscriptions; overlapping subscriptions do not duplicate a transition.
+
+Replay frames carry `replay: true`. A nonbillable `replay_end` control reports
+`requested`, `delivered`, `retained_transitions`, `earliest_cursor` and
+`barrier_cursor`. The replay/live barrier prevents a new live publication from
+being interleaved with that replay. A queue overflow closes the connection.
+
+This bounded replay does not certify recovery of every missed event. Fewer matching
+transitions than requested may be available. Use the historical endpoint for older
+windows, subject to its separate permission and coverage status. An unsupported
+replay request fails explicitly instead of silently appearing to recover a gap.
+
+## Streams
+
+| Stream | Filter |
+| --- | --- |
+| `collateral:polymarket:*` | All supported collateral operations |
+| `collateral:polymarket:wallet:<address>` | Actor recorded in the event |
+| `collateral:polymarket:market:<conditionId>` | One condition |
+| `collateral:polymarket:negrisk-market:<marketId>` | One CTF NegRisk group |
+| `resolutions:polymarket:*` | Supported resolutions |
+| `resolutions:polymarket:market:<conditionId>` | One condition |
+| `conditions:polymarket:*` | Supported preparation events |
+| `conditions:polymarket:market:<conditionId>` | One condition |
+| `registrations:polymarket:*` | Supported exchange registrations |
+| `registrations:polymarket:market:<conditionId>` | One condition |
+| `registrations:polymarket:token:<decimalId>` | One registered token |
+
+Native condition IDs are kept at their ABI width in payloads. The existing
+32-byte channel boundary right-pads native IDs with zero bytes. A condition
+filter does not include group-level converts without that condition ID.
+
+## Interpret amounts and identity
+
+Amounts, token IDs, payout numerators and masks are exact decimal strings.
+Keep them as strings or integers; do not parse them as floating-point numbers.
+
+- Split and merge amounts describe the operation, not exchange volume.
+- Redemption `amount` is the **payout**, including zero. Native redemption also
+  preserves `position_amount`; the two quantities are different.
+- Convert preserves `neg_risk_market_id` for CTF NegRisk, or `native_event_id`
+  and `condition_index` for Protocol V2. Neither is a CTF condition ID.
+- CTF resolution payout is numerator divided by `payout_denominator`. Native
+  module results use their verified denominator, not an assumed binary winner.
+- `wallet` is the on-chain initiator/stakeholder/redeemer. Native frames also
+  preserve recipients. It is not automatically the owner EOA or transaction sender.
+- Asset address and verified decimals are explicit. Parent-position units
+  must not be labelled as dollars. Missing metadata stays unknown.
+
+These lifecycle logs alone do not reconstruct wallet balances. Transfers and
+fills also change balances, and related adapter/CTF logs must not be summed as
+independent economic flows.
+
+## Provenance and corrections
+
+Schema version 2 carries `event_id`, `event_version`, chain, contract/ABI version,
+block hash, transaction, log index and decoded payload. Full mode also includes
+raw topics/data; compact mode omits those raw fields. It also
+carries `venue_membership`; `unknown` is not certified Polymarket membership.
+
+The occurrence identity includes the block hash. A reorg produces an explicit
+`reorged` transition with `removed: true`. Re-inclusion has a new occurrence ID.
+A finalization transition confirms the canonical occurrence. Free live corrections
+carry identity and state only, with `delivery_kind: "correction"`; they omit the
+economic payload and raw ABI fields. Merge them into a previously received event
+by `event_id`, applying a newer `event_version`. If you did not receive the initial
+event, keep its economic fields unknown and retrieve them through granted history.
+Requested replay supplies the full selected event shape and remains billable,
+including replayed finalization or reorg transitions.
+
+Deduplicate by `(event_id, event_version)`, never by `(tx_hash, status)` for these
+families. Overlapping firehose, wallet and market subscriptions deliver an occurrence once
+per connection. The `stream` label uses the first matching route in deterministic
+order: firehose, condition, wallet, then group/token.
+Recent replay and historical queries remain release-gated; neither implies complete
+reconnect recovery or certified historical coverage.
+
+## Compact frame examples
+
+<Warning>
+These seven examples are synthetic fixtures with invented addresses, IDs and
+blocks. They document the candidate compact wire shape; they are not production
+observations or audited economic flows. Full mode adds raw ABI topics/data.
+</Warning>
+
+<AccordionGroup>
+
+<Accordion title="Split">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 0,
+  "status": "mined",
+  "removed": false,
+  "type": "collateral",
+  "stream": "collateral:polymarket:*",
+  "cursor": "1:0",
+  "payload": {
+    "wallet": "0x000000000000000000000000000000000000000a",
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "asset_address": "0x00000000000000000000000000000000000000c8",
+    "asset_decimals": 6,
+    "amount_unit": "collateral_base_units",
+    "parent_collection_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "partition": [
+      "1",
+      "2"
+    ],
+    "amount": "1000000",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:0",
+  "kind": "split",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="Merge">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 1,
+  "status": "mined",
+  "removed": false,
+  "type": "collateral",
+  "stream": "collateral:polymarket:*",
+  "cursor": "2:0",
+  "payload": {
+    "wallet": "0x000000000000000000000000000000000000000a",
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "asset_address": "0x00000000000000000000000000000000000000c8",
+    "asset_decimals": 6,
+    "amount_unit": "collateral_base_units",
+    "parent_collection_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "partition": [
+      "1",
+      "2"
+    ],
+    "amount": "1000000",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:1",
+  "kind": "merge",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="Redemption with zero payout">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 2,
+  "status": "mined",
+  "removed": false,
+  "type": "collateral",
+  "stream": "collateral:polymarket:*",
+  "cursor": "3:0",
+  "payload": {
+    "wallet": "0x000000000000000000000000000000000000000a",
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "asset_address": "0x00000000000000000000000000000000000000c8",
+    "asset_decimals": 6,
+    "amount_unit": "collateral_base_units",
+    "parent_collection_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "index_sets": [
+      "1",
+      "2"
+    ],
+    "amount": "500000",
+    "payout": "500000",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:2",
+  "kind": "redeem",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="NegRisk convert">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000065",
+  "contract_version": "fixture-negrisk",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 3,
+  "status": "mined",
+  "removed": false,
+  "type": "collateral",
+  "stream": "collateral:polymarket:*",
+  "cursor": "4:0",
+  "payload": {
+    "wallet": "0x000000000000000000000000000000000000000a",
+    "neg_risk_market_id": "0x0000000000000000000000000000000000000000000000000000000000000fa0",
+    "neg_risk": true,
+    "index_set": "3",
+    "amount": "1000000",
+    "amount_unit": "position_base_units"
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:3",
+  "kind": "convert",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="Condition resolution">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 4,
+  "status": "mined",
+  "removed": false,
+  "type": "resolution",
+  "stream": "resolutions:polymarket:*",
+  "cursor": "5:0",
+  "payload": {
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "question_id": "0x0000000000000000000000000000000000000000000000000000000000001388",
+    "oracle": "0x000000000000000000000000000000000000012c",
+    "outcome_slot_count": 2,
+    "payouts": [
+      "0",
+      "1"
+    ],
+    "payout_denominator": "1",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:4",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="New condition">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000064",
+  "contract_version": "fixture-ctf",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 5,
+  "status": "mined",
+  "removed": false,
+  "type": "condition",
+  "stream": "conditions:polymarket:*",
+  "cursor": "6:0",
+  "payload": {
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "question_id": "0x0000000000000000000000000000000000000000000000000000000000001388",
+    "oracle": "0x000000000000000000000000000000000000012c",
+    "outcome_slot_count": 2,
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:5",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+<Accordion title="Token registration">
+
+```json
+{
+  "schema_version": 2,
+  "event_version": 1,
+  "chain_id": 137,
+  "contract_address": "0x0000000000000000000000000000000000000190",
+  "contract_version": "fixture-exchange",
+  "position_system": "ctf",
+  "block": 123456789,
+  "block_hash": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+  "block_timestamp": 1791763200,
+  "transaction_index": 0,
+  "tx": "0x00000000000000000000000000000000000000000000000000000000000007d0",
+  "log_index": 6,
+  "status": "mined",
+  "removed": false,
+  "type": "token_registration",
+  "stream": "registrations:polymarket:*",
+  "cursor": "7:0",
+  "payload": {
+    "token0": "123456789012345678901234567890",
+    "token1": "987654321098765432109876543210",
+    "condition_id": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "exchange_address": "0x0000000000000000000000000000000000000190",
+    "neg_risk": false
+  },
+  "event_id": "137:0x00000000000000000000000000000000000000000000000000000000000003e8:0x00000000000000000000000000000000000000000000000000000000000007d0:6",
+  "venue_membership": "unknown"
+}
+```
+
+</Accordion>
+
+</AccordionGroup>
+
+## Historical REST candidate
+
+The candidate route is `GET /v1/polymarket/onchain/events`, using the existing
+signed partner request format and independent history grants. Supply UTC `from`
+and `to` values and selected `families`. Windows are `[from,to)`, limited to 31
+days; `limit` defaults to 500 and cannot exceed 1,000. Optional `wallet`,
+`condition_id` and `neg_risk_market_id` filters combine with AND.
+
+`consistency=finalized` is the default. Pagination uses an opaque signed cursor
+bound to your organisation, filters and insertion snapshot. Pages follow UTC block
+timestamp, block number, transaction index and log index, with occurrence ID as
+a deterministic tie-breaker. Identifiers are not used as a substitute for execution
+order inside a block. While certification
+is pending, requests must explicitly use `allow_partial=true`; otherwise the
+candidate returns `HISTORY_AUDIT_PENDING`. A partial result always reports
+`coverage.complete=false`. It is not evidence of deployment-to-present coverage.
+
+Historical delivery uses the same bytes tariff and existing credit balance.
+Set `format=ndjson` to download one page as `application/x-ndjson`. The first
+line is `export_metadata` with `next_cursor`, coverage and billing; following
+lines contain the decoded events. The page has at most 1,000 events, default
+500. Every line ends with a newline. Follow the signed cursor with the same
+filters until `next_cursor` is null. Changing the presentation between JSON and
+NDJSON preserves the same filter-bound cursor; changing the filters or organisation
+is rejected. Metadata and newline bytes are included in the delivered-byte charge.
+
+Console provides the same download through a session-checked HMAC bridge, with
+100 events per page. Your API secret stays on the server. Select UTC start and
+exclusive end dates and the event families. Each download is a billable request;
+API delivery to Console is accounted even if your browser subsequently fails to
+save the file. This is a paginated download, not a background export job.
+
+Example first line (cursor abbreviated; use the actual signed cursor):
+
+```json
+{"type":"export_metadata","schema_version":1,"next_cursor":"opaque-signed-cursor","coverage":{"complete":false,"audit_state":"pending","gaps":null,"snapshot":"2026-10-14T00:00:00.000Z"},"billing":{"bytes_per_credit":20000,"price_version":"returned-by-capabilities","unit":"uncompressed UTF-8 response bytes"}}
+```
+
+Background export jobs, complete-range certificates and durable archive-backed
+WebSocket replay remain separate release gates. Download availability does not
+certify dataset completeness.
+
+## Usage and price
+
+The selected initial tariff is **one credit per 20,000 uncompressed UTF-8 bytes
+of delivered data**. It uses your existing credit balance. No separate monthly
+subscription is required. The access response must expose the effective tariff;
+unknown tariff is not free usage.
+
+Requested replay and historical downloads are billable deliveries. Controls,
+heartbeats, **live identity-only** finalization/correction frames and internal receipt
+retries are not charged. Requested replayed transitions are delivered data and are
+charged even when their event status is finalized or reorged. A generated but undelivered export is not a delivered-data charge.
+The candidate ledger records each streamed family separately: collateral, resolutions,
+new conditions and token registrations. Console Usage shows delivered credits by
+product. Failed or ambiguous writes retain their reservation for reconciliation;
+they do not automatically become a charge or a zero-byte settlement. Repeating an
+identical delivery receipt does not add consumption.
+
+These paths have finite acceptance tests; production invoice acceptance and the
+customer browser journey remain release gates.
+
+## Storage and recovery
+
+Local capture files are a cache of the durable archive. The retention candidate
+removes only closed segments after byte-for-byte bucket verification, committed
+API index confirmation and recorded finality. It preserves bucket objects and the
+occurrence index; it does not shorten the historical API's coverage by deleting
+historical records.
+
+Cache retirement is separate from coverage certification. It cannot prove that
+every contract, event family or block was captured. A lost or lagging index can be
+rebuilt from verified archive manifests with a finite repair budget; the same
+source identity and contiguous cursors are required. Older missing data is never
+silently replaced by a new starting cursor.
+
+These operations remain under release acceptance. Their internal credentials and
+storage permissions are not granted to a customer WebSockets key.
+
+## Coverage and availability
+
+The historical goal is deployment-to-present coverage for the supported
+contracts and versions. Until backfill and independent reconciliation finish,
+no complete-history claim is made. A quiet event family can be healthy; evaluate
+block/index watermarks and coverage rather than the time of the last redemption.
+
+The capture candidate pins proxy ABI epochs by block and global log index. An
+uncertified upgrade halts the dataset checkpoint instead of extending the old ABI.
+A failed capture refuses new on-chain connections and closes existing sessions
+with `CAPTURE_UNAVAILABLE` during its bounded access recheck. Legacy fill access
+is a separate flow.
+
+General availability requires an independently reconciled finalized test day,
+stream-consumer comparison, recovery tests, price/usage reconciliation and a
+real self-service signup journey. Release-candidate UI and local fixture tests
+are not evidence that these criteria passed in production.
+
+
+## Feed status and uptime
+
+[Open the live operational status](https://stream.bravadotrade.com/ws/onchain/status)
+to inspect the current feed instance. This public, read-only endpoint returns
+`200` while capture is healthy and has committed a block within 30 seconds.
+It returns `503` while starting, stale or failed, and `404` before the managed
+on-chain route is enabled. Responses are not cached.
+
+```json
+{
+  "state": "live",
+  "started_at_ms": 1793746800000,
+  "uptime_seconds": 123,
+  "observed_at_ms": 1793746923000,
+  "last_captured_block": 96700000,
+  "last_capture_at_ms": 1793746922500,
+  "capture_age_ms": 500,
+  "historical_coverage": "partial"
+}
+```
+
+The sample is illustrative. Times ending in `_ms` are Unix milliseconds; uptime
+is seconds since this service instance started, not a historical SLA percentage.
+Capture progress is published only after the block's durable journal commit.
+Before the first observed block, capture fields are `null`, not zero. A healthy
+live status does not certify complete historical coverage or venue attribution.

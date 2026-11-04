@@ -10,8 +10,10 @@ icon:
 The mempool feed is Bravado's **low-latency** fills stream. Settlements are decoded directly from the Polygon **public mempool**, so a fill reaches you **~1–2s before the venue's own real-time feed reports it** (measured against Polymarket RTDS: earlier on ~100% of trades, ~1.5–2s median). Every fill carries the full on-chain lifecycle — **pending → mined → settled**, and the negative states (**reverted / dropped / replaced**) — plus the **owner wallet (EOA)** behind the trading proxy.
 
 <Info>
-  This is a **partner tier**. Connect to `wss://stream.bravadotrade.com/ws` with a
-  Bravado feed token (provisioned during onboarding). The public
+  The legacy connection at `wss://stream.bravadotrade.com/ws` requires a
+  separately provisioned feed token. A Data API or Market Data HMAC key is not
+  that token. The Console-managed connection is a separate rollout; see
+  [access and authentication](#access-and-authentication). The public
   [Live Trades](/api/market-data/trade-feed) feed mirrors the venue's push feed and
   uses your Market Data credential; this feed adds the mempool lead, the settlement-truth
   lifecycle, and inline identity. Coverage today is Polymarket.
@@ -23,6 +25,37 @@ The mempool feed is Bravado's **low-latency** fills stream. Settlements are deco
   an extra proxy hop would add relay latency and erode the mempool lead that is the whole
   point of this feed. Connect to the edge host directly.
 </Note>
+
+## Access and authentication
+
+Use a key created under **WebSockets**, not the separate Data API, Market Data
+REST, or Trade API products. A key display name can be customised; its product
+and `stream.read` scope determine eligibility. Do not send the API key itself as a feed bearer token. There are two
+connection contracts, and the token must match the socket:
+
+| Connection | Credential | Destination |
+| --- | --- | --- |
+| Legacy partner feed | Provisioned Ed25519 feed token | `wss://stream.bravadotrade.com/ws` |
+| Console-managed fills · release candidate | Short-lived grant from signed `GET /mempool/token`, using a WebSockets key (`ws_stream`) with `stream.read` | `wss://stream.bravadotrade.com/ws/console` |
+| Versioned lifecycle events · release candidate | Short-lived grant with explicit family permissions | [On-chain Events](/api/market-data/onchain-events) |
+
+The Console-managed destinations are not generally available until coordinated
+release validation is complete. A `404` on those paths is a deployment issue,
+not a reason to rotate your API key. A `401` on the legacy socket means its feed
+token is missing, expired or refused. Contact support with the destination and
+error code; never send your API secret or token in a support message.
+
+During the managed rollout, eligible organisations use
+[**Mempool Fills** in Console](https://console.bravadotrade.com/products/mempool) to obtain access
+without copying your API secret into the browser. Each reconnect obtains a fresh
+grant; expiry closes the previous connection. Your subscription, scope, credits
+and organisation permissions still apply. General plan prices do not override
+an account-specific commercial agreement.
+
+The HMAC path includes the canonical query: sort keys and percent-encode values
+using RFC 3986. Use
+[authentication examples](/authentication-examples) for the signing format.
+The direct legacy example below continues to require its provisioned feed token.
 
 ## Connect
 
@@ -257,3 +290,5 @@ A `status` frame is sent on subscribe and whenever a stream's health changes:
 - [UMA Resolution](/products/uma-api) — the `uma:polymarket:*` lifecycle over REST + WebSocket
 - [Order Books](/api/market-data/venue-order-books) — live books for outcome tokens
 - [Data API](/products/data-api) — cross-reference the `owner` wallet's PnL, positions, and history
+
+For splits, merges, redemptions, converts, resolutions and condition/token registration, see the [versioned on-chain protocol](/api/market-data/onchain-events).
