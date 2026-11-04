@@ -22,8 +22,8 @@ Bravado's Market Data layer streams realtime prediction-market data over WebSock
     One frame per Polymarket combo settlement, with the combo's legs. History is served by the Data API.
   </Card>
 
-  <Card title="UMA resolution" icon="gavel" href="/products/uma-api">
-    How Polymarket markets settle through UMA's Optimistic Oracle: proposals, disputes and outcomes, as a stream with the Market Data credential and over REST (full history) with the Data API credential.
+  <Card title="UMA resolution stream" icon="gavel" href="/api/market-data/uma-websocket">
+    How Polymarket markets settle through UMA's Optimistic Oracle: proposals, disputes and outcomes, pushed live over this Market Data stream (`stream.read`). The REST lookups (live window and full history) are a separate [Data API](/products/data-api) surface — see the [UMA overview](/products/uma-api).
   </Card>
 
   <Card title="Mempool Fills" icon="zap" href="/api/market-data/mempool-feed">
@@ -89,7 +89,7 @@ venue's own real-time feed reports them** (measured against Polymarket RTDS: ear
 | --- | --- | --- | --- |
 | [Live Trades](/api/market-data/trade-feed) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner/trades` | HMAC | Server → client |
 | [Live Combos](/api/combos-data/stream) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner/combos` | HMAC | Server → client |
-| [UMA resolution](/products/uma-api) | `https://partner-api.bravadotrade.com/uma/*` and `wss://partner-api.bravadotrade.com/uma/ws` | HMAC | REST and server → client |
+| [UMA resolution stream](/api/market-data/uma-websocket) | `wss://partner-api.bravadotrade.com/uma/ws` | HMAC | Server → client |
 | [Mempool Fills](/api/market-data/mempool-feed) (low-latency) | `wss://stream.bravadotrade.com/ws` | Partner | Bidirectional |
 | [Polymarket order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` | HMAC | Bidirectional |
 | [Predict.fun order books](/api/market-data/venue-order-books) | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` | HMAC | Bidirectional |

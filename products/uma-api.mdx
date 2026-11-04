@@ -16,23 +16,23 @@ Polymarket markets do not settle themselves. When a market's event concludes, th
 
 ## Choose your interface
 
-UMA is one capability within Market Data. REST and WebSocket use the same credential; they are not separate products.
+The **REST** API is a [Data API](/products/data-api) surface (`analytics.read`, 1 credit per response) and is split into two pages — the live window and all history. The **WebSocket** is a separate [Market Data](/products/market-data) surface (`stream.read`, paid plan). They do not share a credential, and neither is a product of its own.
 
 | You want to… | Use |
 | --- | --- |
-| Look up the resolution of one question or market, over all history | [REST API](/api/market-data/uma-rest#full-history) — `/uma/history/question` or `/uma/history/market` |
-| Read questions that changed in a time range, with paging | [REST API](/api/market-data/uma-rest#get-/uma/history/recent) — `/uma/history/recent` |
-| Read what is resolving right now, at the lowest latency | [REST API](/api/market-data/uma-rest#live-window) — `/uma/question`, `/uma/market`, `/uma/recent` |
+| Read what is resolving right now, at the lowest latency | [REST — live window](/api/analytics/uma-live) — `/uma/question`, `/uma/market`, `/uma/recent` |
+| Look up the resolution of one question or market, over all history | [REST — history](/api/analytics/uma-history#get-/uma/history/question) — `/uma/history/question` or `/uma/history/market` |
+| Read questions that changed in a time range, with paging | [REST — history](/api/analytics/uma-history#get-/uma/history/recent) — `/uma/history/recent` |
 | Receive new proposals, disputes and settlements as they occur | [WebSocket](/api/market-data/uma-websocket) — `/uma/ws` |
 
 ## Coverage and history
 
 Coverage is Polymarket's UMA resolutions: requests from Polymarket's UMA adapters for `YES_OR_NO_QUERY` markets, including NegRisk markets.
 
-- **Full history** (`/uma/history/*`) reads the complete record of oracle events, with `from` / `to` ranges, cursor paging and `resolution_source` provenance. A question that was re-requested returns its latest lifecycle and says how many there were.
-- **Live window** (`/uma/question`, `/uma/market`, `/uma/recent`, and the WebSocket) reflects what the realtime feed currently holds: about 7 days for settled questions and 14 days for open ones. A `404` there means the record is not retained; it does not prove the question never existed.
+- **[History](/api/analytics/uma-history)** (`/uma/history/*`) reads the complete record of oracle events, with `from` / `to` ranges, cursor paging and `resolution_source` provenance. A question that was re-requested returns its latest lifecycle and says how many there were.
+- **[Live window](/api/analytics/uma-live)** (`/uma/question`, `/uma/market`, `/uma/recent`, and the WebSocket) reflects what the realtime feed currently holds: about 7 days for settled questions and 14 days for open ones. A `404` there means the record is not retained; it does not prove the question never existed.
 
-A market whose oracle request cannot be found is reported as `resolution_source: "unknown"`, never as an empty or unsettled market. Consuming the live stream does not backfill earlier events; read [`/uma/history/recent`](/api/market-data/uma-rest#get-/uma/history/recent) for those.
+A market whose oracle request cannot be found is reported as `resolution_source: "unknown"`, never as an empty or unsettled market. Consuming the live stream does not backfill earlier events; read [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent) for those.
 
 ## The resolution lifecycle
 
@@ -74,6 +74,7 @@ The `answer` field classifies the oracle's `int256` price: `yes`, `no`, `50-50`,
 
 ## Next steps
 
-- [REST API](/api/market-data/uma-rest) — full-history lookups, time ranges and paging, the live window, a signed request and response fields.
-- [WebSocket](/api/market-data/uma-websocket) — connect, filter subscriptions and recover after disconnecting.
-- [Market Data](/products/market-data) — credentials and the other available feeds.
+- [REST — live window](/api/analytics/uma-live) — lowest-latency reads of what is resolving right now, with a signed request and response fields (Data API, `analytics.read`).
+- [REST — history](/api/analytics/uma-history) — all history, `from` / `to` ranges, cursor paging and `resolution_source` provenance (Data API, `analytics.read`).
+- [WebSocket](/api/market-data/uma-websocket) — the live `stream.read` stream: connect, filter subscriptions and recover after disconnecting (Market Data).
+- [Data API](/products/data-api) and [Market Data](/products/market-data) — the two credentials and the other surfaces in each.

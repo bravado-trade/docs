@@ -120,6 +120,14 @@
             ]
           },
           {
+            "group": "UMA resolution",
+            "pages": [
+              "products/uma-api",
+              "api/analytics/uma-live",
+              "api/analytics/uma-history"
+            ]
+          },
+          {
             "group": "By venue",
             "pages": [
               "markets/polymarket/data-api",
@@ -152,16 +160,9 @@
               "api/market-data/kalshi-beta",
               "api/market-data/trade-feed",
               "api/combos-data/stream",
+              "api/market-data/uma-websocket",
               "api/market-data/open-orders",
               "api/market-data/historical-data"
-            ]
-          },
-          {
-            "group": "UMA resolution",
-            "pages": [
-              "products/uma-api",
-              "api/market-data/uma-rest",
-              "api/market-data/uma-websocket"
             ]
           },
           {
@@ -377,6 +378,10 @@
     {
       "source": "/markets/polymarket/uma-resolution",
       "destination": "/products/uma-api"
+    },
+    {
+      "source": "/api/market-data/uma-rest",
+      "destination": "/api/analytics/uma-live"
     }
   ]
 }
