@@ -577,6 +577,14 @@ and `to` values and selected `families`. Windows are `[from,to)`, limited to 31
 days; `limit` defaults to 500 and cannot exceed 1,000. Optional `wallet`,
 `condition_id` and `neg_risk_market_id` filters combine with AND.
 
+Each response is also limited to 2 MiB (`history_max_response_bytes` in
+capabilities). A page may contain fewer events than requested; always follow
+`next_cursor` until it is null. Each API instance allows two concurrent history
+requests per organisation and four across organisations. A busy instance returns
+429 `ONCHAIN_HISTORY_BUSY` with `Retry-After: 1`. Queries have a 15-second database
+deadline; a timeout returns 503 `ONCHAIN_HISTORY_QUERY_TIMEOUT`. Retry with the
+same cursor after the indicated delay. These limits also apply to flat contracts.
+
 `consistency=finalized` is the default. Pagination uses an opaque signed cursor
 bound to your organisation, filters and insertion snapshot. Pages follow UTC block
 timestamp, block number, transaction index and log index, with occurrence ID as
@@ -597,7 +605,7 @@ is rejected. Metadata and newline bytes are included in the delivered-byte charg
 
 Console provides the same download through a session-checked HMAC bridge, with
 100 events per page. Your API secret stays on the server. Select UTC start and
-exclusive end dates and the event families. Each download is a billable request;
+exclusive end dates and the event families. Each download records delivered usage;
 API delivery to Console is accounted even if your browser subsequently fails to
 save the file. This is a paginated download, not a background export job.
 
@@ -630,6 +638,39 @@ identical delivery receipt does not add consumption.
 
 These paths have finite acceptance tests; production invoice acceptance and the
 customer browser journey remain release gates.
+
+### Flat and negotiated contracts
+
+A verified flat monthly contract uses the same WebSockets key, HMAC requests,
+family permissions, short-lived grants and delivery receipts as other plans.
+It records the delivered bytes and credit usage without charging an overage or
+refusing access because those credits are exhausted. Normal rate limits,
+credential restrictions and family permissions still apply.
+
+For these organisations, capabilities, stream-grant billing and historical
+response metadata include `billing_disposition: "contract"`. For example:
+
+```json
+{
+  "price_version": "returned-by-capabilities",
+  "microcredits_per_byte": 50,
+  "bytes_per_credit": 20000,
+  "billing_disposition": "contract"
+}
+```
+
+The byte-to-credit ratio remains the usage measurement; it is not an additional
+monetary charge under the flat contract. Requested replay and historical downloads
+are also recorded as usage covered by that contract. Console identifies this as
+included in your contract. The grant response reports the effective terms;
+an absent or unknown tariff must not be interpreted as free access.
+
+Assigned Enterprise subscriptions with unlimited credits use their existing negotiated contract and the same Console activation. No Stripe payment is inferred from a local Enterprise record; this remains an assigned plan. On first activation, Console creates recording-only accounting automatically when needed, without creating a new charge or requiring ops to create tokens.
+
+The contract covers the products agreed with your organisation. Event access is
+still explicitly enabled per family and key; buying a plan does not grant new
+families implicitly. Reconnects and receipt retries preserve the original
+commercial identity of the delivery rather than creating another charge.
 
 ## Storage and recovery
 
