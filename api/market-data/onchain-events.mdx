@@ -160,7 +160,7 @@ customer routes are omitted when the corresponding release flags are disabled.
 
 This example requires the release-candidate destinations to be enabled for your
 environment and organisation. It uses Node.js 22 or above with no dependencies.
-Run it on your backend, with a Market Data key whose selected stream families
+Run it on your backend, with a WebSockets key (`ws_stream`, `stream.read`) whose selected stream families
 are enabled. Your secret signs the grant request and is never sent to the feed.
 
 Save the [connection example](https://github.com/bravado-trade/docs/blob/main/examples/polymarket-feed.mjs)
