@@ -5,7 +5,7 @@ const mode = process.env.BRAVADO_FEED_MODE ?? 'onchain';
 if (!['onchain', 'fills'].includes(mode)) throw new Error('BRAVADO_FEED_MODE must be onchain or fills');
 const key = process.env.BRAVADO_API_KEY;
 const secret = process.env.BRAVADO_API_SECRET;
-if (!key || !secret) throw new Error('Set your Market Data key and secret in the environment');
+if (!key || !secret) throw new Error('Set your WebSockets key (ws_stream, stream.read) and secret in the environment');
 const api = new URL(process.env.BRAVADO_API_ORIGIN ?? 'https://partner-api.bravadotrade.com');
 const edge = new URL(process.env.BRAVADO_FEED_ORIGIN ?? 'wss://stream.bravadotrade.com');
 for (const [url, secure, local] of [[api, 'https:', 'http:'], [edge, 'wss:', 'ws:']]) {
