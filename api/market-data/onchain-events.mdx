@@ -665,3 +665,31 @@ General availability requires an independently reconciled finalized test day,
 stream-consumer comparison, recovery tests, price/usage reconciliation and a
 real self-service signup journey. Release-candidate UI and local fixture tests
 are not evidence that these criteria passed in production.
+
+
+## Feed status and uptime
+
+[Open the live operational status](https://stream.bravadotrade.com/ws/onchain/status)
+to inspect the current feed instance. This public, read-only endpoint returns
+`200` while capture is healthy and has committed a block within 30 seconds.
+It returns `503` while starting, stale or failed, and `404` before the managed
+on-chain route is enabled. Responses are not cached.
+
+```json
+{
+  "state": "live",
+  "started_at_ms": 1793746800000,
+  "uptime_seconds": 123,
+  "observed_at_ms": 1793746923000,
+  "last_captured_block": 96700000,
+  "last_capture_at_ms": 1793746922500,
+  "capture_age_ms": 500,
+  "historical_coverage": "partial"
+}
+```
+
+The sample is illustrative. Times ending in `_ms` are Unix milliseconds; uptime
+is seconds since this service instance started, not a historical SLA percentage.
+Capture progress is published only after the block's durable journal commit.
+Before the first observed block, capture fields are `null`, not zero. A healthy
+live status does not certify complete historical coverage or venue attribution.
