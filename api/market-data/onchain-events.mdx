@@ -16,7 +16,31 @@ On-chain Events uses your organisation's **WebSockets key**, an active Build pla
 or above, and explicit grants for the event families you select. Book and fills
 access does not grant these families. API secrets remain in your backend.
 
-Console provides **On-chain Events → Activate access → Connect**.
+In Console, open **On-chain Events**, choose your WebSockets key and click
+**Enable selected events** if access is not configured. Existing permissions for
+other events remain enabled. The workspace then separates:
+
+- **Live**: connect/disconnect and preview events. Expand **Event filters & raw
+  data** for family/condition filters, raw ABI logs and optional retained replay.
+  Replay is off by default; requesting it consumes usage. Switching tabs
+  disconnects the live stream.
+- **History**: choose independent event filters and UTC dates, then download
+  finalized NDJSON. Choose one page or up to five pages per action. A page is
+  bounded to 2 MiB, so five pages are bounded to 10 MiB. The Console shows the
+  current tariff and maximum byte/credit budget before downloading.
+- **API & examples**: protocol references and authentication documentation.
+
+**Feed live** describes recent durable capture, while **Connected** describes your
+browser connection. Historical coverage is separate. Missing health or pricing
+is shown as unavailable. Quiet event families do not imply capture failure.
+
+Historical downloads follow cursors even after empty pages. A non-null cursor
+means more pages remain; use **Continue download**. Each page retains its metadata
+line in the combined NDJSON file. **Stop after current page** saves received pages
+and preserves continuation. If a later page fails, earlier received pages are
+saved and continuation retries the next page. Switching organisations, keys or
+historical filters starts a different download scope. Contract customers see
+usage recorded under their existing agreement; normal accounts use their credits.
 An owner or administrator enables new organisation families. Developers may
 configure keys within the organisation's enabled families. Billing membership
 does not grant credential access.
