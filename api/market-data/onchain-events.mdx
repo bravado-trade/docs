@@ -602,6 +602,11 @@ end time or use the live stream for current activity. A changed anchor, divergen
 sources or unavailable archival state returns 503 `HISTORY_SOURCE_UNAVAILABLE`.
 The API does not silently turn that failure into a partial success.
 
+A registry update invalidates an outstanding source cursor with 409
+`HISTORY_REGISTRY_CHANGED`. Start a fresh download so all pages use the same
+contract versions. Source cursors expire after 24 hours of inactivity; each
+successful page renews that lifetime.
+
 ### Indexed partial reads
 
 `source=index&allow_partial=true` retains the indexed-history path, including mined
