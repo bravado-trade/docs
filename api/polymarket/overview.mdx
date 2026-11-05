@@ -10,12 +10,22 @@ The `/v2/polymarket` surface serves Polymarket wallet and market analytics under
 
 ### Response conventions
 
-These hold across every endpoint on this surface:
+For leaderboard and wallet profiles (single and batch):
 
-- **Numbers are exact decimal strings**, never floating-point — USD amounts, prices and PnL as decimal strings, ratios (ROI, win rate) as `0`–`1` decimals — so precision survives transit.
+- **Metrics are JSON numbers or `null`**, including USD amounts, prices, ratios and counts. The source constructs exact decimal number tokens; use a decimal-aware parser when exact decimal precision matters. ROI and win rate are `0`–`1` ratios.
 - **Timestamps are unix seconds** (`computed_at`, `first_trade_at`, `last_trade_at`, …).
 - **Unknown is `null`, never a fake `0`.** A metric the source cannot compute is `null`. In particular `fees_paid` is `null` on the day windows and `fees_refunded` is `null` on every window — this surface has no per-window fee split — so a `null` fee means *unknown*, not *zero*.
 - **Cursor pagination.** List endpoints return `pagination.pagination_key`; pass it back as the `pagination_key` query parameter to get the next page. `pagination.has_more` tells you when to stop.
+
+PnL follows the source’s fee basis. Once the engine and rebuilt rollups certify
+fee-net data, the compat routes return those net values unchanged; `fees_paid`
+is informational and must not be subtracted again. During pre-cutover coverage,
+the source retains the corresponding gross basis. There is no `basis` query
+parameter on these compat routes. `total_pnl` includes current unrealized PnL,
+so it is nullable when that value is unavailable.
+
+Positions and other endpoints follow their own documented response schema,
+including their units and timestamp precision.
 
 ### Endpoints
 
