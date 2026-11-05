@@ -10,7 +10,12 @@ description: "Look up public usernames and avatars for up to 100 Polymarket wall
 Look up public presentation fields without loading trading metrics. This endpoint
 uses your existing Data API key, `analytics.read` permission, active organisation
 plan, rate limit and credit budget. Each successful request uses the standard
-analytics request credit charge. Contract billing follows your existing agreement.
+analytics request charge of **1 credit**. Contract billing follows your existing agreement.
+
+In Console, open the Data API playground and select **Wallet identity** to preview
+one wallet using your organisation’s existing Data API key. Console validates the
+address and shows the price before you run it. Use this REST endpoint directly
+for batches.
 
 ```text
 GET https://partner-api.bravadotrade.com/v2/polymarket/wallets/identities?addresses=0x1111111111111111111111111111111111111111,0x2222222222222222222222222222222222222222
