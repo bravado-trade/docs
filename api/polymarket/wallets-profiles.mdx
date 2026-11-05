@@ -16,7 +16,7 @@ GET https://partner-api.bravadotrade.com/v2/polymarket/wallets/profiles?addresse
 ### Query Parameters
 
 <ParamField query="addresses" type="string" required>
-  Comma-separated wallet addresses, each `0x` followed by 40 hex characters. Duplicates are de-duplicated.
+  Comma-separated list of 1–20 wallet addresses, each `0x` followed by 40 hex characters. Duplicates are de-duplicated.
 </ParamField>
 
 ### Response
@@ -31,3 +31,7 @@ A JSON **array** of wallet-profile objects — each element has exactly the shap
 ```
 
 See [response conventions](/api/polymarket/overview) for the number, timestamp and null rules that apply to every field.
+
+Wallets without indexed trading activity are omitted. An empty array does not
+mean that the input wallets have no public identities. For public usernames and
+avatars for up to 100 wallets, use [public wallet identities](/api/polymarket/wallets-identities).

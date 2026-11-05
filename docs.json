@@ -93,6 +93,7 @@
               "api/polymarket/leaderboard",
               "api/polymarket/wallet",
               "api/polymarket/wallets-profiles",
+              "api/polymarket/wallets-identities",
               "api/polymarket/smart-activity"
             ]
           },

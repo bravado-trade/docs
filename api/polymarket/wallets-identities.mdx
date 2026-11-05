@@ -1,0 +1,66 @@
+---
+title: "GET /wallets/identities: Public wallet identities"
+sidebarTitle: "/wallets/identities"
+api: "GET /v2/polymarket/wallets/identities"
+description: "Look up public usernames and avatars for up to 100 Polymarket wallets."
+---
+
+<Note>Sign each request with a fresh HMAC signature. Use the [request signing examples](/authentication-examples); never expose your API secret in a browser.</Note>
+
+Look up public presentation fields without loading trading metrics. This endpoint
+uses your existing Data API key, `analytics.read` permission, active organisation
+plan, rate limit and credit budget. Each successful request uses the standard
+analytics request credit charge. Contract billing follows your existing agreement.
+
+```text
+GET https://partner-api.bravadotrade.com/v2/polymarket/wallets/identities?addresses=0x1111111111111111111111111111111111111111,0x2222222222222222222222222222222222222222
+```
+
+<ParamField query="addresses" type="string" required>
+  Comma-separated list of 1–100 wallet addresses. Each address is `0x` followed
+  by 40 hex characters. Matching is case-insensitive. Duplicate addresses collapse
+  in first-occurrence order. The 100-address limit includes duplicates supplied
+  in the request. Invalid addresses reject the batch before lookup.
+</ParamField>
+
+## Response
+
+The response is a JSON array in normalized input order. Every unique valid input
+has one entry, including wallets with no indexed trading activity.
+
+```json
+[
+  {
+    "address": "0x1111111111111111111111111111111111111111",
+    "username": "public-alias",
+    "avatar": "https://example.com/avatar.png"
+  },
+  {
+    "address": "0x2222222222222222222222222222222222222222",
+    "username": null,
+    "avatar": null
+  }
+]
+```
+
+| Field | Meaning |
+| --- | --- |
+| `address` | Lowercase input wallet, including `0x`. |
+| `username` | Available public username or public profile alias; otherwise `null`. |
+| `avatar` | Available public avatar URL; otherwise `null`. |
+
+The example is illustrative. A null field means unavailable, including a failed
+or timed-out upstream lookup. It does not prove that the wallet lacks a profile.
+Public identity enrichment is cached and may lag a profile change. Private names,
+internal Bravado user IDs and inferred owner wallets are not returned.
+
+For trading metrics, use [batch wallet profiles](/api/polymarket/wallets-profiles),
+which has a separate 20-address limit and omits wallets without indexed activity.
+
+## Errors
+
+Malformed or oversized batches return `400`. The existing Data API gate returns
+authentication/permission failures, `402` for an exhausted organisation credit
+budget, and `429` for rate limits before forwarding the request. A source
+connectivity failure is an error response; partial identity enrichment can still
+return `200` with nullable fields as described above.
