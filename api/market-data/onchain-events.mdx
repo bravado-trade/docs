@@ -65,7 +65,7 @@ protocol maximum. With a pinned implementation, a signature not declared for
 that implementation is rejected. These are software guarantees; the deployment
 registry, historical range and on-chain occurrences still require certification.
 
-The candidate decoder also supports `MigrationResolved` on the binary and
+The decoder also supports `MigrationResolved` on the binary and
 NegRisk modules. These frames use `type: "resolution"` and
 `kind: "migration_resolved"`. `condition_id` identifies the native condition;
 `legacy_condition_id` identifies its linked CTF condition. `legacy_payouts`
@@ -105,7 +105,7 @@ by itself, prove a NegRisk conversion or a collateral deposit.
 | `resolutions` | `result_reported` | Resolver and normalized payout numerators. A report log and a final condition-resolution log remain separate occurrences. |
 | `resolutions` | `derived_no_available`, `synthetic_yes_available` | Result availability with event/condition identifiers carried by the log; no payout vector is fabricated. |
 
-The decoder uses 18 additional exact signatures from 52 inspected declarations,
+The decoder uses 18 additional exact signatures from 80 inspected declarations,
 including historical recipient-less forms. Historical combo ABIs declare bridge
 events that the current combo ABI does not; implementation/ABI guards preserve
 that distinction. Bridge arrays are canonical, paired and bounded to 256 entries.
@@ -120,9 +120,9 @@ Administrative role/ownership/initialization events are outside these lifecycle
 families; ERC1155 transfers are not implicitly included. Do not interpret absence
 from a filtered response as proof of no activity.
 
-## Candidate connection contract
+## Connection contract
 
-The API candidate accepts a signed `GET /mempool/token?families=...` request and
+The API accepts a signed `GET /mempool/token?families=...` request and
 returns a short-lived grant. Use the edge address configured for the same
 environment, at `/ws/onchain`. Reconnecting requires a fresh grant. Never reuse
 production destinations as a staging fallback.
@@ -136,7 +136,7 @@ production destinations as a staging fallback.
 
 The versioned socket is separate from legacy `/ws` so legacy collateral frames
 cannot be confused with the new schema. A revoked or expired credential loses
-access. The candidate uses a maximum 30-second revocation recheck interval;
+access. The implementation uses a maximum 30-second revocation recheck interval;
 expiry has a deadline timer.
 
 ## Capabilities and API reference
@@ -151,14 +151,14 @@ The Console reads this contract through its server-side organisation scope; API
 secrets are never returned to your browser. Changing keys refreshes permissions
 and stops the previous connection.
 
-The API candidate publishes its market-data OpenAPI contract at
+The API publishes its market-data OpenAPI contract at
 `/stream/openapi.json` and the interactive reference at `/docs/market-data`.
 Internal ingestion and Console administration routes are excluded. On-chain
 customer routes are omitted when the corresponding release flags are disabled.
 
 ## Run a signed connection
 
-This example requires the release-candidate destinations to be enabled for your
+This example requires the production destinations to be enabled for your
 environment and organisation. It uses Node.js 22 or above with no dependencies.
 Run it on your backend, with a WebSockets key (`ws_stream`, `stream.read`) whose selected stream families
 are enabled. Your secret signs the grant request and is never sent to the feed.
@@ -284,7 +284,7 @@ reconnect recovery or certified historical coverage.
 
 <Warning>
 These seven examples are synthetic fixtures with invented addresses, IDs and
-blocks. They document the candidate compact wire shape; they are not production
+blocks. They document the compact wire shape; they are not production
 observations or audited economic flows. Full mode adds raw ABI topics/data.
 </Warning>
 
@@ -649,7 +649,7 @@ Requested replay and historical downloads are billable deliveries. Controls,
 heartbeats, **live identity-only** finalization/correction frames and internal receipt
 retries are not charged. Requested replayed transitions are delivered data and are
 charged even when their event status is finalized or reorged. A generated but undelivered export is not a delivered-data charge.
-The candidate ledger records each streamed family separately: collateral, resolutions,
+The ledger records each streamed family separately: collateral, resolutions,
 new conditions and token registrations. Console Usage shows delivered credits by
 product. Failed or ambiguous writes retain their reservation for reconciliation;
 they do not automatically become a charge or a zero-byte settlement. Repeating an
