@@ -188,6 +188,8 @@ A `matched` signal **upgrades** to `pending` when the settle tx hits the mempool
 <ResponseField name="legs" type="array">
   <Expandable title="leg fields">
     <ResponseField name="role" type="string">`maker` or `taker`.</ResponseField>
+    <ResponseField name="builder" type="string | null">Exact bytes32 builder code from V2 calldata or OrderFilled logs, in compact and full modes. A zero code is a known value; null means this observation does not provide it (including V1 and early matched signals).</ResponseField>
+    <ResponseField name="neg_risk" type="boolean | null">Market type from token metadata, in compact and full modes. Null means unknown; it is never silently converted to false. ExchangeV3/combo does not by itself establish NegRisk.</ResponseField>
     <ResponseField name="token_id" type="string">Outcome token id (exact decimal string).</ResponseField>
     <ResponseField name="condition_id" type="string">CTF condition id (hex) — joins to markets, positions, and resolutions.</ResponseField>
     <ResponseField name="outcome_index" type="integer">0 or 1.</ResponseField>
