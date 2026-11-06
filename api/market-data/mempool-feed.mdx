@@ -61,6 +61,16 @@ The direct legacy example below continues to require its provisioned feed token.
 
 Pass an initial stream set and (optionally) a mode and replay count on the query string, and present your token as a `Bearer` header or a `?token=` parameter.
 
+| Parameter | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `streams` | comma-separated stream names | — | Initial subscriptions (see [Streams](#streams)). |
+| `mode` | `compact` \| `full` | `compact` | Frame detail (see [Modes](#the-fill-frame)). |
+| `replay` | `0`–`500` | `0` | Recent fills to backfill per stream before live frames. |
+| `sender_gate` | `on` \| `off` | `on` | `off` also delivers unverified and rejected pending transactions, tagged `sender_verified: false`. See [Sender verification](#sender-verification). |
+| `pending_ttl` | Go duration, e.g. `10s` | server default | Drop your view of a pending fill sooner. Clamped to `2s`–`120s`. See [Client pending TTL](#client-pending-ttl). |
+
+An invalid `sender_gate` or `pending_ttl` value is refused with HTTP `400` before the WebSocket upgrade.
+
 ```
 wss://stream.bravadotrade.com/ws?streams=fills:polymarket:*&mode=compact&replay=100
 ```
@@ -122,7 +132,7 @@ Subscribe to the firehose or narrow to a token, market, or wallet. One connectio
 | `fills:polymarket:market:<0x conditionId>` | Every fill in that market (both outcomes). |
 | `fills:polymarket:wallet:<0x address>` | Every fill where the address is a maker, signer, on-chain taker, or the tx sender. |
 | `ghost:polymarket:*` | Ghost fills — CLOB matches that never settled on-chain (also delivered on `fills:*`). |
-| `stats:polymarket:latency` | Periodic feed-health stats: per-source win-rates, mempool-lead percentiles, coverage. |
+| `stats:polymarket:latency` | Periodic feed-health stats: per-source win-rates, mempool-lead percentiles, coverage, and `sender_gate` counts (`mode`, `rejected`, `quarantined`, `unverified_expired`). |
 | `market:polymarket:<decimal tokenId>` | Proxied Polymarket CLOB book/price/trade events (a convenience; one hop slower than connecting to the venue directly). |
 
 <Note>
@@ -150,6 +160,33 @@ A fill is not one event — it is a sequence of status transitions for the same 
 | `reorged` | A mined block was reorged out. Carries `orphaned_block`; treat the tx as pending again. | — |
 
 A `matched` signal **upgrades** to `pending` when the settle tx hits the mempool, or expires as a **ghost fill** if it never settles. Track a transaction by `tx_hash`, and **dedupe by `(tx_hash, status)`** — the same tx legitimately arrives once per transition.
+
+## Sender verification
+
+A `pending` frame is emitted only for a transaction whose sender holds the exchange OPERATOR role on-chain; third-party calldata wearing another wallet's name is rejected before it reaches any stream.
+
+A pending transaction is calldata in the public mempool. Anyone can broadcast calldata that names any wallet as maker or taker, but only Polymarket's operators can actually settle a match on the exchange. Before a `pending` frame is emitted, we check the transaction sender against the exchange contract's `isOperator`. The check uses a cache of known operators, so it normally adds no delay. A sender we have not seen before is held for the on-chain check and then emitted with its original `ts_seen`. A pending transaction whose sender fails the check never reaches a default stream, the replay buffer, or a wallet stream.
+
+`mined`, `finalized`, and `reverted` frames are unaffected: they come from block logs, which only the exchange can emit.
+
+### Seeing unverified pendings (`sender_gate=off`)
+
+Connect with `sender_gate=off` if you want the raw mempool view, including transactions whose sender is unverified or not an operator:
+
+- Every `pending` frame, and the `dropped` or `replaced` frame that ends it, carries `sender_verified`. Unverified and rejected transactions carry `sender_verified: false`.
+- Frames that a default (`sender_gate=on`) client would not receive carry **no `seq`**. The `seq` of the frames you share with gated clients stays gap-free.
+- A transaction can arrive as `pending` with `sender_verified: false` and later again with `sender_verified: true` once its sender is verified. **Dedupe on `(tx_hash, status, sender_verified)`** on this connection.
+- A rejected transaction ends with a `dropped` frame when its pending window expires.
+
+```json
+{"type":"fill","stream":"fills:polymarket:*","ts_seen":1756080000101,"ts_sent":1756080000102,
+ "venue":"polymarket","exchange":"ctf_v2","tx_hash":"0x5c…","status":"pending","exact":false,
+ "seen_pending":true,"sender_verified":false,"legs":[…]}
+```
+
+### Client pending TTL
+
+By default a pending fill that never settles is closed by the server's `dropped` frame. Set `pending_ttl` (a Go duration such as `10s`, clamped to `2s`–`120s`) to close it sooner for your connection only. When your TTL elapses you receive a `dropped` frame with no `seq` and a `pending_ttl_ms` field set to the TTL that fired. The server's own later `dropped` for that transaction is suppressed for you, but a later `mined` or `replaced` frame is still delivered, so treat a TTL `dropped` as "stopped waiting", not "did not settle".
 
 ## The `fill` frame
 
@@ -180,6 +217,8 @@ A `matched` signal **upgrades** to `pending` when the settle tx hits the mempool
 <ResponseField name="status" type="string">The lifecycle transition (see the table above).</ResponseField>
 <ResponseField name="exact" type="boolean">`false` for provisional (`matched`/`pending`) amounts from calldata; `true` once log-derived (`mined`).</ResponseField>
 <ResponseField name="seen_pending" type="boolean">Whether we observed the settle tx in the mempool before the block.</ResponseField>
+<ResponseField name="sender_verified" type="boolean">On `pending` frames, and the `dropped`/`replaced` frame that ends a pending: whether the sender was verified as an exchange operator (see [Sender verification](#sender-verification)). Always present in `mode=full`. In `compact` mode it is present only on `sender_gate=off` connections. Absent when not determined; it is never defaulted to `true` or `false`.</ResponseField>
+<ResponseField name="pending_ttl_ms" type="integer">Only on a `dropped` frame produced by your connection's `pending_ttl`: the TTL in milliseconds that fired.</ResponseField>
 <ResponseField name="signal_source" type="string">Which upstream produced this frame: `polymarket-clob` (a `matched` signal) or `mempool`.</ResponseField>
 <ResponseField name="tx_hash" type="string">The Polygon transaction hash — the key you track a fill by.</ResponseField>
 <ResponseField name="seq" type="integer">Per-stream sequence, increasing within a connection; resets when a stream is re-established (a fresh `status` frame marks the reset).</ResponseField>
@@ -208,7 +247,8 @@ A `matched` signal **upgrades** to `pending` when the settle tx hits the mempool
 <Note>
   **Modes.** `compact` (default) omits `from`/`nonce`/`gas`/`source` and the per-leg
   `signer`/`fee`/`order_hash`/`log_index`; request `mode=full` for those. `owner` is present
-  in both modes when known.
+  in both modes when known. `sender_verified` is always present on `pending` frames in
+  `mode=full`, and in `compact` only with `sender_gate=off`.
 </Note>
 
 ## Subscribe, unsubscribe, and replay in band
