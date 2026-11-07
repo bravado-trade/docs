@@ -10,9 +10,9 @@ Connect using a Market Data credential with `stream.read` from an organisation w
 | --- | --- |
 | Polymarket | `wss://partner-api.bravadotrade.com/stream/polymarket/partner` |
 | Predict.fun | `wss://partner-api.bravadotrade.com/stream/predictfun/partner` |
-| Kalshi | [Four-market beta](/api/market-data/kalshi-beta) |
+| Kalshi | [Selected-market beta](/api/market-data/kalshi-beta) |
 
-Kalshi has a [limited four-market beta](/api/market-data/kalshi-beta), with market tickers as subscription identifiers. Check signed `GET /stream/capabilities` for your organisation before connecting. There is no Kalshi live-trades feed.
+Kalshi has a [limited beta](/api/market-data/kalshi-beta) over a selected, changing set of markets, with market tickers as subscription identifiers. Discover the current tickers through signed `GET /stream/kalshi/partner/coverage`; the beta does not cover every open Kalshi market. Check signed `GET /stream/capabilities` for your organisation before connecting. There is no Kalshi live-trades feed.
 
 ## Subscribe
 
