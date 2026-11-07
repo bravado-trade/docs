@@ -1,7 +1,7 @@
 ---
 title: "Kalshi on Bravado: Coverage and Rollout Status"
 sidebarTitle: "Kalshi"
-description: "Kalshi native REST data, captured history and a limited four-market order-book beta."
+description: "Kalshi native REST data, captured history and a limited order-book beta over a selected set of markets."
 icon: "/logo/kalshi-icon.jpg"
 ---
 
@@ -12,7 +12,7 @@ it is not a conditional-token market on a public chain: contracts are exchange-l
 identified by a market ticker rather than an on-chain token id.
 
 <Info>
-  **Kalshi order books are available in a [four-market beta](/api/market-data/kalshi-beta).** Check signed `GET /stream/capabilities` for `implemented`, `upstream_registered` and your organisation's `entitled` state before connecting. A built endpoint alone does not mean its source is available.
+  **Kalshi order books are available in a [selected-market beta](/api/market-data/kalshi-beta)** — a changing cohort discovered through signed `GET /stream/kalshi/partner/coverage`, not every open Kalshi market. Check signed `GET /stream/capabilities` for `implemented`, `upstream_registered` and your organisation's `entitled` state before connecting. A built endpoint alone does not mean its source is available.
 </Info>
 
 Kalshi is a **Market Data venue only**. There is no Kalshi trading, copy-trading or trader
@@ -20,7 +20,7 @@ analytics on Bravado, and none is in rollout — see [product coverage](#product
 
 ## Order-book beta
 
-The [Kalshi beta](/api/market-data/kalshi-beta) serves two selected BTC contracts and two Fed contracts. It uses the shared authenticated order-book format with exact decimal strings. Coverage is limited to those four fixed tickers, with no automatic rollover or full-market coverage claim.
+The [Kalshi beta](/api/market-data/kalshi-beta) serves a **selected, changing set of markets**; BTC and ETH 15-minute contracts are included when present in the ready inventory. It uses the shared authenticated order-book format with exact decimal strings. Discover the current tickers through signed `GET /stream/kalshi/partner/coverage` rather than assuming a fixed list: there is no automatic rollover when a short-duration contract closes, and no full-market coverage claim. Re-read coverage to find replacement tickers — subscribing to one ticker does not subscribe you to its replacements.
 
 ## Checking the live state
 
@@ -44,13 +44,13 @@ Polymarket or Predict.fun access does not include it. Market Data connections ne
 with `stream.read` on an eligible paid plan — see [authentication](/authentication) and
 [API credits](/api-credits#authenticated-websocket-credits).
 
-[Native Kalshi market data](/api/market-data/kalshi-native) provides current books, catalogue metadata, public trades and native candles over REST. [Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately through REST with a Data credential and Kalshi data grant. Its published coverage is limited to retained short windows and point observations; it is not a live book feed.
+[Native Kalshi market data](/api/market-data/kalshi-native) provides current books, catalogue metadata, public trades and native candles over REST. [Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately through REST with a Data credential and Kalshi data grant. It is a historic depth beta over a coverage-validated dataset (currently TBD-N markets in the latest published window); only coverage-validated intervals are queryable, and anything outside one is refused rather than estimated. Its published coverage is limited to retained windows and point observations; it is not a live book feed.
 
 ## Product coverage
 
 | Bravado product | Status |
 | --- | --- |
-| [Order-book WebSockets](/api/market-data/kalshi-beta) | Four-market beta |
+| [Order-book WebSockets](/api/market-data/kalshi-beta) | Selected-market beta |
 | [Enriched live trades](/api/market-data/trade-feed) | Not available |
 | [Data API](/products/data-api) | [Native market data](/api/market-data/kalshi-native) and [captured book history](/api/market-data/kalshi-history); no trader analytics |
 | [Trade API](/products/trade-api) | Not available |
