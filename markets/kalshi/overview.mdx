@@ -1,7 +1,7 @@
 ---
-title: "Kalshi on Bravado: Coverage and Rollout Status"
+title: "Kalshi on Bravado: Coverage and Supported Features"
 sidebarTitle: "Kalshi"
-description: "Kalshi native REST data, captured history and a limited four-market order-book beta."
+description: "Kalshi native REST data, a live order-book feed over a bounded cohort of markets, and captured order-book history, through the Market Data and Data API credentials."
 icon: "/logo/kalshi-icon.jpg"
 ---
 
@@ -12,15 +12,15 @@ it is not a conditional-token market on a public chain: contracts are exchange-l
 identified by a market ticker rather than an on-chain token id.
 
 <Info>
-  **Kalshi order books are available in a [four-market beta](/api/market-data/kalshi-beta).** Check signed `GET /stream/capabilities` for `implemented`, `upstream_registered` and your organisation's `entitled` state before connecting. A built endpoint alone does not mean its source is available.
+  **The Kalshi live order-book feed is available** across a bounded, changing cohort of markets — dozens at a time, not every open Kalshi market. Discover the served set through signed `GET /stream/kalshi/partner/coverage`; `all_open_markets` is `false`. Check `GET /stream/capabilities` for your organisation's `entitled` state before connecting.
 </Info>
 
 Kalshi is a **Market Data venue only**. There is no Kalshi trading, copy-trading or trader
 analytics on Bravado, and none is in rollout — see [product coverage](#product-coverage) below.
 
-## Order-book beta
+## Order-book feed
 
-The [Kalshi beta](/api/market-data/kalshi-beta) serves two selected BTC contracts and two Fed contracts. It uses the shared authenticated order-book format with exact decimal strings. Coverage is limited to those four fixed tickers, with no automatic rollover or full-market coverage claim.
+The [Kalshi order-book feed](/api/market-data/kalshi-beta) serves a bounded, changing cohort of markets over the shared authenticated [order-book format](/api/market-data/venue-order-books): a snapshot then sequenced full-book replacements, both sides quoted as exact decimal strings. It is not every open Kalshi market — discover the current set through signed `GET /stream/kalshi/partner/coverage`, which returns the served `scope`, the `ready` / `pending` / `retired` lists and `all_open_markets: false`. Short-duration contracts roll over; re-read coverage to find replacement tickers.
 
 ## Checking the live state
 
@@ -34,8 +34,9 @@ now. It separates three facts that are easy to read as one:
 | `entitled` | your organisation holds the entitlement |
 | `reason` | which of the three is missing, when the venue is not usable |
 
-While `implemented` is `false`, there is no path and no subscription to call. Treat a venue named
-in that payload as a published status, not an endpoint.
+For Kalshi today, `implemented` and `upstream_registered` are `true`; connect once your
+organisation's `entitled` state is `true`. Availability is still per market — inspect the stream
+status and wait for a snapshot before using a book.
 
 ## Access
 
@@ -44,13 +45,13 @@ Polymarket or Predict.fun access does not include it. Market Data connections ne
 with `stream.read` on an eligible paid plan — see [authentication](/authentication) and
 [API credits](/api-credits#authenticated-websocket-credits).
 
-[Native Kalshi market data](/api/market-data/kalshi-native) provides current books, catalogue metadata, public trades and native candles over REST. [Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately through REST with a Data credential and Kalshi data grant. Its published coverage is limited to retained short windows and point observations; it is not a live book feed.
+[Native Kalshi market data](/api/market-data/kalshi-native) provides current books, catalogue metadata, public trades and native candles over REST. [Captured Kalshi order-book history](/api/market-data/kalshi-history) is available separately through REST with a Data credential and Kalshi data grant: point-in-time book reconstruction over content-addressed generations, with every gap disclosed. Continuous historical depth — the full change stream over an arbitrary range, and backfill further into the past — is being delivered in stages; a bounded Parquet export can be scoped with the team in the meantime. Captured history is not the live book feed.
 
 ## Product coverage
 
 | Bravado product | Status |
 | --- | --- |
-| [Order-book WebSockets](/api/market-data/kalshi-beta) | Four-market beta |
+| [Order-book WebSockets](/api/market-data/kalshi-beta) | Available, bounded cohort |
 | [Enriched live trades](/api/market-data/trade-feed) | Not available |
 | [Data API](/products/data-api) | [Native market data](/api/market-data/kalshi-native) and [captured book history](/api/market-data/kalshi-history); no trader analytics |
 | [Trade API](/products/trade-api) | Not available |
