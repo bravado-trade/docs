@@ -89,7 +89,8 @@ GET https://partner-api.bravadotrade.com/uma/history/market?condition_id=<0x con
 | `resolution_source` | Meaning |
 | --- | --- |
 | `derived` | Found through the condition map (standard markets). |
-| `gamma_join` | Found by matching the market's Gamma id to the oracle request. Served only when that match is **unambiguous** (exactly one oracle request names the Gamma id in the searched window) and the requester is a NegRisk adapter; an ambiguous match returns `unknown` rather than a guess. |
+| `negrisk_exact` | Found through the **exact NegRisk condition map** — the on-chain `NegRiskOperator.QuestionPrepared` bridge (`keccak(NegRiskAdapter, questionId, 2)` → the oracle request id; 1:1, exact). This is the authoritative source for NegRisk markets; the requester must be a NegRisk adapter, otherwise the response is `unknown` with reason `requester_family_mismatch`. |
+| `gamma_join` | Found by matching the market's Gamma id to the oracle request. Served only when that match is **unambiguous** (exactly one oracle request names the Gamma id in the searched window) and the requester is a NegRisk adapter; an ambiguous match returns `unknown` rather than a guess. Used as a fallback when `negrisk_exact` has no entry. |
 | `unknown` | Neither join found an oracle request. |
 
 When the answer is `unknown`, the response is **HTTP 200** with an explicit marker, not an empty success and not a `404`:
@@ -105,7 +106,7 @@ When the answer is `unknown`, the response is **HTTP 200** with an explicit mark
 }
 ```
 
-`reason` is one of `condition_not_in_pm_tokens`, `market_time_unknown`, `no_oo_request_found`, `ambiguous_gamma_candidate` (more than one oracle request names the market's Gamma id, so none is served rather than guessing), `gamma_requester_not_negrisk` (the sole match was not a NegRisk adapter) or `no_stage_events` (an oracle request exists but nothing has been proposed yet; `question_id` is then set). An unknown carries no `settled`, `answer` or stage field: do not read it as an unsettled market.
+`reason` is one of `condition_not_in_pm_tokens`, `market_time_unknown`, `no_oo_request_found`, `ambiguous_gamma_candidate` (more than one oracle request names the market's Gamma id, so none is served rather than guessing), `gamma_requester_not_negrisk` (the sole match was not a NegRisk adapter), `requester_family_mismatch` (a `negrisk_exact` map entry was found but its requester is not a NegRisk adapter) or `no_stage_events` (an oracle request exists but nothing has been proposed yet; `question_id` is then set). An unknown carries no `settled`, `answer` or stage field: do not read it as an unsettled market.
 
 ## `GET /uma/history/recent`
 
