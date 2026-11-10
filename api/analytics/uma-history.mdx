@@ -67,6 +67,9 @@ Response fields are those of [`GET /uma/question`](/api/analytics/uma-live#get-/
 <ResponseField name="resolution_source" type="string">How `condition_id` was established. `derived`: computed from the question and confirmed against the condition map. `derived_unverified`: the same computation, **not** confirmed, and wrong for NegRisk markets; use `/uma/history/market` for the real condition id.</ResponseField>
 <ResponseField name="lifecycles" type="integer">How many lifecycles of this question have proposal, dispute or settlement events in the window. `1` is normal. A question that is re-requested after it finished has more than one, and the **latest** is served. A dispute re-requests the price in the same transaction and stays one lifecycle, so a disputed question keeps its `disputed` stage and the final settlement that follows the token-holder vote.</ResponseField>
 
+<ResponseField name="proposed.block_ms · disputed.block_ms · settled_at.block_ms" type="integer">On-chain block time (unix ms) of each stage event — the authoritative event time. The `request_ts` on each stage is the UMA **request key**, not a clock: across a dispute re-request it can read earlier than a later stage, so order stages by `block_ms`, not `request_ts`.</ResponseField>
+<ResponseField name="searched_from_ms · searched_to_ms" type="integer">The time window actually scanned, returned on **every** response — success as well as `unknown` — so a result is never silently truncated. With no `from`/`to`, the search reaches the present.</ResponseField>
+
 A `404` with code `not_found` means no proposal, dispute or settlement for that id exists in the window.
 
 ## `GET /uma/history/market`
@@ -86,7 +89,7 @@ GET https://partner-api.bravadotrade.com/uma/history/market?condition_id=<0x con
 | `resolution_source` | Meaning |
 | --- | --- |
 | `derived` | Found through the condition map (standard markets). |
-| `gamma_join` | Found by matching the market's Gamma id to the oracle request (covers NegRisk). |
+| `gamma_join` | Found by matching the market's Gamma id to the oracle request. Served only when that match is **unambiguous** (exactly one oracle request names the Gamma id in the searched window) and the requester is a NegRisk adapter; an ambiguous match returns `unknown` rather than a guess. |
 | `unknown` | Neither join found an oracle request. |
 
 When the answer is `unknown`, the response is **HTTP 200** with an explicit marker, not an empty success and not a `404`:
@@ -102,7 +105,7 @@ When the answer is `unknown`, the response is **HTTP 200** with an explicit mark
 }
 ```
 
-`reason` is one of `condition_not_in_pm_tokens`, `market_time_unknown`, `no_oo_request_found` or `no_stage_events` (an oracle request exists but nothing has been proposed yet; `question_id` is then set). An unknown carries no `settled`, `answer` or stage field: do not read it as an unsettled market.
+`reason` is one of `condition_not_in_pm_tokens`, `market_time_unknown`, `no_oo_request_found`, `ambiguous_gamma_candidate` (more than one oracle request names the market's Gamma id, so none is served rather than guessing), `gamma_requester_not_negrisk` (the sole match was not a NegRisk adapter) or `no_stage_events` (an oracle request exists but nothing has been proposed yet; `question_id` is then set). An unknown carries no `settled`, `answer` or stage field: do not read it as an unsettled market.
 
 ## `GET /uma/history/recent`
 
