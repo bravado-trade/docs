@@ -1,0 +1,79 @@
+---
+title: "Confirmed fills WebSocket"
+sidebarTitle: "Confirmed fills"
+description: "Every confirmed Polymarket OrderFilled on one authenticated socket, all wallets or a wallet set, with role, counterparty, builder code, fee and market metadata on each frame. Resumable by block and log index."
+---
+
+A real-time tape of every **confirmed** Polymarket `OrderFilled` event, for all wallets or for a set of wallets you choose. Each frame is one fill row read from the chain record after its block is final in our warehouse. For the lowest-latency (pre-block) signal, use the [mempool feed](/api/market-data/mempool-feed) instead.
+
+- **Venue: Polymarket only.**
+- **Exchange scope: CLOB V2.** Fills from the CTF Exchange V2 and the NegRisk CTF Exchange V2. ExchangeV3 (combo markets, live since about 2026-11-02) fills are not on this tape yet. Combo settlements have their own [combos stream](/api/combos-data/stream).
+- **Credential:** a **Market Data** key (`stream.read`), signed like [Live Trades](/api/market-data/trade-feed#connect-with-usage-tracking) with `path` set to `/stream/polymarket/partner/fills`. Metered like Live Trades.
+
+## Connect and subscribe
+
+```text
+wss://partner-api.bravadotrade.com/stream/polymarket/partner/fills
+```
+
+A new connection subscribes to nothing. Subscribe in band:
+
+```json
+{"op":"sub","streams":["confirmed_fills:all"]}
+{"op":"sub","streams":["confirmed_fills:wallets"],"wallets":["0x…","0x…"]}
+{"op":"update_filter","add":["0x…"],"remove":["0x…"]}
+{"op":"resume","token":{"block_number":"66123456","log_index":4}}
+{"op":"unsub"}
+```
+
+| Stream | Delivers |
+| --- | --- |
+| `confirmed_fills:all` | Every confirmed fill. |
+| `confirmed_fills:wallets` | Only fills whose `user` is in your wallet set. Change the set live with `update_filter`. |
+
+**Resume.** Send the `block_number` and `log_index` of the last frame you processed. The server replays everything after it, then continues live. A token that is too old is refused with `RESUME_TOO_STALE`. Without a token, the stream starts at the current tip.
+
+## Frame
+
+```json
+{
+  "type": "confirmed_fill", "venue": "polymarket",
+  "user": "0x…", "token_id": "71321045…", "side": "BUY",
+  "shares_normalized": "1.000000", "price": "0.520000",
+  "timestamp": 1782753000, "tx_hash": "0x…", "order_hash": "0x…",
+  "log_index": 4, "block_number": "66123456",
+  "dedup_key": "0x…:71321045…:0x…",
+  "fee": "0.036130", "role": "taker",
+  "taker": "0xe111180000d2663c0091e4f400237545b87b996b",
+  "builder": null,
+  "condition_id": "0x…", "outcome_index": 1, "outcome": "Down", "neg_risk": false,
+  "market_slug": "btc-updown-5m-…", "title": "Bitcoin Up or Down - …"
+}
+```
+
+Money and shares are fixed-scale decimal **strings** (6 decimals), never JSON numbers. An unknown price is `null`, never `0`.
+
+**One match produces several frames.** Polymarket emits one `OrderFilled` per order in a match: one for each maker order, plus one for the taker order. Each is its own frame.
+
+<ResponseField name="user" type="string">The owner of this row's order (the maker of this `OrderFilled`). `side`, `shares_normalized` and `price` are from this owner's point of view.</ResponseField>
+<ResponseField name="side" type="string">`BUY` or `SELL`.</ResponseField>
+<ResponseField name="shares_normalized" type="string">Shares filled, 6 decimals.</ResponseField>
+<ResponseField name="price" type="string">pUSD per share, 6 decimals, from the exact integer ratio. `null` when it cannot be computed.</ResponseField>
+<ResponseField name="timestamp" type="integer">Block time, unix seconds.</ResponseField>
+<ResponseField name="tx_hash · order_hash · block_number" type="string">Chain coordinates (`block_number` is a decimal string).</ResponseField>
+<ResponseField name="log_index" type="integer">Log index in the block. `(block_number, log_index)` is the resume token.</ResponseField>
+<ResponseField name="dedup_key" type="string">`tx_hash:token_id:user`. Use it to drop duplicates across your own reconnects.</ResponseField>
+<ResponseField name="fee" type="string">The fee charged to **this row's order**, pUSD, 6 decimals, as logged on chain. The taker order usually pays it; maker rows are usually `"0.000000"`.</ResponseField>
+<ResponseField name="role" type="string">`taker` when this row is the taker order's fill, else `maker`. Absent when it cannot be determined.</ResponseField>
+<ResponseField name="taker" type="string">The raw `taker` of the log: the counterparty (the taker order's owner) on a maker row, and the exchange contract itself on the taker-order row.</ResponseField>
+<ResponseField name="builder" type="string | null">The builder code (bytes32) of **this row's own order**: the taker's builder on the taker-order row, each maker's own builder on its row. `null` means the order carried no builder code. **Absent** means it is not known on this read path (a resumed wallet-set replay does not carry it).</ResponseField>
+<ResponseField name="condition_id · outcome_index · outcome · neg_risk · market_slug · title" type="string">Market metadata for the token, looked up server-side. Each field is **absent** when we have no value for it (for example, a market synced moments ago). It is never sent as `""`, `0` or `false` to mean unknown.</ResponseField>
+
+<Note>
+**Builder attribution.** Summing volume per `builder` over frames is correct attribution: each row carries its own order's builder. The sum across all builders is **routed order volume**, about **2× the matched volume**, because both sides of a match are rows. The builder's share of the fee is not on chain: one `fee` is charged per order and paid to Polymarket's fee receiver. Builder fees are not served on this tape.
+</Note>
+
+## Related
+
+- [Mempool feed](/api/market-data/mempool-feed): the same fills before the block, with the pending → mined lifecycle.
+- [Live Trades](/api/market-data/trade-feed): the venue trade feed.

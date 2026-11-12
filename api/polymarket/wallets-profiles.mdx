@@ -21,7 +21,7 @@ GET https://partner-api.bravadotrade.com/v2/polymarket/wallets/profiles?addresse
 
 ### Response
 
-A JSON **array** of wallet-profile objects — each element has exactly the shape returned by [`GET /wallet/{wallet}`](/api/polymarket/wallet) (`user`, four-window `metrics`, `trading_styles`, `entry_edge`, `unrealized_pnl`, `total_pnl`, `first_trade_at`, `last_trade_at`, `computed_at`). There is no surrounding envelope.
+A JSON **array** of wallet-profile objects — each element has exactly the shape returned by [`GET /wallet/{wallet}`](/api/polymarket/wallet) (`user`, four-window `metrics` including `fees_paid` / `fees_paid_source` per window and `max_loss_streak` / `max_loss_streak_unit` on `all_time`, `trading_styles`, `entry_edge`, `unrealized_pnl`, `total_pnl`, `first_trade_at`, `last_trade_at`, `computed_at`). There is no surrounding envelope.
 
 ```json
 [

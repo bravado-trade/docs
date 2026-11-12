@@ -94,6 +94,9 @@
               "api/polymarket/wallet",
               "api/polymarket/wallets-profiles",
               "api/polymarket/wallets-identities",
+              "api/polymarket/wallet-identity",
+              "api/polymarket/top-holders",
+              "api/polymarket/volume-charts",
               "api/polymarket/smart-activity"
             ]
           },
@@ -170,6 +173,7 @@
             "group": "Mempool Fills",
             "pages": [
               "api/market-data/mempool-feed",
+              "api/market-data/confirmed-fills",
               "api/market-data/onchain-events"
             ]
           }

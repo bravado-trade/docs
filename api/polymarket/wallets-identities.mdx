@@ -57,7 +57,10 @@ has one entry, including wallets with no indexed trading activity.
 The example is illustrative. A null field means unavailable, including a failed
 or timed-out upstream lookup. It does not prove that the wallet lacks a profile.
 Public identity enrichment is cached and may lag a profile change. Private names,
-internal Bravado user IDs and inferred owner wallets are not returned.
+internal Bravado user IDs and owner wallets are not returned here. For the full
+public profile (pseudonym, bio, X handle, badges, fetch time) and the wallet's
+signer and type with a confidence label, use
+[full wallet identities](/api/polymarket/wallet-identity).
 
 For trading metrics, use [batch wallet profiles](/api/polymarket/wallets-profiles),
 which has a separate 20-address limit and omits wallets without indexed activity.
