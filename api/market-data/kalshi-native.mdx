@@ -43,7 +43,7 @@ All paths below are relative to the base URL. Unknown parameters are rejected. T
 | `/markets/{ticker}/orderbook` | `depth` (0–100), `fresh` |
 | `/events` | `limit`, `cursor`, `status`, `series_ticker`, `tickers`, `with_nested_markets`, `with_milestones`, `min_close_ts`, `min_updated_ts` |
 | `/events/{ticker}` | `fresh`; native detail includes nested markets |
-| `/series` | `category`, `tags`, `include_product_metadata`, `include_volume`, `min_updated_ts` |
+| `/series` | `limit`, `cursor`, `category`, `tags`, `include_product_metadata`, `include_volume`, `min_updated_ts` |
 | `/series/{ticker}` | `fresh` |
 | `/trades` | Required `ticker`; optional `limit` (1–1000), `cursor`, `min_ts`, `max_ts`, `is_block_trade`, `fresh` |
 | `/historical/trades` | Same trade parameters; explicitly select the historical tier |
@@ -52,7 +52,7 @@ All paths below are relative to the base URL. Unknown parameters are rejected. T
 | `/historical/markets` | `limit`, `cursor`, `series_ticker`, `event_ticker`, `tickers`, `mve_filter=exclude`, `fresh` |
 | `/historical/cutoff` | `fresh` |
 
-`fresh` accepts `true` or `false` on every endpoint and defaults to `false`. Market and historical-market pages default to 100 records, events to 200 and trades to 100. The series list is not paginated. Responses are bounded to **1 MiB**; narrow filters or time windows when needed.
+`fresh` accepts `true` or `false` on every endpoint and defaults to `false`. Market and historical-market pages default to 100 records, events to 200, trades to 100 and the series list to 100. Follow the native `cursor` to page the full series list. Responses are bounded to **1 MiB**; narrow filters or time windows when needed.
 
 Trade and candle query times are Unix **seconds**. Native candles support `period_interval=1`, `60` or `1440` minutes. These are native 1-minute, 1-hour and 1-day candles, not computed 1-second bars.
 

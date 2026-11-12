@@ -47,6 +47,70 @@ with `stream.read` on an eligible paid plan — see [authentication](/authentica
 
 [Native Kalshi market data](/api/market-data/kalshi-native) provides current books, catalogue metadata, public trades and native candles over REST. [Historical Kalshi order-book depth](/api/market-data/kalshi-history) (captured history) is available separately through REST with a Data credential and Kalshi data grant: point-in-time book reconstruction over content-addressed generations, from September 2026 where coverage exists, with every gap disclosed. Continuous historical depth — the full change stream over an arbitrary range, and backfill further into the past — is being delivered in stages; a bounded Parquet export can be scoped with the team in the meantime. Captured history is not the live book feed.
 
+## All Kalshi endpoints
+
+Every Kalshi surface in one place. Two credentials: the **Market Data** credential (`stream.read`) for the live feed and its discovery, and the **Data API** credential (`analytics.read` + Kalshi data grant) for the REST surfaces. Each row links to the page documenting it in full.
+
+### Live feed — WebSocket · [Order-book feed](/api/market-data/kalshi-beta)
+
+Connect with the Market Data credential. Base `wss://partner-api.bravadotrade.com`.
+
+| Channel | What it streams |
+| --- | --- |
+| `GET /stream/kalshi/partner` | Order book: a snapshot then sequenced full-book replacements |
+| `GET /stream/kalshi/partner/trades` | Native public-trades ring |
+| `GET /stream/kalshi/partner/lifecycle` | Market and event lifecycle ring |
+
+### Live feed — discovery & health (signed `GET`)
+
+| Path | Returns |
+| --- | --- |
+| `GET /stream/capabilities` | Per-organisation venue capabilities: `implemented`, `upstream_registered`, `entitled`, channel paths |
+| `GET /stream/kalshi/partner/coverage` | The served cohort: `ready` / `pending` / `retired`, counts, `all_open_markets: false` |
+| `GET /stream/health` | Feed health: `degraded`, per-market staleness percentiles, `gaps_24h` |
+| `GET /stream/kalshi/partner/ticket` | A single-use 60-second ticket for a browser WebSocket |
+
+### Native REST pass-through · [Native market data](/api/market-data/kalshi-native)
+
+Data API credential. Base `https://partner-api.bravadotrade.com/market-data/v1/native`.
+
+| Path | Returns |
+| --- | --- |
+| `GET /markets` | Current markets list (`limit`, `cursor`, `status`, series/event filters, time filters) |
+| `GET /markets/{ticker}` | Market detail |
+| `GET /markets/{ticker}/orderbook` | Current order book: native YES/NO bid ladders |
+| `GET /events` | Events list |
+| `GET /events/{ticker}` | Event detail with nested markets |
+| `GET /series` | Series list (`limit`, `cursor`, `category`, `tags`) |
+| `GET /series/{ticker}` | Series detail |
+| `GET /trades` | Public trades (requires `ticker`) |
+| `GET /historical/trades` | Historical public trades |
+| `GET /series/{series_ticker}/markets/{ticker}/candlesticks` | Current candles — 1m / 1h / 1d |
+| `GET /historical/markets/{ticker}/candlesticks` | Historical candles |
+| `GET /historical/markets` | Historical markets list |
+| `GET /historical/cutoff` | Current/historical tier cutoff timestamps |
+
+### Computed · [Liquidity](/api/market-data/kalshi-liquidity)
+
+Data API credential. Base `https://partner-api.bravadotrade.com/market-data/v1/computed`.
+
+| Path | Returns |
+| --- | --- |
+| `GET /markets/{ticker}/liquidity` | Exact-decimal spread and depth derived from one native order-book observation |
+
+### Historical order-book depth · [Captured history](/api/market-data/kalshi-history)
+
+Data API credential. Base `https://partner-api.bravadotrade.com/market-data/v1`.
+
+| Path | Returns |
+| --- | --- |
+| `GET /capabilities` | Stored-history dataset capabilities and limits |
+| `GET /generations` | Generation index (`limit`, `after`, `instrument`) |
+| `GET /coverage` | Coverage per generation: intervals, gaps, quality |
+| `GET /instruments` | Instruments catalogue per generation |
+| `GET /books/{instrument}` | Stored order book at a generation (point-in-time) |
+| `GET /history/{instrument}` | Stored history over a capture-time range |
+
 ## Product coverage
 
 | Bravado product | Status |
