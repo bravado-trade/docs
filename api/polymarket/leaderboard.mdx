@@ -20,7 +20,9 @@ GET https://partner-api.bravadotrade.com/v2/polymarket/leaderboard
 </ParamField>
 
 <ParamField query="sort_by" type="string">
-  Rank metric: one of `total_pnl`, `roi`, `win_rate`, `volume`, `trades`.
+  Rank metric: `total_pnl` (default), `realized_pnl`, `roi`, `win_rate`,
+  `volume`, `trades`, `wins` or `losses`. `win_rate`, `wins` and `losses`
+  require `window=all_time`; other windows return `400`.
 </ParamField>
 
 <ParamField query="order" type="string">
@@ -51,16 +53,33 @@ GET https://partner-api.bravadotrade.com/v2/polymarket/leaderboard
   Opaque cursor from the previous page's `pagination.pagination_key`.
 </ParamField>
 
+### Ranking and availability
+
+Ranking is computed across the full candidate set before pagination, with a
+wallet tie-break and the native cursor. `realized_pnl` ranks the chosen window’s
+realized PnL; `total_pnl` also includes current unrealized PnL. Unknown values
+retain the source’s null ordering. Changing sort, order, window or filters
+requires starting a new cursor walk.
+
+In the Console Data API playground, **Realized PnL leaderboard (all-time)**,
+**Wins leaderboard (all-time)** and **Losses leaderboard (all-time)** are fixed
+all-time previews using your existing organisation key and request-credit flow.
+Direct REST calls support the windows listed above.
+
+Filters remain `style`, `exclude_style`, `min_volume` and `min_trades`. Fields
+such as `profit_factor`, prices and fees are not supported sort keys or arbitrary
+metric filters; unsupported sort keys return `400`.
+
 ### Response
 
 <ResponseField name="entries" type="array">
   <Expandable title="entry">
     <ResponseField name="user" type="string">Wallet address.</ResponseField>
     <ResponseField name="rank" type="integer">1-based rank within this page's ordering.</ResponseField>
-    <ResponseField name="entry_edge" type="string">Decimal string; `null` when unknown.</ResponseField>
+    <ResponseField name="entry_edge" type="number">Decimal number; `null` when unknown.</ResponseField>
     <ResponseField name="first_trade_at" type="integer">Unix seconds; `null` when unknown.</ResponseField>
     <ResponseField name="metrics" type="object">
-      Window metrics. `realized_pnl`, `total_pnl`, `volume` (USD decimal strings); `roi`, `win_rate` (`0`–`1` decimals); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_refunded`. Every field is a decimal string or `null` (see [conventions](/api/polymarket/overview) — `fees_paid` is `null` on day windows, `fees_refunded` is always `null`).
+      Window metrics. `realized_pnl`, `total_pnl`, `volume` (USD numbers); `roi`, `win_rate` (`0`–`1` decimals); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_refunded`. Every metric is a JSON number or `null` (see [conventions](/api/polymarket/overview) — `fees_paid` is `null` on day windows, `fees_refunded` is always `null`).
     </ResponseField>
     <ResponseField name="trading_styles" type="object">
       `is_whale`, `is_market_maker`, `is_active_trader`, `is_buy_and_hold`, `is_degen`, `is_high_conviction`, `is_contrarian`, `is_value_hunter` (booleans) and `primary_style` (string or `null`).
