@@ -1,10 +1,12 @@
 ---
-title: "Captured Kalshi order-book history"
+title: "Historical Kalshi order-book depth"
 sidebarTitle: "Kalshi order-book history"
-description: "Discover available Kalshi capture generations and query their retained books and short historical windows."
+description: "Historical order book depth for Kalshi: discover capture generations and query their retained order books over REST. Captures from September 2026 where coverage exists; continuous depth is being delivered in stages."
 ---
 
-Query retained Kalshi order books over REST at `https://partner-api.bravadotrade.com/market-data/v1`. Start with generation discovery and coverage; a market being listed on Kalshi does not mean its history is available here.
+This is **historical Kalshi order-book depth** — the captured order-book history behind the console's **Data API → Connect → Historical order book depth** option. Query retained Kalshi order books over REST at `https://partner-api.bravadotrade.com/market-data/v1`. Start with generation discovery and coverage; a market being listed on Kalshi does not mean its history is available here.
+
+Captured order-book depth runs from **September 2026** where coverage exists (coverage varies by market and period, and every gap is disclosed). Point-in-time lookup works today over each generation's retained window; continuous depth over an arbitrary range — the full change stream back in time — is being delivered in stages. A bounded Parquet export can be scoped with the team in the meantime.
 
 <Warning>
   This endpoint serves published capture windows and point observations, not a live book or complete Kalshi history. Check each generation’s quality and reported coverage before querying. A catalog entry alone does not establish that its data is ready to serve.
