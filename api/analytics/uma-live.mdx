@@ -1,15 +1,15 @@
 ---
 title: "UMA live window (REST)"
 sidebarTitle: "Live window"
-description: "Lowest-latency REST reads of the UMA resolutions that are happening right now — look up one question or market, or list recently updated questions, from the realtime feed's retained window."
+description: "Lowest-latency REST reads of the UMA resolutions that are happening right now: look up one question or market, or list recently updated questions, from the realtime feed's retained window. Protocol V2 body (uma-lifecycle/2)."
 ---
 
-Use these routes for the **lowest-latency reads of what is resolving right now**: the captured, retained state held by Bravado's realtime UMA feed — about 7 days for settled questions and 14 days for open ones. For anything older, or for `from` / `to` ranges, paging and provenance, use the [UMA history API](/api/analytics/uma-history).
+Use these routes for the **lowest-latency reads of what is resolving right now**: the captured, retained state held by Bravado's realtime UMA feed. Settled questions are retained for about 7 days after their last update, and open questions for about 14 days. For anything older, or for `from` / `to` ranges, paging and the complete event record, use the [UMA history API](/api/analytics/uma-history).
 
-Read the [UMA overview](/products/uma-api) for the lifecycle and [coverage](/products/uma-api#coverage-and-history).
+Read the [UMA overview](/products/uma-api) for the lifecycle, the status values and the [v2 breaking change](/products/uma-api#breaking-change-uma-api-v2).
 
 <Info>
-  UMA REST is part of the [Data API](/products/data-api): sign every request with your **Data API** credential (`analytics.read`) using [HMAC authentication](/authentication). Each successful response costs **1 API credit**, and the surface has its own per-key rate bucket. The UMA **WebSocket** is different: it stays on the Market Data credential (`stream.read`) — see [UMA WebSocket](/api/market-data/uma-websocket). There is no separate UMA key.
+  UMA REST is part of the [Data API](/products/data-api): sign every request with your **Data API** credential (`analytics.read`) using [HMAC authentication](/authentication). Each successful response costs **1 API credit**, and the surface has its own per-key rate bucket. The UMA **WebSocket** is different: it stays on the Market Data credential (`stream.read`), see [UMA WebSocket](/api/market-data/uma-websocket). There is no separate UMA key.
 </Info>
 
 <Warning>
@@ -51,95 +51,116 @@ console.log(await response.json());
 
 A `200` with `questions` confirms that your authenticated REST read succeeded. An empty `questions` array reports no matching recent records. A `401` only confirms an authentication refusal, not a successful read of resolution data.
 
-Base URL: `https://partner-api.bravadotrade.com`. Sign every REST request with HMAC, including its sorted query parameters. JSON; ids are hex, `payout` is an integer micro-USDC string.
+Base URL: `https://partner-api.bravadotrade.com`. Sign every REST request with HMAC, including its sorted query parameters. JSON. Ids are lowercase hex, `price_raw` is the exact 32-byte two's-complement `int256` word, and `payout` is an integer micro-USDC string.
 
 ## `GET /uma/question`
 
-The captured, retained lifecycle state of one question. Stage objects are present only when Bravado has captured that stage; a record is not a guarantee of complete event history.
+The captured, retained lifecycle of one question, in the v2 body. The body is the same shape the [history routes](/api/analytics/uma-history) serve. Its contents cover only the retained window, so read `coverage` before you rely on completeness.
 
 ```text
 GET https://partner-api.bravadotrade.com/uma/question?id=<0x questionId>
 ```
 
 <ParamField query="id" type="string" required>
-  The `0x` 32-byte `question_id`.
+  The `0x` 32-byte `question_id`. The `0x` prefix is optional.
 </ParamField>
 
-<ResponseField name="question_id" type="string">Hex question id (`keccak256(ancillaryData)`).</ResponseField>
-<ResponseField name="condition_id" type="string">Hex CTF condition id for the market. Derived from the question and **not reliable for NegRisk markets** — use [`/uma/history/market`](/api/analytics/uma-history#get-/uma/history/market) for the real id.</ResponseField>
-<ResponseField name="title" type="string">Human-readable market question (from the ancillary data).</ResponseField>
-<ResponseField name="answer" type="string">Latest answer: `yes` · `no` · `50-50` · `too-early` · `other`.</ResponseField>
-<ResponseField name="settled" type="boolean">Whether the resolution has finalized on-chain.</ResponseField>
-<ResponseField name="proposed" type="object">
-  <Expandable title="stage fields">
-    <ResponseField name="proposer" type="string">Address that posted the proposal.</ResponseField>
-    <ResponseField name="answer" type="string">Answer classified from the proposed price.</ResponseField>
-    <ResponseField name="price_raw" type="string">Exact `int256` price, hex.</ResponseField>
-    <ResponseField name="request_ts" type="integer">Oracle request timestamp (unix seconds).</ResponseField>
-    <ResponseField name="block" type="integer">Polygon block.</ResponseField>
-    <ResponseField name="tx" type="string">Transaction hash.</ResponseField>
-    <ResponseField name="log_index" type="integer">Log index within the block.</ResponseField>
-    <ResponseField name="seen_pending" type="boolean">Present and `true` while this proposal/dispute is known only from the mempool (`block` is `0`); cleared once mined.</ResponseField>
-  </Expandable>
-</ResponseField>
-<ResponseField name="disputed" type="object">Same shape as `proposed`, plus `disputer`. Present only if the proposal was disputed.</ResponseField>
-<ResponseField name="settled_at" type="object">Same shape, plus `payout` (micro-USDC string). Present once `settled`.</ResponseField>
-<ResponseField name="updated_ms" type="integer">When Bravado last updated this record (unix ms).</ResponseField>
+<ResponseField name="fold_version" type="string" required>Always `uma-lifecycle/2` on the v2 body. Branch on it if you also read pre-v2 responses.</ResponseField>
+<ResponseField name="question_id" type="string" required>Hex question id (`keccak256` of the ancillary data).</ResponseField>
+<ResponseField name="title" type="string | null" required>Market question from the ancillary data, up to 256 bytes. `null` when the record carries no title.</ResponseField>
+<ResponseField name="family" type="string" required>Requester family of the active request: `uma_ctf_adapter` (standard markets), `negrisk_adapter` (NegRisk markets), `legacy_v1`, `polymarket_v2` (Protocol V2), or `unknown`.</ResponseField>
+<ResponseField name="condition_id" type="string | null" required>The CTF condition id for the market, or `null` when it is not established. See `condition_id_source`.</ResponseField>
+<ResponseField name="condition_id_source" type="string" required>How `condition_id` was established: `derived` (the standard adapter's formula, computed from the question's requester and id; the live route does not check it against the warehouse map), `pv2_exact` (the Protocol V2 `request_id`), or `unknown`. NegRisk markets are `unknown` on this route; use [`/uma/history/market`](/api/analytics/uma-history#get-/uma/history/market) for their real id.</ResponseField>
+<ResponseField name="condition_id_reason" type="string" conditional>Present when `condition_id_source` is `unknown`. Values: `negrisk_history_only` (NegRisk markets are not indexed live), `pv2_request_not_observed` (no same-transaction Protocol V2 request was captured), `pv2_request_id_ambiguous` (more than one Protocol V2 request id was captured for the question), `unknown_family` (the requester is outside the family table).</ResponseField>
+<ResponseField name="status" type="string" required>Stage of the active request: `requested`, `proposed`, `disputed`, `settled`, or `unknown` (no oracle request is identifiable in the retained record).</ResponseField>
+<ResponseField name="active_request" type="object | null" required>The request with the highest `request_ts`, which decides `status` and `outcome`. `null` when `status` is `unknown`.</ResponseField>
+<ResponseField name="active_request.requester" type="string">The requester address of the active request.</ResponseField>
+<ResponseField name="active_request.request_ts" type="integer">The request key timestamp (unix seconds). It identifies the request. It is not the time of an event: use `block_ms` for that.</ResponseField>
+<ResponseField name="active_request.origin" type="string">Why this request exists: `initial`, `dispute_reset` (re-requested in the same transaction as a dispute), `ignore_reset` (re-requested after a too-early settlement was discarded), `re_request`, or `unobserved` (its RequestPrice was not captured).</ResponseField>
+<ResponseField name="active_request.basis" type="string">`request_event` when the request's RequestPrice was captured, or `stage_events_only` when the request is known only from its stage events.</ResponseField>
+<ResponseField name="outcome" type="object | null" required>The active request's Settle. `null` until that request settles. A Settle of any other request never sets `outcome`.</ResponseField>
+<ResponseField name="outcome.answer" type="string">`yes`, `no`, `50-50`, `too-early`, or `other`. Read `price_raw` for the exact value.</ResponseField>
+<ResponseField name="outcome.price_raw" type="string">The exact 32-byte two's-complement `int256` settled price, hex.</ResponseField>
+<ResponseField name="outcome.payout" type="string">Settled payout, integer micro-USDC string.</ResponseField>
+<ResponseField name="outcome.request_ts" type="integer">The request key of the active request that this Settle closes.</ResponseField>
+<ResponseField name="outcome.via" type="string">`dvm` when the active request was disputed and settled by UMA's vote, or `optimistic` when it settled without a dispute.</ResponseField>
+<ResponseField name="outcome.settle" type="object">Where the Settle was mined: `block`, `block_ms`, `tx`, `log_index`.</ResponseField>
+<ResponseField name="requests" type="array" required>Every oracle request of the question that the record holds, ascending by `request_ts`. Each item carries `requester`, `request_ts`, `origin`, `request` (the RequestPrice location, or `null` when unobserved), `proposals`, `disputes` and `settles`. Each step has `block`, `block_ms`, `tx`, `log_index`, `price_raw`, `answer`, and `proposer` or `disputer` when known. A settle carries `payout`, and `superseded: true` when it belongs to a request that is not the active one. At most 50 requests are listed: the newest is always kept, and `coverage.truncated` is `true` when older requests were cut.</ResponseField>
+<ResponseField name="pending" type="array" required>Mempool events that are not yet mined, as an overlay. Items carry `kind` (`RequestPrice`, `ProposePrice` or `DisputePrice`), `requester`, `request_ts`, `tx`, `seen_ms`, and `proposer` or `disputer`, `price_raw` and `answer` when known. A pending event never changes `status`, `active_request` or `outcome`. An event leaves `pending` when its transaction is mined, or after 10 minutes without a mined match.</ResponseField>
+<ResponseField name="updated_ms" type="integer" required>Block time (unix ms) of the latest mined event in the record. It is not the time of your request, and it is not the time Bravado last touched the record.</ResponseField>
+<ResponseField name="coverage" type="object" required>What the response is based on. Present on every response.</ResponseField>
+<ResponseField name="coverage.source" type="string" required>`live_store`.</ResponseField>
+<ResponseField name="coverage.from_ms" type="integer" required>Unix ms when the live service began continuous capture. Events from before that point come from a restored snapshot.</ResponseField>
+<ResponseField name="coverage.to_ms" type="integer" required>Block time (unix ms) of the latest event the service has ingested.</ResponseField>
+<ResponseField name="coverage.truncated" type="boolean" required>`true` when older requests were cut from `requests`, or when the oldest events of this question were evicted at the per-question event cap. The lifecycle is then incomplete.</ResponseField>
+<ResponseField name="coverage.restored_from_v1" type="boolean" conditional>Present and `true` when this record was restored from the previous release's snapshot. Its `block_ms` values are when Bravado received each event, not on-chain block times, and its RequestPrice was not captured.</ResponseField>
 
-```json Example response
-{
-  "question_id": "0x3281d5f64c96c007212bdc90b29cb51581058dac59a57fc2b98a31fd7abe0538",
-  "condition_id": "0x19c79788f1288b497b5305f81b71c3f20db1ae338b049d733dcb09b5d5d352f6",
-  "title": "Will Ben Shelton win the 2026 Men's US Open?",
-  "answer": "no",
-  "settled": true,
-  "proposed": {
-    "proposer": "0xef3990a7c8fa92d84dce0e7816ca3410820c1d36",
-    "answer": "no", "price_raw": "0x00…00",
-    "request_ts": 1767385181, "block": 93012001, "tx": "0x42879bd3…", "log_index": 5
-  },
-  "settled_at": {
-    "answer": "no", "price_raw": "0x00…00", "payout": "500800000",
-    "request_ts": 1767385181, "block": 93012040, "tx": "0x7c80413d…", "log_index": 9
-  },
-  "updated_ms": 1789253500123
-}
-```
+Stage values and the full lifecycle are defined in the [UMA overview](/products/uma-api#the-resolution-lifecycle).
 
 ## `GET /uma/market`
 
-The same retained record as `/uma/question`, looked up by the market's CTF condition id. It has the same coverage and retention limits.
+The same v2 body as `/uma/question`, looked up by the market's CTF condition id. It has the same coverage and retention limits.
 
 ```text
 GET https://partner-api.bravadotrade.com/uma/market?condition_id=<0x conditionId>
 ```
 
-<ParamField query="condition_id" type="string" required>The `0x` 32-byte CTF condition id.</ParamField>
+<ParamField query="condition_id" type="string" required>
+  The `0x` 32-byte CTF condition id. The `0x` prefix is optional.
+</ParamField>
+
+A market is found by a standard adapter's derived condition id or by a Protocol V2 `request_id`. A NegRisk condition id is not indexed on the live route, so it returns `404 not_in_live_window` with a pointer to the history route.
+
+<ResponseField name="fold_version" type="string" required>Always `uma-lifecycle/2`.</ResponseField>
+<ResponseField name="question_id" type="string" required>Hex question id (`keccak256` of the ancillary data).</ResponseField>
+<ResponseField name="title" type="string | null" required>Market question, up to 256 bytes. `null` when the record carries no title.</ResponseField>
+<ResponseField name="family" type="string" required>Requester family of the active request: `uma_ctf_adapter`, `legacy_v1`, `polymarket_v2`, or `unknown`.</ResponseField>
+<ResponseField name="condition_id" type="string" required>The condition id you looked up.</ResponseField>
+<ResponseField name="condition_id_source" type="string" required>`derived` or `pv2_exact` on a match. See [`/uma/question`](#get-/uma/question).</ResponseField>
+<ResponseField name="condition_id_reason" type="string" conditional>Present only when `condition_id_source` is `unknown`. A match never has a reason.</ResponseField>
+<ResponseField name="status" type="string" required>`requested`, `proposed`, `disputed`, `settled`, or `unknown`.</ResponseField>
+<ResponseField name="active_request" type="object | null" required>The request that decides `status` and `outcome`, with `requester`, `request_ts`, `origin` and `basis`. `null` when `status` is `unknown`.</ResponseField>
+<ResponseField name="outcome" type="object | null" required>The active request's Settle, with `answer`, `price_raw`, `payout`, `request_ts`, `via` and `settle`. `null` until that request settles.</ResponseField>
+<ResponseField name="requests" type="array" required>Every oracle request the record holds, with `origin`, `request`, `proposals`, `disputes` and `settles`. A superseded settle is marked `superseded: true`. See [`/uma/question`](#get-/uma/question) for the item fields.</ResponseField>
+<ResponseField name="pending" type="array" required>Mempool events not yet mined. Never changes `status`, `active_request` or `outcome`.</ResponseField>
+<ResponseField name="updated_ms" type="integer" required>Block time (unix ms) of the latest mined event in the record.</ResponseField>
+<ResponseField name="coverage" type="object" required>Present on every response. Same fields as [`/uma/question`](#get-/uma/question): `source` (`live_store`), `from_ms`, `to_ms`, `truncated`, and `restored_from_v1` when true.</ResponseField>
 
 ## `GET /uma/recent`
 
-Recently updated question records, newest first by last update. Each question appears with its current captured state, not as one row per proposal, dispute or settlement event. The `stage` filter selects the current stage: a question that has settled is not returned as `proposed` even if its record includes an earlier proposal.
+Recently updated question records, most recently updated first. Each question appears once, with its current captured state, not as one row per proposal, dispute or settlement event. The `stage` filter selects the current `status`: a question that has settled is not returned as `proposed`, even if its record includes an earlier proposal.
 
 ```text
 GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100
 ```
 
-<ParamField query="stage" type="string">Filter by current stage: `proposed` · `disputed` · `settled`. Omit for all.</ParamField>
-<ParamField query="limit" type="integer" default="100">Max question records in this response (1–500). This is a result cap, not a page size: there is no cursor, offset or next page. To page an event log over a time range, use [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent).</ParamField>
+<ParamField query="stage" type="string">Filter by current `status`: `requested`, `proposed`, `disputed` or `settled`. Omit for all.</ParamField>
+<ParamField query="limit" type="integer" default="100">Maximum question records in this response, from 1 to 500. This is a result cap, not a page size: there is no cursor, offset or next page. To page an event log over a time range, use [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent).</ParamField>
 
-<ResponseField name="questions" type="array">Array of question records (same shape as `GET /uma/question`).</ResponseField>
-<ResponseField name="count" type="integer">Number of records returned.</ResponseField>
+<ResponseField name="questions" type="array" required>Question records, each in the v2 body of [`/uma/question`](#get-/uma/question).</ResponseField>
+<ResponseField name="count" type="integer" required>Number of records in `questions`.</ResponseField>
 
 ## Missing records and freshness
 
 On the live routes:
 
-- A `404` from a question or market lookup means no retained record is available for that ID. It does not establish that the market never existed, never resolved or never had a dispute. For anything older than the live window, query the [history API](/api/analytics/uma-history).
-- A missing `proposed`, `disputed` or `settled_at` object means that stage is absent from the captured record. Do not infer a complete event history from omitted fields.
-- `updated_ms` is the record's last update time, not the time of your request. Responses can be cached; a cached response may also be served during an upstream interruption. Check this timestamp before relying on freshness.
-- A `502` can indicate that the resolution feed is unavailable. Do not interpret it as an empty result or an unresolved market.
+- A `404 not_in_live_window` from a question or market lookup means no retained record is available for that ID. It does not establish that the market never existed, never resolved or never had a dispute. The body carries a `history` field with the matching history route. For anything older than the live window, query the [history API](/api/analytics/uma-history).
+- A `proposed`, `disputed` or `settled` stage is present only when its events are in the captured record. Do not infer a complete event history from the absence of a request or stage.
+- `updated_ms` is the block time of the latest mined event, not the time of your request. Responses can be cached. Check `updated_ms` and `coverage` before you rely on freshness or completeness.
+- A `503` or `504` can indicate that the resolution feed is unavailable or slow. Do not interpret it as an empty result or an unresolved market.
 
-For access refusals, check your signature (`401`), that your credential carries `analytics.read` (`403`), and your credit allowance (`402`). See [HMAC authentication](/authentication) and [API credits](/api-credits).
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_id` | `/uma/question`: `id` is missing, or is not a 32-byte hex id (the `0x` prefix is optional). |
+| `400` | `invalid_condition_id` | `/uma/market`: `condition_id` is missing, or is not a 32-byte hex id (the `0x` prefix is optional). |
+| `400` | `invalid_stage` | `/uma/recent`: `stage` is not one of `requested`, `proposed`, `disputed`, `settled`. |
+| `400` | `invalid_limit` | `/uma/recent`: `limit` is not an integer from 1 to 500. |
+| `404` | `not_in_live_window` | No retained record for that id. The body has a `history` field that points to the history route. |
+| `401` / `402` / `403` / `429` | `INVALID_SIGNATURE`, `STALE_TIMESTAMP`, `INVALID_KEY`, `KEY_DISABLED`, `INSUFFICIENT_SCOPE`, `RATE_LIMITED` and the credit-allowance refusal | Signature, key, credential scope, credit allowance or rate limit. See [HMAC authentication](/authentication) and [API credits](/api-credits). |
+| `503` | `UMA_LIVE_UNAVAILABLE`, `NOT_CONFIGURED` | The live UMA source is unavailable or not configured. Retry after the `Retry-After` interval. |
+| `504` | `UPSTREAM_TIMEOUT` | The upstream read timed out. Retry. |
 
 ## Continue with live updates
 
@@ -147,6 +168,6 @@ Use the [WebSocket](/api/market-data/uma-websocket) for new events. After a disc
 
 ## Related
 
-- [UMA history (REST)](/api/analytics/uma-history) — all history, `from` / `to`, paging and `resolution_source` provenance.
-- [UMA WebSocket](/api/market-data/uma-websocket) — the live `stream.read` stream of new proposals, disputes and settlements.
-- [UMA overview](/products/uma-api) — lifecycle, identifiers and coverage limits.
+- [UMA history (REST)](/api/analytics/uma-history): all history, `from` / `to`, paging and `condition_id_source` provenance.
+- [UMA WebSocket](/api/market-data/uma-websocket): the live `stream.read` stream of new proposals, disputes and settlements.
+- [UMA overview](/products/uma-api): lifecycle, identifiers, coverage and the v2 breaking change.

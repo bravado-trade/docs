@@ -263,7 +263,7 @@ The same Data API credential also serves **UMA resolution data** — how Polymar
 | Endpoint | Description |
 | --- | --- |
 | `GET /uma/question`, `/uma/market`, `/uma/recent` | The [live window](/api/analytics/uma-live) — lowest-latency reads of what is resolving right now (about 7 days settled, 14 days open) |
-| `GET /uma/history/question`, `/uma/history/market`, `/uma/history/recent` | [All history](/api/analytics/uma-history) from `pm_uma_oracle_events`, with `from` / `to`, cursor paging and `resolution_source` provenance |
+| `GET /uma/history/question`, `/uma/history/market`, `/uma/history/recent` | [All history](/api/analytics/uma-history) from `pm_uma_oracle_events`, with `from` / `to`, keyset paging and `condition_id_source` provenance |
 
 The live push **stream** (`/uma/ws`) is a separate [Market Data](/products/market-data) surface on the `stream.read` credential. See the [UMA overview](/products/uma-api).
 

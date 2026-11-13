@@ -1,7 +1,7 @@
 ---
 title: "UMA API: Optimistic Oracle Resolution Data"
 sidebarTitle: "Overview"
-description: "Query and stream how Polymarket markets resolve through UMA's Optimistic Oracle — proposals, disputes, and final settlement outcomes — over REST and WebSocket."
+description: "Query and stream how Polymarket markets resolve through UMA's Optimistic Oracle: proposals, disputes, re-requests and final settlement outcomes, over REST and WebSocket."
 icon: "/logo/uma.png"
 ---
 
@@ -11,70 +11,129 @@ Polymarket markets do not settle themselves. When a market's event concludes, th
   UMA resolution is served from `partner-api.bravadotrade.com`, signed with [HMAC authentication](/authentication). The **REST** routes are part of the
   [Data API](/products/data-api) and take your Data API credential (`analytics.read`); each successful response costs 1 credit. The **WebSocket** is part of
   [Market Data](/products/market-data) and takes your Market Data credential (`stream.read`) on an active paid plan. You do not need a separate UMA key.
-  Coverage today is Polymarket.
+  Coverage is Polymarket.
 </Info>
+
+## Breaking change: UMA API v2
+
+The REST routes `/uma/question`, `/uma/market`, `/uma/recent` and their `/uma/history/*` counterparts now return a new response shape, in place. The field names and the meaning of several fields changed. Every v2 response carries `"fold_version": "uma-lifecycle/2"`, so you can tell the two shapes apart.
+
+**What changed.** A question is now a set of oracle requests. Each request has its own proposals, disputes and settlements. The question's outcome is the Settle of the **active request**, the one with the highest `request_ts`. A Settle of any other request is listed on that request with `superseded: true`, and it never changes the outcome.
+
+**Why.** On disputed markets the previous fold took the latest Settle in log order. When a dispute sent the question back to UMA's token-holder vote, a superseded too-early settlement could be served as the outcome. The v2 rule takes the outcome from the active request only. Checked against the adapters' own resolution events on disputed questions, the v2 rule agreed in every case checked, and the previous rule agreed in fewer than half.
+
+**Field mapping.** The old fields are removed. They are not aliased.
+
+| Previous field | v2 field |
+| --- | --- |
+| `answer` (top level) | `outcome.answer`. `null` in `outcome` until the active request settles. |
+| `settled` (boolean) | `status` equals `settled`. |
+| `proposed` (stage object) | `active_request`, and the active request's entry in `requests[]`, where the proposals are in `proposals[]`. |
+| `disputed` (stage object) | The active request's entry in `requests[]`, where the disputes are in `disputes[]`. |
+| `settled_at` (stage object) | `outcome`: `payout`, `request_ts`, `via`, `price_raw`, and `settle` with `block`, `block_ms`, `tx`, `log_index`. |
+| `request_ts` on a stage | `requests[].request_ts`. It is a request key, not a clock. |
+| `seen_pending: true` on a stage object | An entry of `pending[]`. Stage objects are always mined. History always returns `pending: []`. |
+| `condition_id` derived on every route, not reliable for NegRisk | `condition_id` is `null` when it is not established, and `condition_id_source` says how it was. |
+| `resolution_source` (history) | `condition_id_source`. Values: `derived`, `negrisk_exact`, `pv2_exact`, `unknown`. `derived_unverified` and `gamma_join` are retired. |
+| `lifecycles` (history) | `requests[]`. `requests` has one entry per oracle request, so `requests.length` is the count. |
+| `searched_from_ms`, `searched_to_ms` on every response | `coverage.from_ms` and `coverage.to_ms` on every response. The `/uma/history/market` unknown answer keeps `searched_from_ms` and `searched_to_ms`, as nullable fields. |
+| `updated_ms` (when Bravado last updated the record) | `updated_ms`, the block time of the latest mined event. |
+| `stage` filter: `proposed`, `disputed`, `settled` | The same three, plus `requested`. The filter is the `status` of the active request over the whole lifecycle, not the stage of events inside the window. |
+| `title`, `question_id`, `answer` values, `price_raw`, `payout` | Unchanged. |
 
 ## Choose your interface
 
-The **REST** API is a [Data API](/products/data-api) surface (`analytics.read`, 1 credit per response) and is split into two pages — the live window and all history. The **WebSocket** is a separate [Market Data](/products/market-data) surface (`stream.read`, paid plan). They do not share a credential, and neither is a product of its own.
+The **REST** API is a [Data API](/products/data-api) surface (`analytics.read`, 1 credit per response) and is split into two pages: the live window and all history. The **WebSocket** is a separate [Market Data](/products/market-data) surface (`stream.read`, paid plan). They do not share a credential, and neither is a product of its own.
 
 | You want to… | Use |
 | --- | --- |
-| Read what is resolving right now, at the lowest latency | [REST — live window](/api/analytics/uma-live) — `/uma/question`, `/uma/market`, `/uma/recent` |
-| Look up the resolution of one question or market, over all history | [REST — history](/api/analytics/uma-history#get-/uma/history/question) — `/uma/history/question` or `/uma/history/market` |
-| Read questions that changed in a time range, with paging | [REST — history](/api/analytics/uma-history#get-/uma/history/recent) — `/uma/history/recent` |
-| Receive new proposals, disputes and settlements as they occur | [WebSocket](/api/market-data/uma-websocket) — `/uma/ws` |
+| Read what is resolving right now, at the lowest latency | [REST: live window](/api/analytics/uma-live): `/uma/question`, `/uma/market` or `/uma/recent` |
+| Look up the resolution of one question or market, over all history | [REST: history](/api/analytics/uma-history#get-/uma/history/question): `/uma/history/question` or `/uma/history/market` |
+| Read questions that changed in a time range, with paging | [REST: history](/api/analytics/uma-history#get-/uma/history/recent): `/uma/history/recent` |
+| Receive new proposals, disputes and settlements as they occur | [WebSocket](/api/market-data/uma-websocket): `/uma/ws` |
 
 ## Coverage and history
 
-Coverage is Polymarket's UMA resolutions: requests from Polymarket's UMA adapters for `YES_OR_NO_QUERY` markets, including NegRisk markets.
+Coverage is Polymarket's UMA resolutions. Three kinds of request are included, for `YES_OR_NO_QUERY` questions only:
 
-- **[History](/api/analytics/uma-history)** (`/uma/history/*`) reads the complete record of oracle events, with `from` / `to` ranges, cursor paging and `resolution_source` provenance. A question that was re-requested returns its latest lifecycle and says how many there were.
-- **[Live window](/api/analytics/uma-live)** (`/uma/question`, `/uma/market`, `/uma/recent`, and the WebSocket) reflects what the realtime feed currently holds: about 7 days for settled questions and 14 days for open ones. A `404` there means the record is not retained; it does not prove the question never existed.
+- **Standard adapters**, the `uma_ctf_adapter` and `legacy_v1` families, for standard markets.
+- **NegRisk adapters**, the `negrisk_adapter` family, for NegRisk markets.
+- **Protocol V2**, the `polymarket_v2` family, for Polymarket's Protocol V2 requester (`0x53703dd6129d723066b6362510e5ae2fecd48218`). Protocol V2 questions are Polymarket questions, served on both the live and the history routes. Their `condition_id` is the Protocol V2 `request_id`, served as `pv2_exact`.
 
-A market whose oracle request cannot be found is reported as `resolution_source: "unknown"`, never as an empty or unsettled market. Consuming the live stream does not backfill earlier events; read [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent) for those.
+Other protocols that use the same oracle are not served.
+
+- **[History](/api/analytics/uma-history)** (`/uma/history/*`) reads the complete record of oracle events, with `from` / `to` ranges and keyset paging. It serves `condition_id_source` provenance and `coverage` on every response.
+- **[Live window](/api/analytics/uma-live)** (`/uma/question`, `/uma/market`, `/uma/recent`, and the WebSocket) reflects what the realtime feed currently holds: about 7 days for settled questions and 14 days for open ones. A `404 not_in_live_window` there means the record is not retained. It does not prove the question never existed. NegRisk markets are not indexed on the live routes, so their `condition_id` is `null` there.
+
+Every response carries `coverage`, which states what it was computed from: `source` (`warehouse` or `live_store`), the time bounds, and `truncated`. Read it before you rely on a response being complete.
+
+A market whose oracle request cannot be found is reported with `condition_id_source: "unknown"` and a `condition_id_reason` (on the question routes) or a `reason` (on the history market route). It is never reported as an empty or unsettled market. Consuming the live stream does not backfill earlier events. Read [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent) for those.
 
 ## The resolution lifecycle
 
-The captured record can contain a proposal, an optional dispute and a final settlement.
+The record of one question can contain a request, a proposal, an optional dispute and a final settlement. A dispute can send the question back through a new request, so a question can hold several requests.
 
 <Steps>
+  <Step title="Request">
+    The question is requested from the oracle (`requested`). The request has a key, `request_ts` plus the requester, and it stays the active request until a later request replaces it.
+  </Step>
   <Step title="Proposal">
-    A proposer posts an outcome to the oracle with a bond. This is the `proposed` stage; `answer` carries the proposed result. A proposal observed before mining carries `seen_pending: true` and is provisional.
+    A proposer posts an outcome to the oracle with a bond (`proposed`). `answer` carries the proposed result. A proposal seen in the mempool before it is mined appears in `pending[]` and is provisional.
   </Step>
   <Step title="Challenge window">
     The proposal stays open for a fixed liveness period. If nobody disputes it, it becomes eligible to settle on the proposed answer.
   </Step>
   <Step title="Dispute (optional)">
-    Any party may dispute within the window by posting their own bond (`disputed` stage). A disputed request escalates to UMA's token-holder vote rather than settling on the proposer's word.
+    Any party may dispute within the window by posting their own bond (`disputed`). The dispute escalates to UMA's token-holder vote. The vote can re-request the price, which starts a new request that becomes the active one.
   </Step>
   <Step title="Settlement">
-    The final answer is written on-chain (`settled` stage, with the `payout`). Winning outcome tokens become redeemable at \$1; losing tokens go to \$0.
+    The final answer is written on-chain (`settled`, with `outcome.payout`). Winning outcome tokens become redeemable at \$1; losing tokens go to \$0.
   </Step>
 </Steps>
 
+`status` is the stage of the **active request**: `requested`, `proposed`, `disputed` or `settled`. It is `unknown` when no oracle request can be identified in the record. `outcome` is that request's Settle, and it is `null` until the request settles.
+
 <Warning>
-  A market whose event has visibly concluded is not necessarily settled. Always confirm `settled: true` before treating a position as realized — an undisputed proposal can still be disputed until its challenge window closes.
+  A market whose event has visibly concluded is not necessarily settled. Always confirm `status` is `settled` and `outcome` is not `null` before treating a position as realized. An undisputed proposal can still be disputed until its challenge window closes.
 </Warning>
+
+## The response body
+
+These enumerations apply to every v2 response, live and history. The per-route reference lists each field.
+
+| Field | Values |
+| --- | --- |
+| `status` | `requested`, `proposed`, `disputed`, `settled`, `unknown` |
+| `family` | `uma_ctf_adapter` (standard markets), `negrisk_adapter` (NegRisk markets), `legacy_v1`, `polymarket_v2` (Protocol V2), `unknown` |
+| `active_request.origin` and `requests[].origin` | `initial`: the first request of the question. `dispute_reset`: re-requested in the same transaction as a dispute. `ignore_reset`: re-requested after a too-early settlement was discarded. `re_request`: any other re-request. `unobserved`: known only from its stage events. |
+| `active_request.basis` | `request_event` when the request's RequestPrice is in the record, `stage_events_only` otherwise |
+| `outcome.via` | `optimistic` (settled without a dispute), `dvm` (settled by UMA's vote after a dispute) |
+| `outcome.answer`, `answer` in steps | `yes`, `no`, `50-50`, `too-early`, `other`. `price_raw` keeps the exact value. |
+| `condition_id_source` | `derived`, `negrisk_exact`, `pv2_exact`, `unknown` |
+
+A step in `proposals`, `disputes` or `settles` has `block`, `block_ms`, `tx` and `log_index`, with `price_raw` and `answer`. A settle also has `payout`. A settle that belongs to a request other than the active one has `superseded: true`, and it never changes `outcome`.
+
+`price_raw` is the exact 32-byte two's-complement `int256` word, in hex. Map it to `answer` as follows: `0` is `no`, `1e18` is `yes`, `5e17` is `50-50`, the minimum `int256` is `too-early`, and any other value is `other`.
 
 ## Identifiers
 
 Every lifecycle record carries two ids:
 
-- **`question_id`** — `keccak256(ancillaryData)`, the UMA adapter's question id. This is the stable, exact key for a resolution.
-- **`condition_id`** — the CTF condition id used everywhere else in Bravado to identify the market. Use it to join resolution state to positions and trades. On `/uma/history/market` it is always the real id; on the other routes it is derived from the question and is **not reliable for NegRisk markets** (see `resolution_source`).
+- **`question_id`**: `keccak256(ancillaryData)`, the UMA adapter's question id. This is the stable, exact key for a resolution.
+- **`condition_id`**: the CTF condition id used everywhere else in Bravado to identify the market. Use it to join resolution state to positions and trades. It is `null` when it is not established, and `condition_id_source` says how it was established. On `/uma/history/market` it is always the real id.
 
-The `answer` field classifies the oracle's `int256` price: `yes`, `no`, `50-50`, `too-early`, or `other`; `price_raw` preserves the exact value.
+On the live routes, a NegRisk market's `condition_id` is `null` with `condition_id_reason` `negrisk_history_only`. Use the history route for it. The live `derived` value is computed from the question and is not checked against the warehouse map. On the history routes, `derived` is confirmed against the condition map.
 
 ## Build around final settlement
 
-- Treat a concluded event and a redeemable position as different states. Confirm `settled: true` before presenting a resolution as final.
-- Allow for disputes: a proposed answer can change before final settlement.
+- Treat a concluded event and a redeemable position as different states. Confirm `status` is `settled` before presenting a resolution as final.
+- Allow for disputes: a proposed answer can change before final settlement, and a settled question can have superseded settles in its record. Read `outcome`, not the latest step, for the answer.
+- Read `coverage` and `updated_ms` before you rely on freshness or completeness.
 - Redeem positions only after settlement through the [Trade API](/api/trade/positions).
 
 ## Next steps
 
-- [REST — live window](/api/analytics/uma-live) — lowest-latency reads of what is resolving right now, with a signed request and response fields (Data API, `analytics.read`).
-- [REST — history](/api/analytics/uma-history) — all history, `from` / `to` ranges, cursor paging and `resolution_source` provenance (Data API, `analytics.read`).
-- [WebSocket](/api/market-data/uma-websocket) — the live `stream.read` stream: connect, filter subscriptions and recover after disconnecting (Market Data).
-- [Data API](/products/data-api) and [Market Data](/products/market-data) — the two credentials and the other surfaces in each.
+- [REST: live window](/api/analytics/uma-live): lowest-latency reads of what is resolving right now, with a signed request and response fields (Data API, `analytics.read`).
+- [REST: history](/api/analytics/uma-history): all history, `from` / `to` ranges, keyset paging and `condition_id_source` provenance (Data API, `analytics.read`).
+- [WebSocket](/api/market-data/uma-websocket): the live `stream.read` stream: connect, filter subscriptions and recover after disconnecting (Market Data).
+- [Data API](/products/data-api) and [Market Data](/products/market-data): the two credentials and the other surfaces in each.

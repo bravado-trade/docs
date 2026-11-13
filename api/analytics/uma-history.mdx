@@ -1,15 +1,15 @@
 ---
 title: "UMA history (REST)"
 sidebarTitle: "History"
-description: "Query the complete record of Polymarket's UMA resolutions — proposals, disputes and settlements over all history — by question or condition id, with from/to ranges, cursor paging and resolution_source provenance."
+description: "Query the complete record of Polymarket's UMA resolutions over all history, by question or condition id, with from/to ranges, keyset paging and condition_id_source provenance. Protocol V2 body (uma-lifecycle/2)."
 ---
 
-Use these routes for **backtests, audits, dashboards — anything older than the [live window](/api/analytics/uma-live)**. They read the complete record of Polymarket's UMA requests, proposals, disputes and settlements from the warehouse (`pm_uma_oracle_events`), with `from` / `to` ranges, cursor paging and `resolution_source` provenance. Only Polymarket's UMA adapters asking the `YES_OR_NO_QUERY` identifier are included; other protocols that use the same oracle are not.
+Use these routes for **backtests, audits, dashboards, anything older than the [live window](/api/analytics/uma-live)**. They read the complete record of Polymarket's UMA requests, proposals, disputes and settlements from the warehouse, with `from` / `to` ranges, keyset paging and `condition_id_source` provenance. Polymarket's UMA adapters and Protocol V2 are included, for `YES_OR_NO_QUERY` questions only. Other protocols that use the same oracle are not.
 
-Read the [UMA overview](/products/uma-api) for the lifecycle and [coverage](/products/uma-api#coverage-and-history).
+Read the [UMA overview](/products/uma-api) for the lifecycle, the status values and the [v2 breaking change](/products/uma-api#breaking-change-uma-api-v2). Read [coverage](/products/uma-api#coverage-and-history) for what each route covers.
 
 <Info>
-  UMA REST is part of the [Data API](/products/data-api): sign every request with your **Data API** credential (`analytics.read`) using [HMAC authentication](/authentication). Each successful response costs **1 API credit**, and the surface has its own per-key rate bucket. The UMA **WebSocket** is different: it stays on the Market Data credential (`stream.read`) — see [UMA WebSocket](/api/market-data/uma-websocket). There is no separate UMA key.
+  UMA REST is part of the [Data API](/products/data-api): sign every request with your **Data API** credential (`analytics.read`) using [HMAC authentication](/authentication). Each successful response costs **1 API credit**, and the surface has its own per-key rate bucket. The UMA **WebSocket** is different: it stays on the Market Data credential (`stream.read`), see [UMA WebSocket](/api/market-data/uma-websocket). There is no separate UMA key.
 </Info>
 
 <Warning>
@@ -48,89 +48,310 @@ console.log(await response.json());
 
 A `200` with `questions` confirms that your authenticated REST read succeeded. An empty `questions` array reports no matching records in the range. A `401` only confirms an authentication refusal, not a successful read of resolution data.
 
-Base URL: `https://partner-api.bravadotrade.com`. Sign every REST request with HMAC, including its sorted query parameters. JSON; ids are hex, `payout` is an integer micro-USDC string.
+Base URL: `https://partner-api.bravadotrade.com`. Sign every REST request with HMAC, including its sorted query parameters. JSON. Ids are lowercase hex, `price_raw` is the exact 32-byte two's-complement `int256` word, and `payout` is an integer micro-USDC string.
 
-The history routes serve the same fields as the [live routes](/api/analytics/uma-live), from the complete on-chain record rather than the retained live window. `updated_ms` is the on-chain time of the latest event, and `seen_pending` is never present: history has no mempool pre-image.
+The history routes serve the same v2 body as the [live routes](/api/analytics/uma-live), computed over the complete on-chain record rather than the retained live window. `pending` is always `[]` here, because history has no mempool view.
 
 ## `GET /uma/history/question`
+
+The complete lifecycle of one question, in the v2 body.
 
 ```text
 GET https://partner-api.bravadotrade.com/uma/history/question?id=<0x questionId>
 ```
 
-<ParamField query="id" type="string" required>The `0x` 32-byte `question_id`.</ParamField>
-<ParamField query="from" type="string">Search window start: RFC3339, unix seconds or unix milliseconds. Default: all history.</ParamField>
-<ParamField query="to" type="string">Search window end. Default: now.</ParamField>
+<ParamField query="id" type="string" required>
+  The `0x` 32-byte `question_id`. The `0x` prefix is optional.
+</ParamField>
+<ParamField query="from" type="string">
+  Start of the search window: RFC3339, unix seconds or unix milliseconds. The question must have an event at or after it. Default: all history.
+</ParamField>
+<ParamField query="to" type="string">
+  End of the search window: RFC3339, unix seconds or unix milliseconds. The question must have an event before it. Default: now.
+</ParamField>
 
-Response fields are those of [`GET /uma/question`](/api/analytics/uma-live#get-/uma/question), plus:
+`from` and `to` select which questions match. They never truncate a lifecycle, so `status` and `outcome` always describe the current answer.
 
-<ResponseField name="resolution_source" type="string">How `condition_id` was established. `derived`: computed from the question and confirmed against the condition map. `derived_unverified`: the same computation, **not** confirmed, and wrong for NegRisk markets; use `/uma/history/market` for the real condition id.</ResponseField>
-<ResponseField name="lifecycles" type="integer">How many lifecycles of this question have proposal, dispute or settlement events in the window. `1` is normal. A question that is re-requested after it finished has more than one, and the **latest** is served. A dispute re-requests the price in the same transaction and stays one lifecycle, so a disputed question keeps its `disputed` stage and the final settlement that follows the token-holder vote.</ResponseField>
+<ResponseField name="fold_version" type="string" required>Always `uma-lifecycle/2`.</ResponseField>
+<ResponseField name="question_id" type="string" required>Hex question id (`keccak256` of the ancillary data).</ResponseField>
+<ResponseField name="title" type="string | null" required>Market question, up to 256 bytes. `null` when the record carries no title.</ResponseField>
+<ResponseField name="family" type="string" required>Requester family of the active request: `uma_ctf_adapter` (standard markets), `negrisk_adapter` (NegRisk markets), `legacy_v1`, `polymarket_v2` (Protocol V2), or `unknown`.</ResponseField>
+<ResponseField name="condition_id" type="string | null" required>The CTF condition id, or `null` when it is not established. See `condition_id_source`.</ResponseField>
+<ResponseField name="condition_id_source" type="string" required>How `condition_id` was established: `derived` (computed from the question and confirmed in the condition map), `negrisk_exact` (the exact NegRisk condition map, when that map is enabled on the server), `pv2_exact` (the Protocol V2 `request_id`), or `unknown`.</ResponseField>
+<ResponseField name="condition_id_reason" type="string" conditional>Present when `condition_id_source` is `unknown`. Values: `not_in_condition_map`, `condition_map_unavailable`, `negrisk_map_unavailable` (the NegRisk exact map is not enabled on this server, or its table is not readable), `negrisk_not_in_map`, `ambiguous_negrisk_map`, `pv2_requests_unavailable`, `pv2_request_not_found`, `ambiguous_pv2_request`, `unsupported_family`.</ResponseField>
+<ResponseField name="status" type="string" required>Stage of the active request over its whole lifecycle: `requested`, `proposed`, `disputed`, `settled`, or `unknown` (no oracle request is identifiable).</ResponseField>
+<ResponseField name="active_request" type="object | null" required>The request with the highest `request_ts`. It decides `status` and `outcome`. `null` when `status` is `unknown`.</ResponseField>
+<ResponseField name="active_request.requester" type="string">The requester address of the active request.</ResponseField>
+<ResponseField name="active_request.request_ts" type="integer">The request key timestamp (unix seconds). It identifies the request. It is not the time of an event: use `block_ms` for that.</ResponseField>
+<ResponseField name="active_request.origin" type="string">Why this request exists: `initial`, `dispute_reset`, `ignore_reset`, `re_request`, or `unobserved`. See [Origins](#origins).</ResponseField>
+<ResponseField name="active_request.basis" type="string">`request_event` when the request's RequestPrice is in the record, or `stage_events_only` when the request is known only from its stage events.</ResponseField>
+<ResponseField name="outcome" type="object | null" required>The active request's Settle. `null` until that request settles. A Settle of any other request never sets `outcome`.</ResponseField>
+<ResponseField name="outcome.answer" type="string">`yes`, `no`, `50-50`, `too-early`, or `other`.</ResponseField>
+<ResponseField name="outcome.price_raw" type="string">The exact 32-byte two's-complement `int256` settled price, hex.</ResponseField>
+<ResponseField name="outcome.payout" type="string">Settled payout, integer micro-USDC string.</ResponseField>
+<ResponseField name="outcome.request_ts" type="integer">The request key of the active request that this Settle closes.</ResponseField>
+<ResponseField name="outcome.via" type="string">`dvm` when the active request was disputed and settled by UMA's vote, or `optimistic` when it settled without a dispute.</ResponseField>
+<ResponseField name="outcome.settle" type="object">Where the Settle was mined: `block`, `block_ms`, `tx`, `log_index`.</ResponseField>
+<ResponseField name="requests" type="array" required>Every oracle request of the question, ascending by `request_ts`. See [Requests](#requests) for the item fields. At most 50 requests are listed: the active one is always kept, and `coverage.truncated` is `true` when older requests were cut.</ResponseField>
+<ResponseField name="pending" type="array" required>Always `[]` on history.</ResponseField>
+<ResponseField name="updated_ms" type="integer" required>Block time (unix ms) of the latest mined event in the question's lifecycle.</ResponseField>
+<ResponseField name="coverage" type="object" required>What the response is based on. Present on every response.</ResponseField>
+<ResponseField name="coverage.source" type="string" required>`warehouse`.</ResponseField>
+<ResponseField name="coverage.from_ms" type="integer" required>Unix ms of the earliest bound actually read for this question. Use it to know how far back the lifecycle was read.</ResponseField>
+<ResponseField name="coverage.to_ms" type="integer" required>Unix ms of the end of the read, which is now.</ResponseField>
+<ResponseField name="coverage.truncated" type="boolean" required>`true` when older requests were cut from `requests`.</ResponseField>
 
-<ResponseField name="proposed.block_ms · disputed.block_ms · settled_at.block_ms" type="integer">On-chain block time (unix ms) of each stage event — the authoritative event time. The `request_ts` on each stage is the UMA **request key**, not a clock: across a dispute re-request it can read earlier than a later stage, so order stages by `block_ms`, not `request_ts`.</ResponseField>
-<ResponseField name="searched_from_ms · searched_to_ms" type="integer">The time window actually scanned, returned on **every** response — success as well as `unknown` — so a result is never silently truncated. With no `from`/`to`, the search reaches the present.</ResponseField>
+A `404` with code `not_found` means no event for that id exists in the window you requested.
 
-A `404` with code `not_found` means no proposal, dispute or settlement for that id exists in the window.
+### Worked example: a disputed question
+
+This excerpt is the v2 body of Kenneth Walker's "Anytime Touchdown" question (`0xdea2db4f46fce81cda0bc11e3c56219351e91118a84ec8630998ef7d03eb3865`). Its active request is the one that a dispute re-requested. That request settled optimistically to `no` at block 96584738, so `outcome` is `no`, with `via: "optimistic"`.
+
+The earlier request was disputed and its vote settled too early, at block 96756710. That Settle belongs to the initial request, not to the active one, so it is listed on that request with `superseded: true` and does not change the outcome. The condition fields and exact coverage bounds are elided in this excerpt.
+
+```json Kenneth Walker excerpt
+{
+  "fold_version": "uma-lifecycle/2",
+  "question_id": "0xdea2db4f46fce81cda0bc11e3c56219351e91118a84ec8630998ef7d03eb3865",
+  "title": "Kenneth Walker: Anytime Touchdown",
+  "family": "uma_ctf_adapter",
+  "condition_id": "0x…",
+  "condition_id_source": "…",
+  "status": "settled",
+  "active_request": {
+    "basis": "request_event",
+    "origin": "dispute_reset",
+    "request_ts": 1793581182,
+    "requester": "0x65070be91477460d8a7aeeb94ef92fe056c2f2a7"
+  },
+  "outcome": {
+    "answer": "no",
+    "payout": "500800000",
+    "price_raw": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "request_ts": 1793581182,
+    "settle": {
+      "block": 96584738,
+      "block_ms": 1793582563000,
+      "log_index": 496,
+      "tx": "0x19558219a3032ec0b8dd5fe31aab9894e0058526bf55eccf7654f9262e5da773"
+    },
+    "via": "optimistic"
+  },
+  "requests": [
+    {
+      "requester": "0x65070be91477460d8a7aeeb94ef92fe056c2f2a7",
+      "request_ts": 1793137365,
+      "origin": "initial",
+      "request": {
+        "block": 96287996,
+        "block_ms": 1793137365000,
+        "log_index": 1084,
+        "tx": "0xb080b40a55e31ec978475a4568cf1871d32b7b5d77ede9287a0c7f8199b281c3"
+      },
+      "proposals": [
+        {
+          "answer": "no",
+          "block": 96583161,
+          "block_ms": 1793580198000,
+          "log_index": 675,
+          "price_raw": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "proposer": "0xace04ac853c6e4c38e43d3185c6639ceb983903f",
+          "tx": "0x0a078aab3ae9c0fa0b43a6f0a66bb1b508ab00126b335318b34c16ca1740f120"
+        }
+      ],
+      "disputes": [
+        {
+          "answer": "no",
+          "block": 96583817,
+          "block_ms": 1793581182000,
+          "disputer": "0xe0d478a2d0ee970fcf606649a17a2cc7544e8f48",
+          "log_index": 568,
+          "price_raw": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "proposer": "0xace04ac853c6e4c38e43d3185c6639ceb983903f",
+          "tx": "0x009e54bffa748ac6ca3c5ce25f14e8cf03a896bb65191255a4d67d37842e79b0"
+        }
+      ],
+      "settles": [
+        {
+          "answer": "too-early",
+          "block": 96756710,
+          "block_ms": 1793840521000,
+          "disputer": "0xe0d478a2d0ee970fcf606649a17a2cc7544e8f48",
+          "log_index": 898,
+          "payout": "625000000",
+          "price_raw": "0x8000000000000000000000000000000000000000000000000000000000000000",
+          "proposer": "0xace04ac853c6e4c38e43d3185c6639ceb983903f",
+          "superseded": true,
+          "tx": "0x849456f2edd202f233ffbc7d42ffa22c5deda30d5fee87df1e938d0e02d3d4ff"
+        }
+      ]
+    },
+    {
+      "requester": "0x65070be91477460d8a7aeeb94ef92fe056c2f2a7",
+      "request_ts": 1793581182,
+      "origin": "dispute_reset",
+      "request": {
+        "block": 96583817,
+        "block_ms": 1793581182000,
+        "log_index": 571,
+        "tx": "0x009e54bffa748ac6ca3c5ce25f14e8cf03a896bb65191255a4d67d37842e79b0"
+      },
+      "proposals": [
+        {
+          "answer": "no",
+          "block": 96584051,
+          "block_ms": 1793581533000,
+          "log_index": 79,
+          "price_raw": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "proposer": "0x53f1f242e223ddc0dc2e769aeeb2e28c7e05ca8b",
+          "tx": "0x0aacb4ec33489aa3395a61a8d46af7564092b407cbec71d5193f4a41a8d8f7ac"
+        }
+      ],
+      "disputes": [],
+      "settles": [
+        {
+          "answer": "no",
+          "block": 96584738,
+          "block_ms": 1793582563000,
+          "log_index": 496,
+          "payout": "500800000",
+          "price_raw": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "proposer": "0x53f1f242e223ddc0dc2e769aeeb2e28c7e05ca8b",
+          "tx": "0x19558219a3032ec0b8dd5fe31aab9894e0058526bf55eccf7654f9262e5da773"
+        }
+      ]
+    }
+  ],
+  "pending": [],
+  "updated_ms": 1793840521000,
+  "coverage": {
+    "source": "warehouse",
+    "from_ms": "…",
+    "to_ms": "…",
+    "truncated": false
+  }
+}
+```
+
+### Origins
+
+| `origin` | Meaning |
+| --- | --- |
+| `initial` | The first request of the question, with its RequestPrice in the record. |
+| `dispute_reset` | Re-requested in the same transaction as a dispute of an earlier request. |
+| `ignore_reset` | Re-requested after the adapter discarded a too-early settlement. |
+| `re_request` | Any other re-request whose RequestPrice is in the record. |
+| `unobserved` | Known only from its stage events; its RequestPrice is not in the record. |
+
+Origin labels are exact when the lifecycle is read from the question's first event. The history routes widen the read to the start of history when needed, so the label is exact there.
+
+### Requests
+
+Each item of `requests` carries:
+
+- `requester`, `request_ts` and `origin`, which identify the request.
+- `request`: where its RequestPrice was mined, as `block`, `block_ms`, `tx` and `log_index`. `null` when the origin is `unobserved`.
+- `proposals`, `disputes` and `settles`: the steps of that request, each with `block`, `block_ms`, `tx`, `log_index`, `price_raw`, `answer`, and `proposer` or `disputer` when known.
+- A settle also carries `payout`, and `superseded: true` when it belongs to a request that is not the active one. A superseded settle never moves `outcome`.
 
 ## `GET /uma/history/market`
 
-The same body, looked up by the market's CTF condition id.
+The same v2 body, looked up by the market's CTF condition id.
 
 ```text
 GET https://partner-api.bravadotrade.com/uma/history/market?condition_id=<0x conditionId>
 ```
 
-<ParamField query="condition_id" type="string" required>The `0x` 32-byte CTF condition id.</ParamField>
-<ParamField query="from" type="string">Pin the search window start. Default: derived from the market.</ParamField>
-<ParamField query="to" type="string">Pin the search window end. Default: now.</ParamField>
+<ParamField query="condition_id" type="string" required>
+  The `0x` 32-byte CTF condition id. The `0x` prefix is optional.
+</ParamField>
+<ParamField query="from" type="string">
+  Pins the search window start: RFC3339, unix seconds or unix milliseconds. Default: all history for the market.
+</ParamField>
+<ParamField query="to" type="string">
+  Pins the search window end: RFC3339, unix seconds or unix milliseconds. Default: now.
+</ParamField>
 
-`condition_id` is always the **real** condition id, including for NegRisk markets. `resolution_source` says how the market was tied to its oracle request:
+`condition_id` is always the **real** condition id, including for NegRisk markets. The route answers in one of two shapes, both with HTTP `200`. A resolved answer carries the v2 body. An unknown answer carries the fields marked `shape="unknown"`. Check `condition_id_source` first: it is present in both shapes.
 
-| `resolution_source` | Meaning |
-| --- | --- |
-| `derived` | Found through the condition map (standard markets). |
-| `negrisk_exact` | Found through the **exact NegRisk condition map** — the on-chain `NegRiskOperator.QuestionPrepared` bridge (`keccak(NegRiskAdapter, questionId, 2)` → the oracle request id; 1:1, exact). This is the authoritative source for NegRisk markets; the requester must be a NegRisk adapter, otherwise the response is `unknown` with reason `requester_family_mismatch`. |
-| `gamma_join` | Found by matching the market's Gamma id to the oracle request. Served only when that match is **unambiguous** (exactly one oracle request names the Gamma id in the searched window) and the requester is a NegRisk adapter; an ambiguous match returns `unknown` rather than a guess. Used as a fallback when `negrisk_exact` has no entry. |
-| `unknown` | Neither join found an oracle request. |
+<ResponseField name="condition_id" type="string" required>The condition id you looked up, as the real id.</ResponseField>
+<ResponseField name="condition_id_source" type="string" required>`derived`, `negrisk_exact` or `pv2_exact` on a resolved answer. `unknown` on an unknown answer, with the reason in `reason`.</ResponseField>
+<ResponseField name="question_id" type="string | null" required>The question the market resolved through. `null` when no oracle request was tied to the market.</ResponseField>
+<ResponseField name="fold_version" type="string" shape="resolved">Always `uma-lifecycle/2` on a resolved answer.</ResponseField>
+<ResponseField name="title" type="string | null" shape="resolved">Market question, up to 256 bytes. `null` when the record carries no title.</ResponseField>
+<ResponseField name="family" type="string" shape="resolved">Requester family of the active request. See [`/uma/history/question`](#get-/uma/history/question).</ResponseField>
+<ResponseField name="condition_id_reason" type="string" shape="resolved" conditional>Not present on a resolved answer.</ResponseField>
+<ResponseField name="status" type="string" shape="resolved">`requested`, `proposed`, `disputed`, `settled`, or `unknown`.</ResponseField>
+<ResponseField name="active_request" type="object | null" shape="resolved">The request that decides `status` and `outcome`. See [`/uma/history/question`](#get-/uma/history/question).</ResponseField>
+<ResponseField name="outcome" type="object | null" shape="resolved">The active request's Settle, `null` until it settles. See [`/uma/history/question`](#get-/uma/history/question).</ResponseField>
+<ResponseField name="requests" type="array" shape="resolved">Every oracle request of the question. See [`/uma/history/question`](#get-/uma/history/question).</ResponseField>
+<ResponseField name="pending" type="array" shape="resolved">Always `[]` on history.</ResponseField>
+<ResponseField name="updated_ms" type="integer" shape="resolved">Block time (unix ms) of the latest mined event.</ResponseField>
+<ResponseField name="coverage" type="object" shape="resolved">Present on a resolved answer, with `source` (`warehouse`), `from_ms`, `to_ms` and `truncated`.</ResponseField>
+<ResponseField name="reason" type="string" shape="unknown">Why the market could not be tied to an oracle request. See [Unknown answers](#unknown-answers).</ResponseField>
+<ResponseField name="searched_from_ms" type="integer | null" shape="unknown">The start of the window searched. Set for `no_stage_events` and `requester_family_mismatch`, and `null` for the other reasons.</ResponseField>
+<ResponseField name="searched_to_ms" type="integer | null" shape="unknown">The end of the window searched. Set for `no_stage_events` and `requester_family_mismatch`, and `null` for the other reasons.</ResponseField>
 
-When the answer is `unknown`, the response is **HTTP 200** with an explicit marker, not an empty success and not a `404`:
+### Unknown answers
+
+When the market cannot be tied to an oracle request, the answer is an explicit unknown: HTTP `200`, `condition_id_source` set to `unknown`, and a `reason`. It is never an empty success and never a `404`. An unknown answer carries no `status`, `active_request` or `outcome`, so do not read it as an unsettled market.
 
 ```json Unknown example
 {
   "condition_id": "0x…",
   "question_id": null,
-  "resolution_source": "unknown",
+  "condition_id_source": "unknown",
   "reason": "no_oo_request_found",
-  "searched_from_ms": 1792000000000,
-  "searched_to_ms": 1792600000000
+  "searched_from_ms": null,
+  "searched_to_ms": null
 }
 ```
 
-`reason` is one of `condition_not_in_pm_tokens`, `market_time_unknown`, `no_oo_request_found`, `ambiguous_gamma_candidate` (more than one oracle request names the market's Gamma id, so none is served rather than guessing), `gamma_requester_not_negrisk` (the sole match was not a NegRisk adapter), `requester_family_mismatch` (a `negrisk_exact` map entry was found but its requester is not a NegRisk adapter) or `no_stage_events` (an oracle request exists but nothing has been proposed yet; `question_id` is then set). An unknown carries no `settled`, `answer` or stage field: do not read it as an unsettled market.
+| `reason` | Meaning |
+| --- | --- |
+| `no_oo_request_found` | No oracle request is tied to this condition id. |
+| `negrisk_map_unavailable` | The id is not a standard or Protocol V2 market, and the NegRisk exact map is not enabled on this server. |
+| `negrisk_not_in_exact_map` | The NegRisk exact map is enabled, and it holds no entry for this id. |
+| `requester_family_mismatch` | A map entry names this market, but the question's requester is not the family that mapping requires. The entry is not served. |
+| `no_stage_events` | The question was found, but no oracle events for it were found in the read. `question_id` is then set. |
 
 ## `GET /uma/history/recent`
 
-Questions with proposal, dispute or settlement activity in a time range, newest activity first, one entry per question, paged with a cursor.
+Questions with proposal, dispute or settlement activity in a time range, most recent activity first, one entry per question, paged with a cursor.
 
 ```text
 GET https://partner-api.bravadotrade.com/uma/history/recent?stage=settled&limit=100&from=1792000000
 ```
 
-<ParamField query="stage" type="string">Filter on the question's state within the range: `proposed` (proposed, not disputed or settled) · `disputed` (disputed, not settled) · `settled`. Omit for all.</ParamField>
-<ParamField query="limit" type="integer" default="100">Questions per page, 1–500.</ParamField>
-<ParamField query="from" type="string">Range start: RFC3339, unix seconds or unix milliseconds. Default: `to` minus 24 hours.</ParamField>
-<ParamField query="to" type="string">Range end. Default: now.</ParamField>
-<ParamField query="cursor" type="string">The `next_cursor` of the previous page.</ParamField>
+<ParamField query="stage" type="string">
+  Filter on the question's `status` (the active request's stage over its whole lifecycle): `requested`, `proposed`, `disputed` or `settled`. Omit for all.
+</ParamField>
+<ParamField query="limit" type="integer" default="100">
+  Questions per page, from 1 to 500.
+</ParamField>
+<ParamField query="from" type="string">
+  Range start: RFC3339, unix seconds or unix milliseconds. Default: `to` minus 24 hours.
+</ParamField>
+<ParamField query="to" type="string">
+  Range end: RFC3339, unix seconds or unix milliseconds. Default: now.
+</ParamField>
+<ParamField query="cursor" type="string">
+  The `next_cursor` of the previous page. Treat it as opaque.
+</ParamField>
 
-<ResponseField name="questions" type="array">Question records (same shape as `GET /uma/history/question`). Each carries `resolution_source: "derived_unverified"`.</ResponseField>
-<ResponseField name="count" type="integer">Records in this page.</ResponseField>
-<ResponseField name="from_ms" type="integer">Resolved range start (unix ms).</ResponseField>
-<ResponseField name="to_ms" type="integer">Resolved range end (unix ms).</ResponseField>
-<ResponseField name="limit" type="integer">Page size applied.</ResponseField>
-<ResponseField name="has_more" type="boolean">Whether another page exists.</ResponseField>
-<ResponseField name="next_cursor" type="string">Pass as `cursor` to read the next page; `null` on the last page.</ResponseField>
+<ResponseField name="questions" type="array" required>Question records, each in the v2 body of [`/uma/history/question`](#get-/uma/history/question). A question that cannot be read is listed with `status` `unknown`, `status_reason` `question_unreadable`, and `active_request` `null`, so the rest of the page is still served.</ResponseField>
+<ResponseField name="count" type="integer" required>Records in this page.</ResponseField>
+<ResponseField name="from_ms" type="integer" required>Resolved range start (unix ms).</ResponseField>
+<ResponseField name="to_ms" type="integer" required>Resolved range end (unix ms).</ResponseField>
+<ResponseField name="limit" type="integer" required>Page size applied.</ResponseField>
+<ResponseField name="has_more" type="boolean" required>Whether another page follows the cursor.</ResponseField>
+<ResponseField name="next_cursor" type="string | null" required>Pass as `cursor` to read the next page. `null` on the last page.</ResponseField>
 
-The range is at most **7 days**. A wider one is refused with `400 range_too_large` rather than silently shortened, so page a long period with consecutive `from` / `to` windows. Paging is keyset-based on the block time, block number and log index of each question's latest event in the range, so a page never repeats or skips a question.
+The range is at most **7 days**. A wider one is refused with `400 range_too_large` rather than silently shortened, so page a long period with consecutive `from` / `to` windows.
+
+Paging is keyset-based on the block time, block number and log index of each question's latest event in the range, so a page never repeats or skips a question. A page can hold fewer than `limit` questions when `stage` filters out candidates, and it can still carry `has_more: true` and a `next_cursor`. Keep paging until `has_more` is `false`.
+
+Each question's lifecycle is read from up to 30 days before `from`. `coverage.from_ms` on each record states the earliest bound actually read for that question.
 
 <Note>
   For stable paging, pin `to` (an explicit timestamp) on every page request. With the default `to=now` the window moves between requests, and a question can be skipped across a page boundary. Each response echoes the resolved `to_ms` so you can reuse it.
@@ -140,17 +361,25 @@ The range is at most **7 days**. A wider one is refused with `400 range_too_larg
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `400` | `invalid_id`, `invalid_condition_id`, `invalid_from`, `invalid_to`, `invalid_range`, `invalid_stage`, `invalid_limit`, `invalid_cursor`, `range_too_large` | The request is malformed, or the range is wider than 7 days. |
+| `400` | `invalid_id` | `/uma/history/question`: `id` is missing, or is not a 32-byte hex id (the `0x` prefix is optional). |
+| `400` | `invalid_condition_id` | `/uma/history/market`: `condition_id` is missing, or is not a 32-byte hex id (the `0x` prefix is optional). |
+| `400` | `invalid_stage` | `/uma/history/recent`: `stage` is not one of `requested`, `proposed`, `disputed`, `settled`. |
+| `400` | `invalid_limit` | `/uma/history/recent`: `limit` is not an integer from 1 to 500. |
+| `400` | `invalid_from`, `invalid_to` | `from` or `to` is not RFC3339, unix seconds or unix milliseconds. |
+| `400` | `invalid_range` | `from` is not before `to`. |
+| `400` | `invalid_cursor` | `/uma/history/recent`: `cursor` is not a value returned as `next_cursor`. |
+| `400` | `range_too_large` | `/uma/history/recent`: the range is wider than 7 days. Page with consecutive windows. |
 | `404` | `not_found` | `/uma/history/question`: no event for that id in the window. |
-| `401` / `403` / `402` / `429` | | Signature, scope (`INSUFFICIENT_SCOPE`), credit allowance, rate limit. |
-| `503` | `data_source_unavailable` | The history store is unavailable; retry. |
+| `401` / `402` / `403` / `429` | `INVALID_SIGNATURE`, `STALE_TIMESTAMP`, `INVALID_KEY`, `KEY_DISABLED`, `INSUFFICIENT_SCOPE`, `RATE_LIMITED` and the credit-allowance refusal | Signature, key, credential scope, credit allowance or rate limit. See [HMAC authentication](/authentication) and [API credits](/api-credits). |
+| `503` | `UMA_HISTORY_UNAVAILABLE`, `NOT_CONFIGURED` | The history store is unavailable or not configured. Retry after the `Retry-After` interval. |
+| `504` | `UPSTREAM_TIMEOUT` | The upstream read timed out. Retry, with a narrower range if the request was a range read. |
 
 ## Recover after a disconnect
 
-After consuming the live [WebSocket](/api/market-data/uma-websocket), call `/uma/history/recent` with `from` set to your last event to recover the questions that changed while you were away, in order, with no gap. For the lowest-latency reads of what is resolving right now, use the [live window](/api/analytics/uma-live) instead.
+After consuming the live [WebSocket](/api/market-data/uma-websocket), call `/uma/history/recent` with `from` set to your last event to recover the questions that changed while you were away, in order, with no gap. If the gap is longer than 7 days, page it with consecutive windows. For the lowest-latency reads of what is resolving right now, use the [live window](/api/analytics/uma-live) instead.
 
 ## Related
 
-- [UMA live window (REST)](/api/analytics/uma-live) — lowest-latency reads of the realtime feed's retained window.
-- [UMA WebSocket](/api/market-data/uma-websocket) — the live `stream.read` stream of new proposals, disputes and settlements.
-- [UMA overview](/products/uma-api) — lifecycle, identifiers and coverage limits.
+- [UMA live window (REST)](/api/analytics/uma-live): lowest-latency reads of the realtime feed's retained window.
+- [UMA WebSocket](/api/market-data/uma-websocket): the live `stream.read` stream of new proposals, disputes and settlements.
+- [UMA overview](/products/uma-api): lifecycle, identifiers, coverage and the v2 breaking change.
