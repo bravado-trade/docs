@@ -109,7 +109,7 @@ These enumerations apply to every v2 response, live and history. The per-route r
 | `active_request.basis` | `request_event` when the request's RequestPrice is in the record, `stage_events_only` otherwise |
 | `outcome.via` | `optimistic` (settled without a dispute), `dvm` (settled by UMA's vote after a dispute) |
 | `outcome.answer`, `answer` in steps | `yes`, `no`, `50-50`, `too-early`, `other`. `price_raw` keeps the exact value. |
-| `condition_id_source` | `derived`, `negrisk_exact`, `pv2_exact`, `unknown` |
+| `condition_id_source` | `derived` (the adapter's own derivation, `keccak256(requester, question_id, 2)`, for standard markets), `negrisk_exact` (history only), `pv2_exact` (Protocol V2), `unknown` (`condition_id` is `null` and `condition_id_reason` says why) |
 
 A step in `proposals`, `disputes` or `settles` has `block`, `block_ms`, `tx` and `log_index`, with `price_raw` and `answer`. A settle also has `payout`. A settle that belongs to a request other than the active one has `superseded: true`, and it never changes `outcome`.
 
@@ -122,7 +122,7 @@ Every lifecycle record carries two ids:
 - **`question_id`**: `keccak256(ancillaryData)`, the UMA adapter's question id. This is the stable, exact key for a resolution.
 - **`condition_id`**: the CTF condition id used everywhere else in Bravado to identify the market. Use it to join resolution state to positions and trades. It is `null` when it is not established, and `condition_id_source` says how it was established. On `/uma/history/market` it is always the real id.
 
-On the live routes, a NegRisk market's `condition_id` is `null` with `condition_id_reason` `negrisk_history_only`. Use the history route for it. The live `derived` value is computed from the question and is not checked against the warehouse map. On the history routes, `derived` is confirmed against the condition map.
+`derived` is the adapter's own condition derivation, `keccak256(requester, question_id, 2)`. It is exact by construction, because the standard adapter prepares the CTF condition with exactly these inputs, and it is served the same way on the live and history routes. NegRisk markets are never `derived`. On the live routes a NegRisk market's `condition_id` is `null` with `condition_id_reason` `negrisk_history_only`. Use the history route for its real id.
 
 ## Build around final settlement
 

@@ -77,7 +77,7 @@ GET https://partner-api.bravadotrade.com/uma/history/question?id=<0x questionId>
 <ResponseField name="title" type="string | null" required>Market question, up to 256 bytes. `null` when the record carries no title.</ResponseField>
 <ResponseField name="family" type="string" required>Requester family of the active request: `uma_ctf_adapter` (standard markets), `negrisk_adapter` (NegRisk markets), `legacy_v1`, `polymarket_v2` (Protocol V2), or `unknown`.</ResponseField>
 <ResponseField name="condition_id" type="string | null" required>The CTF condition id, or `null` when it is not established. See `condition_id_source`.</ResponseField>
-<ResponseField name="condition_id_source" type="string" required>How `condition_id` was established: `derived` (computed from the question and confirmed in the condition map), `negrisk_exact` (the exact NegRisk condition map, when that map is enabled on the server), `pv2_exact` (the Protocol V2 `request_id`), or `unknown`.</ResponseField>
+<ResponseField name="condition_id_source" type="string" required>How `condition_id` was established: `derived` (the adapter's own condition derivation, `keccak256(requester, question_id, 2)`, exact by construction and identical on the live routes), `negrisk_exact` (the exact NegRisk condition map, when that map is enabled on the server), `pv2_exact` (the Protocol V2 `request_id`), or `unknown`.</ResponseField>
 <ResponseField name="condition_id_reason" type="string" conditional>Present when `condition_id_source` is `unknown`. Values: `not_in_condition_map`, `condition_map_unavailable`, `negrisk_map_unavailable` (the NegRisk exact map is not enabled on this server, or its table is not readable), `negrisk_not_in_map`, `ambiguous_negrisk_map`, `pv2_requests_unavailable`, `pv2_request_not_found`, `ambiguous_pv2_request`, `unsupported_family`.</ResponseField>
 <ResponseField name="status" type="string" required>Stage of the active request over its whole lifecycle: `requested`, `proposed`, `disputed`, `settled`, or `unknown` (no oracle request is identifiable).</ResponseField>
 <ResponseField name="active_request" type="object | null" required>The request with the highest `request_ts`. It decides `status` and `outcome`. `null` when `status` is `unknown`.</ResponseField>
@@ -370,8 +370,12 @@ Each question's lifecycle is read from up to 30 days before `from`. `coverage.fr
 | `400` | `invalid_cursor` | `/uma/history/recent`: `cursor` is not a value returned as `next_cursor`. |
 | `400` | `range_too_large` | `/uma/history/recent`: the range is wider than 7 days. Page with consecutive windows. |
 | `404` | `not_found` | `/uma/history/question`: no event for that id in the window. |
-| `401` / `402` / `403` / `429` | `INVALID_SIGNATURE`, `STALE_TIMESTAMP`, `INVALID_KEY`, `KEY_DISABLED`, `INSUFFICIENT_SCOPE`, `RATE_LIMITED` and the credit-allowance refusal | Signature, key, credential scope, credit allowance or rate limit. See [HMAC authentication](/authentication) and [API credits](/api-credits). |
+| `401` | `INVALID_SIGNATURE`, `STALE_TIMESTAMP`, `INVALID_KEY`, `KEY_DISABLED` | Signature or key refused. See [HMAC authentication](/authentication). |
+| `402` | | Credit allowance exhausted. See [API credits](/api-credits). |
+| `403` | `INSUFFICIENT_SCOPE` | Your credential does not carry `analytics.read`. |
+| `429` | `RATE_LIMITED` | Rate limit reached. Retry after a short wait. |
 | `503` | `UMA_HISTORY_UNAVAILABLE`, `NOT_CONFIGURED` | The history store is unavailable or not configured. Retry after the `Retry-After` interval. |
+| `500` | `internal` | An unexpected server error. Retry later. It is not an empty result and does not mean the question has no record. |
 | `504` | `UPSTREAM_TIMEOUT` | The upstream read timed out. Retry, with a narrower range if the request was a range read. |
 
 ## Recover after a disconnect
