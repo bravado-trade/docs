@@ -26,8 +26,12 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
   Page size, 1 to 1000. A value outside that range returns `400`.
 </ParamField>
 
+<ParamField query="cursor" type="string">
+  The opaque `next_cursor` from the previous page. Send it unchanged. A cursor issued before the data was rebuilt returns `409` with `"code": "cursor_stale"`: start again from the first page. Cannot be combined with `offset`.
+</ParamField>
+
 <ParamField query="offset" type="integer" default="0">
-  Number of closed positions to skip. Page with `limit` and `offset` until `positions` is shorter than `limit`.
+  **Deprecated.** Number of closed positions to skip. Use `cursor`: a deep `offset` is slower. Cannot be combined with `cursor`.
 </ParamField>
 
 ### Response
@@ -37,6 +41,16 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 <ResponseField name="total" type="integer" required>Number of closed positions.</ResponseField>
 <ResponseField name="limit" type="integer" required>The page size applied.</ResponseField>
 <ResponseField name="offset" type="integer" required>The offset applied.</ResponseField>
+<ResponseField name="next_cursor" type="string">Pass as `cursor` for the next page. Absent on the last page.</ResponseField>
+
+## Errors
+
+| Status | `code` | Meaning |
+|---|---|---|
+| 400 | `invalid_cursor` | The cursor is malformed. |
+| 400 | `cursor_with_offset` | `cursor` and `offset` were both sent. |
+| 409 | `cursor_stale` | The data behind the cursor was rebuilt. Restart from the first page. |
+
 
 ### Example
 
