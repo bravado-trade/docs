@@ -20,7 +20,7 @@ GET https://partner-api.bravadotrade.com/v2/polymarket/leaderboard
 </ParamField>
 
 <ParamField query="sort_by" type="string">
-  Rank metric: one of `total_pnl`, `roi`, `win_rate`, `volume`, `trades`.
+  Rank metric: one of `total_pnl`, `realized_pnl`, `roi`, `win_rate`, `volume`, `trades`, `wins`, `losses`. `win_rate`, `wins` and `losses` are only available with `window=all_time`; other windows return `400`.
 </ParamField>
 
 <ParamField query="order" type="string">
