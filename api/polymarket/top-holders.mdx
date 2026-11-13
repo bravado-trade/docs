@@ -88,6 +88,8 @@ Ties are broken by wallet, then token id. Paging is keyset-based, so a page neve
 | `401` / `403` / `402` / `429` | | Signature, scope, credit allowance, rate limit. |
 | `503` | `UNAVAILABLE` | The analytics source is unavailable. Retry. |
 
+Two layers answer a `400`, and their envelopes differ. The API edge sends `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service sends `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.
+
 ## Related
 
 - [Global positions](/api/analytics/positions): the same rows for any wallet, market or token.

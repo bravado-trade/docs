@@ -42,7 +42,7 @@ A new connection subscribes to nothing. Subscribe in band:
   "shares_normalized": "1.000000", "price": "0.520000",
   "timestamp": 1782753000, "tx_hash": "0x…", "order_hash": "0x…",
   "log_index": 4, "block_number": "66123456",
-  "dedup_key": "0x…:71321045…:0x…",
+  "dedup_key": "0x…:4",
   "fee": "0.036130", "role": "taker",
   "taker": "0xe111180000d2663c0091e4f400237545b87b996b",
   "builder": null,
@@ -62,7 +62,7 @@ Money and shares are fixed-scale decimal **strings** (6 decimals), never JSON nu
 <ResponseField name="timestamp" type="integer">Block time, unix seconds.</ResponseField>
 <ResponseField name="tx_hash · order_hash · block_number" type="string">Chain coordinates (`block_number` is a decimal string).</ResponseField>
 <ResponseField name="log_index" type="integer">Log index in the block. `(block_number, log_index)` is the resume token.</ResponseField>
-<ResponseField name="dedup_key" type="string">`tx_hash:token_id:user`. Use it to drop duplicates across your own reconnects.</ResponseField>
+<ResponseField name="dedup_key" type="string">`<tx_hash>:<log_index>`, the chain-log identity of the fill. Use it to drop duplicates across your own reconnects.</ResponseField>
 <ResponseField name="fee" type="string">The fee charged to **this row's order**, pUSD, 6 decimals, as logged on chain. The taker order usually pays it; maker rows are usually `"0.000000"`.</ResponseField>
 <ResponseField name="role" type="string">`taker` when this row is the taker order's fill, else `maker`. Absent when it cannot be determined.</ResponseField>
 <ResponseField name="taker" type="string">The raw `taker` of the log: the counterparty (the taker order's owner) on a maker row, and the exchange contract itself on the taker-order row.</ResponseField>
@@ -72,6 +72,10 @@ Money and shares are fixed-scale decimal **strings** (6 decimals), never JSON nu
 <Note>
 **Builder attribution.** Summing volume per `builder` over frames is correct attribution: each row carries its own order's builder. The sum across all builders is **routed order volume**, about **2× the matched volume**, because both sides of a match are rows. The builder's share of the fee is not on chain: one `fee` is charged per order and paid to Polymarket's fee receiver. Builder fees are not served on this tape.
 </Note>
+
+<Warning>
+**`dedup_key` changed format on 2026-11-12**: from `tx_hash:token_id:user` to `tx_hash:log_index` (for example `"0x…:71321045…:0x…"` → `"0x…:4"`). The old key collided for distinct fills of one wallet in one transaction, and those fills were dropped as duplicates. If you only compare `dedup_key` values, accept the new format and nothing else changes. If you parsed it, read `tx_hash` and `log_index` from their own fields.
+</Warning>
 
 ## Related
 

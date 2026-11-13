@@ -23,6 +23,8 @@ GET https://partner-api.bravadotrade.com/v2/polymarket/wallet/identity/{wallet}
 
 <ParamField path="wallet" type="string" required>Wallet address: `0x` followed by 40 hex characters. Case-insensitive.</ParamField>
 
+This route takes no query parameters. Any query parameter is refused with `400 unknown_param`.
+
 Returns one identity object. A wallet with no public profile is still a `200`, with `found: false` and `null` profile fields. This does not assert that the wallet does not exist.
 
 <ResponseField name="address" type="string" required>The wallet, lowercase `0x`.</ResponseField>
@@ -35,9 +37,9 @@ Returns one identity object. A wallet with no public profile is still a `200`, w
 <ResponseField name="profile_status" type="string" required>`ok`: the Polymarket profile service answered (found or not found). `deferred`: our request budget toward that service was exhausted, so only the locally held fields are served. Retry later for the rest. `unavailable`: the service could not be read (failure or time budget). Locally held fields and the signer are still served.</ResponseField>
 <ResponseField name="profile_fetched_at" type="integer" required>Unix seconds of the read the profile answer rests on. A cached answer carries the time it was originally fetched, not the time of your request. `null` when nothing was read.</ResponseField>
 <ResponseField name="found" type="boolean" required>`true` when a public profile exists (`profile_source` is not `none`). It does not depend on `signer`.</ResponseField>
-<ResponseField name="signer" type="string" required>The address that controls the wallet (lowercase `0x`), from our wallet registry. `null` when the registry has no row for the wallet, could not be read, or holds no known owner.</ResponseField>
+<ResponseField name="signer" type="string" required>The address that controls the wallet (lowercase `0x`), from our wallet registry. `null` when the registry has no row for the wallet, could not be read, or records the zero address (owner unknown). In that last case `type` and `type_confidence` are still served. For `type: "safe"` it is the Safe's owner **at creation**: Safe owners can be changed later, so it is not claimed to be the current signer.</ResponseField>
 <ResponseField name="type" type="string" required>Wallet type: `eoa`, `deposit_wallet`, `poly_proxy`, `poly_clone`, `safe` or `contract`. `null` when the registry has no row.</ResponseField>
-<ResponseField name="type_confidence" type="string" required>How the registry established `signer` and `type`: `exact`, `high`, `medium` or `low`. `null` when the registry has no row.</ResponseField>
+<ResponseField name="type_confidence" type="string" required>How the registry established `signer` and `type`: `exact`, `high`, `medium` or `low`. For `type: "safe"` it is `creation_owner` (see `signer`). `null` when the registry has no row.</ResponseField>
 
 ```json
 {
@@ -78,17 +80,30 @@ Returns a JSON **array** of identity objects, each with the same fields as the `
 
 When many wallets in a batch need a fresh profile read, some rows can come back with `profile_status: "deferred"`. Those rows still carry the locally held fields and the signer. The request never waits for, or fails on, the profile service.
 
-Sign a `POST` the same way as a `GET`, with the SHA-256 of the exact body bytes in the signature payload. See [HMAC authentication](/authentication).
+This `POST` is a read: it is the only `POST` route your Data API key (`analytics.read`) can call. It takes no query parameters (any is refused with `400 unknown_param`) and needs no `Idempotency-Key`.
+
+### Sign the body
+
+The signature covers the **raw body bytes** you send. Serialize the JSON once, hash those bytes with SHA-256, and send exactly those bytes. Re-serializing after signing (key order, spacing) changes the hash, and the request is refused with `401 INVALID_SIGNATURE`.
+
+```text
+payload   = timestamp + "\n" + "POST" + "\n" + "/v2/polymarket/wallet/identities" + "\n" + hex(sha256(body_bytes))
+signature = hex(hmac_sha256(secret, payload))
+```
+
+Send it in `X-Bravado-Signature`, with `X-Bravado-API-Key`, `X-Bravado-Timestamp` and `Content-Type: application/json`. See [HMAC authentication](/authentication).
 
 ## Errors
 
 | Status | Code | Meaning |
 | --- | --- | --- |
 | `400` | `invalid_param` | A `wallet` path value with characters outside `A-Z a-z 0-9 . _ : -`, or a body that is not `{"addresses": [...]}` with 1–200 strings. |
-| `400` | `unknown_param` | `POST`: a body key other than `addresses`. |
+| `400` | `unknown_param` | Any query parameter on either route, or a `POST` body key other than `addresses`. |
 | `400` | `BAD_REQUEST` | Refused by the analytics service: a value that is not a wallet address (for example `0x12`), or a body that is not a single JSON object. |
 | `401` / `403` / `402` / `429` | | Signature, scope, credit allowance, rate limit. |
 | `503` | `UNAVAILABLE` | The analytics source is unavailable. Retry. |
+
+Two layers answer a `400`, and their envelopes differ. The API edge sends `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service sends `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.
 
 ## Related
 

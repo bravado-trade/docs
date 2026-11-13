@@ -62,7 +62,7 @@ GET https://partner-api.bravadotrade.com/v2/polymarket/leaderboard?window=30d&so
 </ParamField>
 
 <ParamField query="min_win_rate · max_win_rate" type="string">
-  Win rate, `0`–`1`. `window=all_time` only. Wallets with no closed positions are excluded.
+  Win rate, `0`–`1`. `window=all_time` only. Compared with the served `win_rate`, which is truncated to 6 decimals: a wallet shown as `0.666666` is kept by `min_win_rate=0.666666` and dropped by `0.666667`. Wallets with no closed positions are excluded.
 </ParamField>
 
 <ParamField query="min_avg_trade_usd · max_avg_trade_usd" type="string">
@@ -111,10 +111,10 @@ Range bounds are inclusive and compared exactly: ratios are compared on the same
 | `rank` | 1-based rank within the ordering. |
 | `entry_edge` | Decimal; `null` when unknown. |
 | `first_trade_at` | Unix seconds; `null` when unknown. |
-| `metrics` | The window metrics: `realized_pnl`, `total_pnl`, `volume` (USD); `roi`, `win_rate` (`0`–`1`); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_paid_source`, `fees_refunded`. Each is a number or `null`. |
+| `metrics` | The window metrics: `realized_pnl`, `total_pnl`, `volume` (USD); `roi`, `win_rate` (`0`–`1`, truncated to 6 decimals); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_paid_source`, `fees_paid_exchange_scope`, `fees_refunded`. Each is a number, a label or `null`. |
 | `trading_styles` | `is_whale`, `is_market_maker`, `is_active_trader`, `is_buy_and_hold`, `is_degen`, `is_high_conviction`, `is_contrarian`, `is_value_hunter` (booleans) and `primary_style` (string or `null`). |
 
-On the leaderboard, `fees_paid` is served on `window=all_time` only and is `null` on the day windows. Use the [wallet profile](/api/polymarket/wallet) for per-window fees. `fees_paid_source` names the table `fees_paid` comes from, and is `null` exactly when `fees_paid` is. `fees_refunded` is always `null`.
+On the leaderboard, `fees_paid` is served on `window=all_time` only and is `null` on the day windows. Use the [wallet profile](/api/polymarket/wallet) for per-window fees. It follows the same rules as the profile: CLOB V2 fees only (`fees_paid_exchange_scope: "ctf_v2"`), and `null` with `fees_paid_source: "v1_fee_unvalued"` for a wallet that also paid V1 fees, so a board row and the profile agree. `fees_refunded` is always `null`.
 
 ## Errors
 
@@ -125,3 +125,5 @@ On the leaderboard, `fees_paid` is served on `window=all_time` only and is `null
 | `400` | `BAD_REQUEST` | Refused by the analytics service: an unknown `window`, `sort_by`, `order` or style; a negative value where only non-negative is allowed; a `min_` above its `max_`; `win_rate`, `wins` or `losses` outside `all_time`; a `limit` above 100; or an invalid `pagination_key`. |
 | `401` / `403` / `402` / `429` | | Signature, scope, credit allowance, rate limit. |
 | `503` | `UNAVAILABLE` | The analytics source is unavailable. Retry. |
+
+Two layers answer a `400`, and their envelopes differ. The API edge sends `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service sends `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.
