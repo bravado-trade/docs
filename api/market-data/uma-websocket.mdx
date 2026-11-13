@@ -53,7 +53,26 @@ new ticket before reconnecting. A credit or access refusal requires resolving
 that refusal before retrying.
 
 
-The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
+The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `condition_id_reason`, `proposer`, `disputer`, `price_raw`, `payout`, `request_ts`, `title`, `block`, `tx`, and `log_index`. A proposal or dispute decoded from the mempool carries `"seen_pending":true` with `block:0`; the same `question_id` is re-sent once mined with the real `block`/`tx` (the pending→mined pair). Settlements are mined-only and never carry `seen_pending`.
+
+`condition_id` is nullable. When it is set, it is the same value the [REST lookup](/api/analytics/uma-live#get-/uma/question) serves for the question: the standard adapter's derived condition for standard markets, or the Protocol V2 `request_id` when the same-transaction request was seen. When it is `null`, `condition_id_reason` says why, and it is present only in that case:
+
+| `condition_id_reason` | Meaning |
+| --- | --- |
+| `negrisk_history_only` | A NegRisk market. The exact NegRisk condition is served only by the history route, so use [`/uma/history/market`](/api/analytics/uma-history#get-/uma/history/market). |
+| `pv2_request_not_observed` | A Protocol V2 question whose same-transaction `RequestInitialized` was not seen. |
+| `pv2_request_id_ambiguous` | More than one distinct Protocol V2 request id was seen for the question. |
+| `no_mined_request` | A standard-adapter question that has so far been seen only as a pending event. |
+| `not_in_live_store` | The question is not held in the live store. |
+
+## Breaking change: condition_id on uma frames
+
+Before this change, every `uma` frame carried `keccak256(requester, question_id, 2)` as `condition_id`. That is the condition of a standard market only. For a NegRisk or Protocol V2 market it was the wrong value. The field is now nullable, and it carries the same value the REST lookup serves. If your client parses `condition_id` as always-hex, update it:
+
+- Accept `null` in `condition_id`. It is a real answer, not an error.
+- Read `condition_id_reason` when `condition_id` is `null`.
+- A subscription on `condition_ids` or `market_ids` cannot match a frame whose `condition_id` is `null`. Subscribe to `question_ids` for those markets, or to the whole stream.
+- Do not join a NegRisk or Protocol V2 frame to positions using the value you stored before this change. Re-key on the current `condition_id`, or on `question_id`.
 
 ## Server-side subscription filters
 
@@ -79,7 +98,7 @@ Every field is optional and matches the same `uma` frame fields documented above
 
 | Field | Matches | Notes |
 | --- | --- | --- |
-| `condition_ids` / `market_ids` | `condition_id` | The CTF market id; the two fields are combined. |
+| `condition_ids` / `market_ids` | `condition_id` | The CTF market id; the two fields are combined. A frame whose `condition_id` is `null` matches neither field, so use `question_ids` for those markets. |
 | `question_ids` | `question_id` | The UMA adapter question id. |
 | `proposers` | `proposer` | Compared case-insensitively. |
 | `disputers` | `disputer` | Only disputed events carry a `disputer`, so this filter selects disputes. |

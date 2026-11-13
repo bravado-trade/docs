@@ -34,6 +34,7 @@ The REST routes `/uma/question`, `/uma/market`, `/uma/recent` and their `/uma/hi
 | `request_ts` on a stage | `requests[].request_ts`. It is a request key, not a clock. |
 | `seen_pending: true` on a stage object | An entry of `pending[]`. Stage objects are always mined. History always returns `pending: []`. |
 | `condition_id` derived on every route, not reliable for NegRisk | `condition_id` is `null` when it is not established, and `condition_id_source` says how it was. |
+| `condition_id` on `uma:*` WebSocket frames, always derived before | Nullable, with `condition_id_reason`. It carries the same value as REST, so it is no longer the derived id for NegRisk or Protocol V2 markets. See the [WebSocket page](/api/market-data/uma-websocket#breaking-change-condition-id-on-uma-frames). |
 | `resolution_source` (history) | `condition_id_source`. Values: `derived`, `negrisk_exact`, `pv2_exact`, `unknown`. `derived_unverified` and `gamma_join` are retired. |
 | `lifecycles` (history) | `requests[]`. `requests` has one entry per oracle request, so `requests.length` is the count. |
 | `searched_from_ms`, `searched_to_ms` on every response | `coverage.from_ms` and `coverage.to_ms` on every response. The `/uma/history/market` unknown answer keeps `searched_from_ms` and `searched_to_ms`, as nullable fields. |
