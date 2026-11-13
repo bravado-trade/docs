@@ -93,6 +93,10 @@ The record of one question can contain a request, a proposal, an optional disput
 
 `status` is the stage of the **active request**: `requested`, `proposed`, `disputed` or `settled`. It is `unknown` when no oracle request can be identified in the record. `outcome` is that request's Settle, and it is `null` until the request settles.
 
+`settled` means the active oracle request settled on the OptimisticOracle. It does not mean the market resolved on the adapter: the adapter's own resolution is a separate, later transaction, and it can be missing. Market resolution is not the same signal as `status`.
+
+A too-early settle is not a settlement. When the active request settles too-early, `status` stays `requested` with `status_reason` `too_early_awaiting_rerequest`, and there is no `outcome`. The adapter re-requests the price, which becomes the active request. That is typically within about a minute (18 to 55 seconds in the observed cases). A reset question that awaits its re-proposal is also `requested`. Polymarket's own UI may show it as disputed.
+
 <Warning>
   A market whose event has visibly concluded is not necessarily settled. Always confirm `status` is `settled` and `outcome` is not `null` before treating a position as realized. An undisputed proposal can still be disputed until its challenge window closes.
 </Warning>
@@ -104,6 +108,7 @@ These enumerations apply to every v2 response, live and history. The per-route r
 | Field | Values |
 | --- | --- |
 | `status` | `requested`, `proposed`, `disputed`, `settled`, `unknown` |
+| `status_reason` | Present only when `status` is `requested` because the active request settled too-early: `too_early_awaiting_rerequest`. On `/uma/recent`, also `question_unreadable` on an item that could not be read. |
 | `family` | `uma_ctf_adapter` (standard markets), `negrisk_adapter` (NegRisk markets), `legacy_v1`, `polymarket_v2` (Protocol V2), `unknown` |
 | `active_request.origin` and `requests[].origin` | `initial`: the first request of the question. `dispute_reset`: re-requested in the same transaction as a dispute. `ignore_reset`: re-requested after a too-early settlement was discarded. `re_request`: any other re-request. `unobserved`: known only from its stage events. |
 | `active_request.basis` | `request_event` when the request's RequestPrice is in the record, `stage_events_only` otherwise |
