@@ -1,0 +1,99 @@
+---
+title: "Volume charts"
+sidebarTitle: "Volume charts"
+description: "Hourly, daily or weekly traded volume for one Polymarket wallet or one market. Predexon-compatible names, with the volume basis, exchange scope and effective bucket range stated in every response."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Two charts share one parameter set: a **wallet's** volume and a **market's** volume, bucketed by hour, day or week. Both routes take your **Data API** credential (`analytics.read`). Each successful response costs **1 API credit**.
+
+- **Venue: Polymarket only.** There is no `venue` parameter.
+- **Exchange scope: CTF Exchange V1 and V2** (`exchange_scope: "ctf_v1_v2"`). ExchangeV3 (combo) fills are not included yet.
+- **The two charts measure different things.** Read `volume_basis` before you compare them. See [Volume basis](#volume-basis).
+- **Predexon-compatible names.** `data[]` with `timestamp`, `total_volume`, `buy_volume` / `sell_volume` (wallet), `yes_volume` / `no_volume` (market) and `trades_count`, plus the echoed `granularity`, `start_time` and `end_time`. The other fields are additions.
+
+### Shared parameters
+
+| Parameter | Rule |
+| --- | --- |
+| `granularity` | `hour` (default), `day` or `week`. Buckets are whole UTC hours, days, or weeks starting Monday. |
+| `start_time` | **Required.** Range start in unix **seconds**. It is floored to a bucket boundary. |
+| `end_time` | **Required.** Range end in unix **seconds**. It is ceiled to a bucket boundary. Must be after `start_time`. |
+
+The range is capped per granularity: **hour 90 days, day 366 days, week 1096 days**. A wider range is refused with `400`. It is never truncated. Empty buckets are returned as zeros, and the newest bucket can be partial. The response echoes the times you requested in `start_time` / `end_time`, and the bucket range actually served in `bucket_start_time` / `bucket_end_time`.
+
+Unknown query parameters, and parameters given twice, are refused with `400`. They are never ignored.
+
+## `GET /v2/polymarket/wallet/volume-chart/{wallet}`
+
+```text
+GET https://partner-api.bravadotrade.com/v2/polymarket/wallet/volume-chart/{wallet}?granularity=day&start_time=1793404800&end_time=1794009600
+```
+
+<ParamField path="wallet" type="string" required>Wallet address: `0x` followed by 40 hex characters.</ParamField>
+<ParamField query="granularity" type="string" default="hour">`hour`, `day` or `week`.</ParamField>
+<ParamField query="start_time" type="integer" required>Range start, unix seconds.</ParamField>
+<ParamField query="end_time" type="integer" required>Range end, unix seconds.</ParamField>
+
+<ResponseField name="wallet_address" type="string" required>The wallet (lowercase `0x`).</ResponseField>
+<ResponseField name="granularity" type="string" required>The bucket width applied.</ResponseField>
+<ResponseField name="start_time · end_time" type="integer" required>The times you requested, echoed.</ResponseField>
+<ResponseField name="bucket_start_time · bucket_end_time" type="integer" required>The whole-bucket range actually served (start floored, end ceiled).</ResponseField>
+<ResponseField name="data" type="array" required>One point per bucket, oldest first: `timestamp` (bucket start), `total_volume`, `buy_volume`, `sell_volume`, `trades_count`.</ResponseField>
+<ResponseField name="venue" type="string" required>Always `polymarket`.</ResponseField>
+<ResponseField name="exchange_scope" type="string" required>Always `ctf_v1_v2`.</ResponseField>
+<ResponseField name="volume_basis" type="string" required>Always `wallet_clob_fills`. See [Volume basis](#volume-basis).</ResponseField>
+<ResponseField name="trades_count_basis" type="string" required>Always `on_chain_fact_rows`: `trades_count` counts every on-chain event row of the wallet, including split, merge, convert and redeem rows that are not volume. It can exceed the wallet's number of CLOB fills.</ResponseField>
+<ResponseField name="buy_sell_split_source" type="string" required>Always `unavailable`: `buy_volume` and `sell_volume` are `null` in every point. The volume is real. Only the buy/sell split is not served yet. Do not read `null` as zero buying or selling.</ResponseField>
+<ResponseField name="source" type="string" required>The rollup that was read: `pm_wallet_hourly` for `hour`, `pm_wallet_daily` for `day` and `week`.</ResponseField>
+
+## `GET /v2/polymarket/volume-chart/{condition_id}`
+
+```text
+GET https://partner-api.bravadotrade.com/v2/polymarket/volume-chart/{condition_id}?granularity=hour&start_time=1794096000&end_time=1794182400
+```
+
+<ParamField path="condition_id" type="string" required>The market's CTF condition id: `0x` followed by 64 hex characters.</ParamField>
+<ParamField query="granularity" type="string" default="hour">`hour`, `day` or `week`.</ParamField>
+<ParamField query="start_time" type="integer" required>Range start, unix seconds.</ParamField>
+<ParamField query="end_time" type="integer" required>Range end, unix seconds.</ParamField>
+
+<ResponseField name="condition_id" type="string" required>The requested condition id.</ResponseField>
+<ResponseField name="market_id" type="string" required>The Polymarket market id, or `null` if it is not known.</ResponseField>
+<ResponseField name="granularity" type="string" required>The bucket width applied.</ResponseField>
+<ResponseField name="start_time · end_time" type="integer" required>The times you requested, echoed.</ResponseField>
+<ResponseField name="bucket_start_time · bucket_end_time" type="integer" required>The whole-bucket range actually served.</ResponseField>
+<ResponseField name="data" type="array" required>One point per bucket, oldest first: `timestamp`, `total_volume`, `yes_volume` (outcome 0), `no_volume` (outcome 1), `trades_count`. `total_volume = yes_volume + no_volume`.</ResponseField>
+<ResponseField name="venue" type="string" required>Always `polymarket`.</ResponseField>
+<ResponseField name="exchange_scope" type="string" required>Always `ctf_v1_v2`.</ResponseField>
+<ResponseField name="volume_basis" type="string" required>Always `all_fill_legs`. See [Volume basis](#volume-basis).</ResponseField>
+
+## Volume basis
+
+`volume_basis` tells you what `total_volume` sums. The two charts use different bases.
+
+| `volume_basis` | Chart | What it sums | Matches |
+| --- | --- | --- | --- |
+| `wallet_clob_fills` | Wallet | The wallet's on-chain CLOB fills, in USD. Split, merge, convert and redeem legs are not volume. Neither are legacy FPMM fills. | The wallet's `volume` on the [leaderboard](/api/polymarket/leaderboard) for the same whole buckets. |
+| `all_fill_legs` | Market | Every `OrderFilled` leg of the market's outcome tokens: the taker order's row **and** each maker order's row. | About **2× the matched volume**, because each match is counted once per side. Divide by about 2 for an estimate of matched volume. Do not compare it 1:1 with a venue's "volume" figure. |
+
+In both charts `trades_count` counts rows, not matches. For the market chart it is the number of fill legs.
+
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `unknown_param` | A query parameter these routes do not accept. |
+| `400` | `invalid_param` | A malformed `wallet`, `condition_id`, `granularity`, `start_time` or `end_time`, a missing `start_time` or `end_time`, or a repeated parameter. |
+| `400` | `BAD_REQUEST` | Refused by the analytics service: `end_time` not after `start_time`, or a range over the cap for the granularity. |
+| `404` | `NOT_FOUND` | Market chart: the condition id is not a known Polymarket market. |
+| `401` / `403` / `402` / `429` | | Signature, scope, credit allowance, rate limit. |
+| `503` | `UNAVAILABLE` | The analytics source is unavailable. Retry. |
+
+Two layers answer a `400`, and their envelopes differ. The API edge sends `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service sends `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.
+
+## Related
+
+- [Top holders](/api/polymarket/top-holders): who holds the market.
+- [Wallet profile](/api/polymarket/wallet): a wallet's volume and PnL per window.

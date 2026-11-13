@@ -1,20 +1,24 @@
 ---
 title: "Polymarket Analytics"
 sidebarTitle: "Overview"
-description: "Wallet leaderboard, wallet profiles, smart-activity markets and positions for Polymarket, on one partner credential. Stable plain-USD numbers, 0–1 ratios, unix-second timestamps."
+description: "Wallet leaderboard, wallet profiles and identities, market top holders, volume charts, smart-activity markets and positions for Polymarket, on one partner credential. Predexon-compatible names, plain-USD numbers, 0–1 ratios, unix-second timestamps."
 ---
 
 <Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values in these pages are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
 
-The `/v2/polymarket` surface serves Polymarket wallet and market analytics under a single Data API credential (`analytics.read`). Every route is **fixed to the Polymarket venue** — there is no `venue` parameter to pass.
+The `/v2/polymarket` surface serves Polymarket wallet and market analytics under a single Data API credential (`analytics.read`). Every route is **fixed to the Polymarket venue** — there is no `venue` parameter to pass. Route and field names follow Predexon's API, so an integration can switch base URLs; fields we add are extra keys.
+
+**Exchange scope.** Positions, volumes and trade statistics come from the CTF Exchange V1 and V2 contracts. Markets created on ExchangeV3 (combo markets, live since about 2026-11-02) are not covered yet. Routes that report it say so in `exchange_scope: "ctf_v1_v2"`.
 
 ### Response conventions
 
 These hold across every endpoint on this surface:
 
-- **Numbers are exact decimal strings**, never floating-point — USD amounts, prices and PnL as decimal strings, ratios (ROI, win rate) as `0`–`1` decimals — so precision survives transit.
+- **Numbers are exact.** USD amounts, prices and PnL are plain JSON numbers written from exact integers (micro-USD), never computed in floating point; ratios (ROI, win rate) are `0`–`1` decimals. Parse them with a decimal type if you need every digit.
 - **Timestamps are unix seconds** (`computed_at`, `first_trade_at`, `last_trade_at`, …).
-- **Unknown is `null`, never a fake `0`.** A metric the source cannot compute is `null`. In particular `fees_paid` is `null` on the day windows and `fees_refunded` is `null` on every window — this surface has no per-window fee split — so a `null` fee means *unknown*, not *zero*.
+- **Unknown is `null`, never a fake `0`.** A metric the source cannot compute is `null`, and where it matters a provenance field says why (`fees_paid_source`, `cost_source`, `mark_source`, `profile_source`, `buy_sell_split_source`). The wallet profile serves `fees_paid` on every window; the leaderboard serves it on `all_time` only. Fees cover the CLOB V2 exchanges (`fees_paid_exchange_scope: "ctf_v2"`); a wallet that also paid V1 fees gets `null` with `fees_paid_source: "v1_fee_unvalued"`. `fees_refunded` is `null` on every window. A `null` fee means *unknown*, not *zero*.
+- **Strict parameters** on the leaderboard, wallet profile, profiles batch, wallet identity, top-holders and volume-chart routes: a query parameter the route does not accept is refused with `400 unknown_param`, and a malformed value with `400 invalid_param`. Value rules owned by the analytics service (an unknown sort key, a `min_` above its `max_`) answer `400 BAD_REQUEST`. On those routes a parameter is never silently ignored.
+- **Two error envelopes.** The API edge answers `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service answers `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.
 - **Cursor pagination.** List endpoints return `pagination.pagination_key`; pass it back as the `pagination_key` query parameter to get the next page. `pagination.has_more` tells you when to stop.
 
 ### Endpoints
@@ -22,5 +26,8 @@ These hold across every endpoint on this surface:
 - [`GET /v2/polymarket/leaderboard`](/api/polymarket/leaderboard) — wallets ranked for a window.
 - [`GET /v2/polymarket/wallet/{wallet}`](/api/polymarket/wallet) — one wallet's four-window profile.
 - [`GET /v2/polymarket/wallets/profiles`](/api/polymarket/wallets-profiles) — a batch of wallet profiles.
+- [`GET /v2/polymarket/wallet/identity/{wallet}` and `POST /v2/polymarket/wallet/identities`](/api/polymarket/wallet-identity) — full public identity with signer and wallet type.
+- [`GET /v2/polymarket/market/{condition_id}/top-holders`](/api/polymarket/top-holders) — a market's holders, ranked.
+- [`GET /v2/polymarket/wallet/volume-chart/{wallet}` and `GET /v2/polymarket/volume-chart/{condition_id}`](/api/polymarket/volume-charts) — hourly, daily or weekly volume.
 - [`GET /v2/polymarket/markets/smart-activity`](/api/polymarket/smart-activity) — per-market smart-cohort aggregates.
 - [`GET /v2/polymarket/positions`](/api/analytics/positions) — positions across every indexed wallet (documented alongside the canonical positions endpoint).

@@ -19,9 +19,11 @@ GET https://partner-api.bravadotrade.com/v2/polymarket/wallets/profiles?addresse
   Comma-separated list of 1–20 wallet addresses, each `0x` followed by 40 hex characters. Duplicates are de-duplicated.
 </ParamField>
 
+Any other query parameter is refused with `400 unknown_param`.
+
 ### Response
 
-A JSON **array** of wallet-profile objects — each element has exactly the shape returned by [`GET /wallet/{wallet}`](/api/polymarket/wallet) (`user`, four-window `metrics`, `trading_styles`, `entry_edge`, `unrealized_pnl`, `total_pnl`, `first_trade_at`, `last_trade_at`, `computed_at`). There is no surrounding envelope.
+A JSON **array** of wallet-profile objects — each element has exactly the shape returned by [`GET /wallet/{wallet}`](/api/polymarket/wallet) (`user`, four-window `metrics` including `fees_paid` / `fees_paid_source` / `fees_paid_exchange_scope` per window and `max_loss_streak` / `max_loss_streak_unit` on `all_time`, `trading_styles`, `entry_edge`, `unrealized_pnl`, `total_pnl`, `first_trade_at`, `last_trade_at`, `computed_at`). There is no surrounding envelope.
 
 ```json
 [
@@ -35,3 +37,15 @@ See [response conventions](/api/polymarket/overview) for the number, timestamp a
 Wallets without indexed trading activity are omitted. An empty array does not
 mean that the input wallets have no public identities. For public usernames and
 avatars for up to 100 wallets, use [public wallet identities](/api/polymarket/wallets-identities).
+
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `unknown_param` | A query parameter other than `addresses`. |
+| `400` | `invalid_param` | `addresses` missing, empty or longer than the edge allows. |
+| `400` | `BAD_REQUEST` | An invalid address, or more than 20 addresses. |
+| `401` / `403` / `402` / `429` | | Signature, scope, credit allowance, rate limit. |
+| `503` | `UNAVAILABLE` | The analytics source is unavailable. Retry. |
+
+Two layers answer a `400`, and their envelopes differ. The API edge sends `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service sends `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.

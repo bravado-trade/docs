@@ -1,0 +1,111 @@
+---
+title: "Full wallet identities"
+sidebarTitle: "/wallet/identity"
+description: "The public Polymarket profile of one wallet or up to 200 wallets (username, pseudonym, bio, image, X handle, badges), with its provenance and fetch time, plus the wallet's signer and wallet type with a confidence label."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Returns the full public identity of Polymarket wallets: the public profile fields, where they came from and when they were read, and the wallet's **signer** and **wallet type** from our wallet registry, each labelled with a confidence. The routes take your **Data API** credential (`analytics.read`). Each successful request costs **1 API credit**.
+
+- **Venue: Polymarket only.** There is no `venue` parameter.
+- **Predexon-compatible.** The routes and field names follow Predexon's wallet identity endpoints, so you can switch base URLs.
+- **Unknown is `null`, never a default.** A boolean that the profile source did not return is `null`, not `false`. `profile_source`, `profile_status` and `profile_fetched_at` tell you what each answer rests on.
+- **The signer is labelled, not filtered.** `signer` and `type` are served at every confidence level, always together with `type_confidence`. Decide what to trust from that label.
+
+For usernames and avatars only, the lighter [`GET /v2/polymarket/wallets/identities`](/api/polymarket/wallets-identities) is still available. It does not return the signer.
+
+## `GET /v2/polymarket/wallet/identity/{wallet}`
+
+```text
+GET https://partner-api.bravadotrade.com/v2/polymarket/wallet/identity/{wallet}
+```
+
+<ParamField path="wallet" type="string" required>Wallet address: `0x` followed by 40 hex characters. Case-insensitive.</ParamField>
+
+This route takes no query parameters. Any query parameter is refused with `400 unknown_param`.
+
+Returns one identity object. A wallet with no public profile is still a `200`, with `found: false` and `null` profile fields. This does not assert that the wallet does not exist.
+
+<ResponseField name="address" type="string" required>The wallet, lowercase `0x`.</ResponseField>
+<ResponseField name="username" type="string" required>The Bravado username if the wallet has one. Otherwise the Polymarket public name, when the profile allows it to be public. Otherwise the Polymarket pseudonym. `null` if none of these is available.</ResponseField>
+<ResponseField name="pseudonym · bio · x_username" type="string" required>From the Polymarket public profile, verbatim. `null` when the profile did not return the field or was not read.</ResponseField>
+<ResponseField name="profile_image" type="string" required>The Bravado avatar, else the Polymarket profile image URL. `null` if neither.</ResponseField>
+<ResponseField name="verified_badge · is_creator · is_mod" type="boolean" required>From the Polymarket public profile. `null` (not `false`) when the profile did not return the field or was not read.</ResponseField>
+<ResponseField name="created_at" type="string" required>The profile's creation time as Polymarket returns it (an ISO-8601 string, not unix seconds). `null` when not returned.</ResponseField>
+<ResponseField name="profile_source" type="string" required>`bravado` when a Bravado user record supplied the username or avatar. `gamma` when the Polymarket public profile was found. `none` when neither.</ResponseField>
+<ResponseField name="profile_status" type="string" required>`ok`: the Polymarket profile service answered (found or not found). `deferred`: our request budget toward that service was exhausted, so only the locally held fields are served. Retry later for the rest. `unavailable`: the service could not be read (failure or time budget). Locally held fields and the signer are still served.</ResponseField>
+<ResponseField name="profile_fetched_at" type="integer" required>Unix seconds of the read the profile answer rests on. A cached answer carries the time it was originally fetched, not the time of your request. `null` when nothing was read.</ResponseField>
+<ResponseField name="found" type="boolean" required>`true` when a public profile exists (`profile_source` is not `none`). It does not depend on `signer`.</ResponseField>
+<ResponseField name="signer" type="string" required>The address that controls the wallet (lowercase `0x`), from our wallet registry. `null` when the registry has no row for the wallet, could not be read, or records the zero address (owner unknown). In that last case `type` and `type_confidence` are still served. For `type: "safe"` it is the Safe's owner **at creation**: Safe owners can be changed later, so it is not claimed to be the current signer.</ResponseField>
+<ResponseField name="type" type="string" required>Wallet type: `eoa`, `deposit_wallet`, `poly_proxy`, `poly_clone`, `safe` or `contract`. `null` when the registry has no row.</ResponseField>
+<ResponseField name="type_confidence" type="string" required>How the registry established `signer` and `type`: `exact`, `high`, `medium` or `low`. For `type: "safe"` it is `creation_owner` (see `signer`). `null` when the registry has no row.</ResponseField>
+
+```json
+{
+  "address": "0x1111111111111111111111111111111111111111",
+  "username": "public-alias",
+  "pseudonym": "Brisk-Otter",
+  "bio": null,
+  "profile_image": "https://example.com/avatar.png",
+  "x_username": null,
+  "verified_badge": false,
+  "is_creator": null,
+  "is_mod": null,
+  "created_at": "2024-03-01T12:00:00.000Z",
+  "profile_fetched_at": 1794500000,
+  "profile_source": "gamma",
+  "profile_status": "ok",
+  "found": true,
+  "signer": "0x2222222222222222222222222222222222222222",
+  "type": "poly_proxy",
+  "type_confidence": "exact"
+}
+```
+
+The example is illustrative.
+
+## `POST /v2/polymarket/wallet/identities`
+
+```text
+POST https://partner-api.bravadotrade.com/v2/polymarket/wallet/identities
+Content-Type: application/json
+
+{"addresses": ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"]}
+```
+
+<ParamField body="addresses" type="string[]" required>1–200 wallet addresses, each `0x` followed by 40 hex characters. The limit counts the list **as sent**, duplicates included. Any other key in the body is refused.</ParamField>
+
+Returns a JSON **array** of identity objects, each with the same fields as the `GET` route. Addresses are lowercased and duplicates collapse in first-occurrence order, so the array can be **shorter than your list**. Match rows by their `address` field, never by position. One invalid address rejects the whole batch before any lookup.
+
+When many wallets in a batch need a fresh profile read, some rows can come back with `profile_status: "deferred"`. Those rows still carry the locally held fields and the signer. The request never waits for, or fails on, the profile service.
+
+This `POST` is a read: it is the only `POST` route your Data API key (`analytics.read`) can call. It takes no query parameters (any is refused with `400 unknown_param`) and needs no `Idempotency-Key`.
+
+### Sign the body
+
+The signature covers the **raw body bytes** you send. Serialize the JSON once, hash those bytes with SHA-256, and send exactly those bytes. Re-serializing after signing (key order, spacing) changes the hash, and the request is refused with `401 INVALID_SIGNATURE`.
+
+```text
+payload   = timestamp + "\n" + "POST" + "\n" + "/v2/polymarket/wallet/identities" + "\n" + hex(sha256(body_bytes))
+signature = hex(hmac_sha256(secret, payload))
+```
+
+Send it in `X-Bravado-Signature`, with `X-Bravado-API-Key`, `X-Bravado-Timestamp` and `Content-Type: application/json`. See [HMAC authentication](/authentication).
+
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_param` | A `wallet` path value with characters outside `A-Z a-z 0-9 . _ : -`, or a body that is not `{"addresses": [...]}` with 1–200 strings. |
+| `400` | `unknown_param` | Any query parameter on either route, or a `POST` body key other than `addresses`. |
+| `400` | `BAD_REQUEST` | Refused by the analytics service: a value that is not a wallet address (for example `0x12`), or a body that is not a single JSON object. |
+| `401` / `403` / `402` / `429` | | Signature, scope, credit allowance, rate limit. |
+| `503` | `UNAVAILABLE` | The analytics source is unavailable. Retry. |
+
+Two layers answer a `400`, and their envelopes differ. The API edge sends `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service sends `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.
+
+## Related
+
+- [Public wallet identities](/api/polymarket/wallets-identities): username and avatar only, up to 100 wallets.
+- [Wallet profile](/api/polymarket/wallet): trading metrics for a wallet.

@@ -2,51 +2,81 @@
 title: "GET /wallet/{wallet}: Wallet Profile"
 sidebarTitle: "/wallet/{wallet}"
 api: "GET /v2/polymarket/wallet/{wallet}"
-description: "One Polymarket wallet's analytics across four windows, with trading-style flags."
+description: "One Polymarket wallet's analytics across four windows, including fees paid per window and the longest losing streak, with trading-style flags."
 ---
 
 <Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
 
-Returns one Polymarket wallet's analytics across four windows (`one_day`, `seven_day`, `thirty_day`, `all_time`) plus trading-style flags and lifetime fields. Fixed to Polymarket (no `venue` parameter). See [response conventions](/api/polymarket/overview) for the number, timestamp and null rules.
+Returns one Polymarket wallet's analytics across four windows (`one_day`, `seven_day`, `thirty_day`, `all_time`) plus trading-style flags and lifetime fields. Fixed to Polymarket (no `venue` parameter). Exchange scope: CTF Exchange V1 and V2. ExchangeV3 (combo) fills are not counted yet. See [response conventions](/api/polymarket/overview) for the number, timestamp and null rules. Field names follow Predexon's wallet profile.
 
 ```text
 GET https://partner-api.bravadotrade.com/v2/polymarket/wallet/{wallet}
 ```
 
-### Path Parameters
+### Path parameters
 
 <ParamField path="wallet" type="string" required>
   Wallet address: `0x` followed by 40 hex characters.
 </ParamField>
 
-This endpoint takes no query parameters.
+This endpoint takes no query parameters. Any query parameter is refused with `400 unknown_param`.
 
 ### Response
 
-<ResponseField name="user" type="string">Wallet address.</ResponseField>
+<ResponseField name="user" type="string" required>Wallet address.</ResponseField>
 
-<ResponseField name="metrics" type="object">
-  <Expandable title="metrics">
-    <ResponseField name="one_day" type="object">The window metric set (see below).</ResponseField>
-    <ResponseField name="seven_day" type="object">The window metric set.</ResponseField>
-    <ResponseField name="thirty_day" type="object">The window metric set.</ResponseField>
-    <ResponseField name="all_time" type="object">
-      The window metric set plus `avg_hold_time_seconds`, `wallet_age_days`, `total_positions`, `active_positions`.
-    </ResponseField>
-  </Expandable>
+<ResponseField name="metrics.one_day · metrics.seven_day · metrics.thirty_day" type="object" required>
+  The window metric set (see below) for the last 1, 7 and 30 days.
 </ResponseField>
 
-<ResponseField name="trading_styles" type="object">
+<ResponseField name="metrics.all_time" type="object" required>
+  The window metric set plus `max_loss_streak`, `max_loss_streak_unit`, `avg_hold_time_seconds`, `wallet_age_days`, `total_positions` and `active_positions`.
+</ResponseField>
+
+<ResponseField name="metrics.all_time.max_loss_streak" type="number" required>
+  The longest run of consecutive **losing trading days** in the wallet's history. Days on which the wallet did not trade are skipped: they neither extend nor break a streak. `null` when the wallet has no score yet. The unit is active (trading) days, not calendar days, trades or positions.
+</ResponseField>
+
+<ResponseField name="metrics.all_time.max_loss_streak_unit" type="string" required>
+  `active_days` whenever `max_loss_streak` is set; `null` when it is `null`.
+</ResponseField>
+
+<ResponseField name="metrics.one_day.fees_paid · metrics.seven_day.fees_paid · metrics.thirty_day.fees_paid · metrics.all_time.fees_paid" type="number" required>
+  Trading fees the wallet paid in the window, in USD, on the **CLOB V2** exchanges only. A covered wallet with no fees is `0`. `null` when unknown, and `fees_paid_source` says why: `v1_fee_unvalued` when the wallet also has V1 fee rows in the window (V1 fees were taken in shares, not USD, so a V2-only total would be incomplete), `unavailable` when the fee read failed, or `null` when the wallet is not covered by the fee rollup.
+</ResponseField>
+
+<ResponseField name="metrics.one_day.fees_paid_source · metrics.seven_day.fees_paid_source · metrics.thirty_day.fees_paid_source · metrics.all_time.fees_paid_source" type="string" required>
+  Where `fees_paid` comes from: `pm_wallet_fees_daily` (day windows) or `pm_wallet_fees` (`all_time`, the same figure the leaderboard serves). When `fees_paid` is `null`: `v1_fee_unvalued`, `unavailable`, or `null` (wallet not covered).
+</ResponseField>
+
+<ResponseField name="metrics.one_day.fees_paid_exchange_scope · metrics.seven_day.fees_paid_exchange_scope · metrics.thirty_day.fees_paid_exchange_scope · metrics.all_time.fees_paid_exchange_scope" type="string" required>
+  The exchanges `fees_paid` covers: `ctf_v2`. Set whenever `fees_paid_source` is set.
+</ResponseField>
+
+<ResponseField name="trading_styles" type="object" required>
   `is_whale`, `is_market_maker`, `is_active_trader`, `is_buy_and_hold`, `is_degen`, `is_high_conviction`, `is_contrarian`, `is_value_hunter` (booleans) and `primary_style` (string or `null`).
 </ResponseField>
 
-<ResponseField name="entry_edge" type="string">Decimal string; `null` when unknown.</ResponseField>
-<ResponseField name="unrealized_pnl" type="string">USD decimal string; `null` when unknown.</ResponseField>
-<ResponseField name="total_pnl" type="string">USD decimal string; `null` when unknown.</ResponseField>
-<ResponseField name="first_trade_at" type="integer">Unix seconds; `null` when unknown.</ResponseField>
-<ResponseField name="last_trade_at" type="integer">Unix seconds; `null` when unknown.</ResponseField>
-<ResponseField name="computed_at" type="integer">Unix seconds the snapshot was computed.</ResponseField>
+<ResponseField name="entry_edge" type="number" required>Decimal; `null` when unknown.</ResponseField>
+<ResponseField name="unrealized_pnl" type="number" required>USD; `null` when unknown.</ResponseField>
+<ResponseField name="total_pnl" type="number" required>USD; `null` when unknown.</ResponseField>
+<ResponseField name="first_trade_at" type="integer" required>Unix seconds; `null` when unknown.</ResponseField>
+<ResponseField name="last_trade_at" type="integer" required>Unix seconds; `null` when unknown.</ResponseField>
+<ResponseField name="computed_at" type="integer" required>Unix seconds the snapshot was computed.</ResponseField>
 
 <Info>
-The **window metric set** is: `realized_pnl`, `total_pnl`, `volume` (USD decimal strings); `roi`, `win_rate` (`0`–`1` decimals); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_refunded`. Each is a decimal string or `null`. Per the [conventions](/api/polymarket/overview), `fees_paid` is `null` on the day windows and `fees_refunded` is `null` on every window.
+The **window metric set** is: `realized_pnl`, `total_pnl`, `volume` (USD); `roi`, `win_rate` (`0`–`1`); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_paid_source`, `fees_paid_exchange_scope`, `fees_refunded`. Each is a number, a string label, or `null`. `win_rate` is truncated to 6 decimals. `fees_refunded` is `null` on every window.
 </Info>
+
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `unknown_param` | Any query parameter (this route takes none). |
+| `400` | `invalid_param` | A path value with characters outside `A-Z a-z 0-9 . _ : -`. |
+| `400` | `BAD_REQUEST` | The path value is not a wallet address. |
+| `404` | `NOT_FOUND` | No indexed activity for this wallet. |
+| `401` / `403` / `402` / `429` | | Signature, scope, credit allowance, rate limit. |
+| `503` | `UNAVAILABLE` | The analytics source is unavailable. Retry. |
+
+Two layers answer a `400`, and their envelopes differ. The API edge sends `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service sends `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.

@@ -1,0 +1,96 @@
+---
+title: "Top holders of a market"
+sidebarTitle: "/market/{condition_id}/top-holders"
+description: "The holders of one Polymarket market, ranked by shares, value, PnL or trade count, with per-market trade stats. Predexon-compatible field names; unknown cost or mark is null with a provenance label."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
+
+Lists the wallets holding an open position in one market, ranked by the metric you choose, with each holder's trade count and first/last trade time **in this market**. The route takes your **Data API** credential (`analytics.read`). Each successful response costs **1 API credit**.
+
+- **Venue: Polymarket only.** There is no `venue` parameter.
+- **Exchange scope: CTF Exchange V1 and V2** (`exchange_scope: "ctf_v1_v2"` on every response). Markets created on ExchangeV3 (combo markets, live since about 2026-11-02) are not covered yet.
+- **Predexon-compatible names.** `entries[]`, `rank`, `user`, `position_shares`, `position_value_usd`, `avg_price`, `realized_pnl`, `unrealized_pnl`, `trade_count`, `first_trade_at`, `last_trade_at`, `pagination` and `total_count` use Predexon's names, so you can switch base URLs. The other fields are additions.
+- **Same numbers as positions.** Each row has the same shares, mark, cost, realized and unrealized PnL as the matching row of [`GET /v2/polymarket/positions`](/api/analytics/positions) for that wallet and token.
+
+## `GET /v2/polymarket/market/{condition_id}/top-holders`
+
+```text
+GET https://partner-api.bravadotrade.com/v2/polymarket/market/{condition_id}/top-holders?side=yes&sort=shares&limit=100
+```
+
+<ParamField path="condition_id" type="string" required>The market's CTF condition id: `0x` followed by 64 hex characters.</ParamField>
+<ParamField query="side" type="string">`yes` returns holders of the first outcome (`outcome_index` 0) only. `no` returns holders of the second outcome (`outcome_index` 1) only. Omit it to get both outcomes.</ParamField>
+<ParamField query="min_shares" type="string">Keep positions holding at least this many shares. A positive decimal with at most 6 decimal places.</ParamField>
+<ParamField query="min_trades" type="integer">Keep holders with at least this many trades in this market. Must be `1` or more. Holders with no trade record in this market are excluded.</ParamField>
+<ParamField query="include_count" type="boolean" default="false">`true` also fills `total_count`, `total_holders` and `unseeded_holders`. Otherwise those fields are `null`.</ParamField>
+<ParamField query="sort" type="string" default="shares">Rank by `shares`, `value` (position value at the current mark), `pnl` (realized + unrealized) or `trades` (trade count in this market). Always descending. A holder whose figure is unknown sorts **last** in every sort.</ParamField>
+<ParamField query="limit" type="integer" default="100">Rows per page, 1–100.</ParamField>
+<ParamField query="pagination_key" type="string">The `pagination.pagination_key` of the previous page. It only works with the same `side`, `min_shares`, `min_trades` and `sort`. A key from a different query is refused with a `400`.</ParamField>
+
+Unknown query parameters, and parameters given twice, are refused with `400`. They are never ignored.
+
+### Response
+
+<ResponseField name="entries" type="array" required>One object per (holder, outcome token), in rank order. The fields are in the table below.</ResponseField>
+<ResponseField name="pagination" type="object" required>`limit`, `count`, `has_more` (boolean) and `pagination_key` (string, `null` on the last page).</ResponseField>
+<ResponseField name="total_count" type="integer" required>Number of positions in the filtered set. `null` unless `include_count=true`.</ResponseField>
+<ResponseField name="total_holders" type="integer" required>Distinct holder wallets in the filtered set. `null` unless `include_count=true`.</ResponseField>
+<ResponseField name="unseeded_holders" type="integer" required>Wallets holding this market whose balance is not yet known. They are counted here but not ranked. `null` unless `include_count=true`.</ResponseField>
+<ResponseField name="condition_id" type="string" required>The requested condition id.</ResponseField>
+<ResponseField name="market_id" type="string" required>The Polymarket market id, or `null` if it is not known.</ResponseField>
+<ResponseField name="venue" type="string" required>Always `polymarket`.</ResponseField>
+<ResponseField name="exchange_scope" type="string" required>Always `ctf_v1_v2`: the CTF Exchange V1/V2 facts. ExchangeV3 (combo) fills are not included yet.</ResponseField>
+<ResponseField name="trade_stats_scope" type="string" required>Always `market`: `trade_count`, `first_trade_at` and `last_trade_at` count this market only, not the wallet's lifetime.</ResponseField>
+<ResponseField name="sort" type="string" required>The sort that was applied.</ResponseField>
+<ResponseField name="served_at" type="integer" required>Unix seconds when the response was built.</ResponseField>
+
+**Entry fields.** Money and share counts are plain JSON numbers built from exact integers. Prices are 0–1. Timestamps are unix seconds.
+
+| Field | Meaning |
+| --- | --- |
+| `rank` | 1-based rank over the whole ordering. It continues across pages. |
+| `user` | Holder wallet (lowercase `0x`). |
+| `token_id` | Outcome token id (decimal string). |
+| `condition_id` | The market's condition id. |
+| `side` | `yes` (outcome 0) or `no` (outcome 1). `null` for any other outcome slot. |
+| `outcome` / `outcome_index` | The outcome label from the market metadata and its 0-based slot. |
+| `position_shares` | Shares held. |
+| `current_price` | The current mark, 0–1. `null` when `mark_source` is `unknown`. |
+| `position_value_usd` | `position_shares × current_price`. `null` when the mark is unknown. |
+| `cost_basis` / `avg_price` | Cost of the open shares, and cost per share. `null` when `cost_source` is `unknown`. |
+| `realized_pnl` | Realized PnL on this position. |
+| `unrealized_pnl` | Value minus cost. `null` when the mark or the cost is unknown. |
+| `total_pnl` | `realized_pnl + unrealized_pnl`. `null` exactly when `unrealized_pnl` is `null`. |
+| `trade_count` / `first_trade_at` / `last_trade_at` | Trades in this market, and the times of the first and last. `null` when the wallet has no trade record in this market (for example, it received the shares by transfer). |
+| `cost_source` / `mark_source` | Provenance. A value of `unknown` means the matching figures above are `null`. |
+| `shares_source` | Where the share count comes from: `book` or `fifo_lot`. |
+| `realized_pnl_source` | Where `realized_pnl` is read from (`pm_global_positions`). |
+| `unrealized_pnl_source` | `mark_and_lot_cost`, `unknown_mark` or `unknown_cost`. |
+| `updated_at` | Unix seconds of the position's latest economic event. |
+
+<Info>
+**Unknown is `null`, never `0`.** For many open holders, the cost of their shares cannot yet be attributed. Those rows have `cost_source: "unknown"`, with `avg_price`, `cost_basis`, `unrealized_pnl` and `total_pnl` all `null`. Do not read `null` as a zero cost or a breakeven position.
+</Info>
+
+### Ordering and paging
+
+Ties are broken by wallet, then token id. Paging is keyset-based, so a page never repeats or skips a row while the data does not change. With `sort=value` or `sort=pnl`, rows are ordered by **live** marks, so a page boundary is exact only while the marks hold between your two requests. `shares` and `trades` are exact.
+
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `unknown_param` | A query parameter this route does not accept. |
+| `400` | `invalid_param` | A malformed value: a bad `condition_id`, `side`, `sort`, `include_count`, `min_shares`, `min_trades` or `limit`, or a repeated parameter. |
+| `400` | `BAD_REQUEST` | Refused by the analytics service, for example a `pagination_key` from a different query. |
+| `404` | `NOT_FOUND` | The condition id is not a known Polymarket market. |
+| `401` / `403` / `402` / `429` | | Signature, scope, credit allowance, rate limit. |
+| `503` | `UNAVAILABLE` | The analytics source is unavailable. Retry. |
+
+Two layers answer a `400`, and their envelopes differ. The API edge sends `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service sends `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.
+
+## Related
+
+- [Global positions](/api/analytics/positions): the same rows for any wallet, market or token.
+- [Market volume chart](/api/polymarket/volume-charts): the market's traded volume over time.

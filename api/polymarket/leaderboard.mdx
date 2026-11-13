@@ -2,76 +2,128 @@
 title: "GET /leaderboard: Wallet Leaderboard"
 sidebarTitle: "/leaderboard"
 api: "GET /v2/polymarket/leaderboard"
-description: "Polymarket wallets ranked for a rolling window, with trading-style filters and metric floors. Cursor-paginated."
+description: "Polymarket wallets ranked for a rolling window, with min/max range filters on PnL, ROI, profit factor, win rate, trade size, wallet age and prices, trading-style filters and eleven sort keys. Cursor-paginated; unknown parameters are refused."
 ---
 
 <Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples).</Note>
 
-Ranks Polymarket wallets for the requested window by the chosen metric, with trading-style include/exclude and volume/trade floors. Fixed to Polymarket (no `venue` parameter). See [response conventions](/api/polymarket/overview) for the number, timestamp and null rules.
+Ranks Polymarket wallets for the requested window by the chosen metric. You can narrow the set with trading-style include/exclude filters and with inclusive `min_` / `max_` range filters. Fixed to Polymarket (no `venue` parameter). Exchange scope: CTF Exchange V1 and V2. ExchangeV3 (combo) fills are not counted yet. See [response conventions](/api/polymarket/overview) for the number, timestamp and null rules.
+
+Parameter and field names follow Predexon's leaderboard, so you can switch base URLs.
 
 ```text
-GET https://partner-api.bravadotrade.com/v2/polymarket/leaderboard
+GET https://partner-api.bravadotrade.com/v2/polymarket/leaderboard?window=30d&sort_by=realized_pnl&min_trades=20&min_win_rate=0.6
 ```
 
-### Query Parameters
+<Warning>
+**Every parameter is checked.** A query parameter this endpoint does not list below is refused with `400 unknown_param`, never ignored. A range filter on a metric that is unknown for a wallet **excludes** that wallet. For example, `min_profit_factor` drops wallets with no losing positions, because their profit factor is undefined.
+</Warning>
+
+### Query parameters
 
 <ParamField query="window" type="string" default="all_time">
-  Rolling window: one of `1d`, `7d`, `30d`, `all_time`.
+  Rolling window: `1d`, `7d`, `30d` or `all_time`.
 </ParamField>
 
-<ParamField query="sort_by" type="string">
-  Rank metric: one of `total_pnl`, `realized_pnl`, `roi`, `win_rate`, `volume`, `trades`, `wins`, `losses`. `win_rate`, `wins` and `losses` are only available with `window=all_time`; other windows return `400`.
+<ParamField query="sort_by" type="string" default="total_pnl">
+  Rank metric: `total_pnl`, `realized_pnl`, `roi`, `win_rate`, `volume`, `trades`, `wins`, `losses`, `profit_factor`, `avg_trade_usd` or `wallet_age_days`. `win_rate`, `wins` and `losses` need `window=all_time`. Wallets whose metric is unknown sort last in both directions. `wallet_age_days` with `order=desc` lists the oldest wallets first.
 </ParamField>
 
-<ParamField query="order" type="string">
+<ParamField query="order" type="string" default="desc">
   Sort direction: `asc` or `desc`.
 </ParamField>
 
 <ParamField query="style" type="string">
-  Include only wallets carrying this trading style (e.g. `WHALE`, `MARKET_MAKER`). Case-insensitive.
+  Include only wallets with this trading style: `WHALE`, `MARKET_MAKER`, `ACTIVE_TRADER`, `BUY_AND_HOLD`, `DEGEN`, `HIGH_CONVICTION`, `CONTRARIAN` or `VALUE_HUNTER`. Case-insensitive.
 </ParamField>
 
 <ParamField query="exclude_style" type="string">
-  Exclude wallets carrying this trading style.
+  Exclude wallets with this trading style. Same values as `style`.
 </ParamField>
 
-<ParamField query="min_volume" type="number">
-  Minimum volume in USD.
+<ParamField query="min_volume · max_volume" type="string">
+  Volume in USD over the window. Non-negative, at most 6 decimals.
 </ParamField>
 
-<ParamField query="min_trades" type="integer">
-  Minimum trade count.
+<ParamField query="min_trades · max_trades" type="integer">
+  Trade count over the window. Non-negative whole number.
 </ParamField>
 
-<ParamField query="limit" type="integer">
-  Rows per page, up to 100.
+<ParamField query="min_realized_pnl · max_realized_pnl · min_total_pnl · max_total_pnl" type="string">
+  Realized PnL, or total PnL (realized + unrealized), in USD. Can be negative. At most 6 decimals. A wallet whose total PnL is unknown (open positions not yet valued) is excluded by a `total_pnl` range.
+</ParamField>
+
+<ParamField query="min_roi · max_roi" type="string">
+  Return on cost as a decimal (`0.5` = 50%). Can be negative. At most 6 decimals. Wallets with no buy cost are excluded.
+</ParamField>
+
+<ParamField query="min_profit_factor · max_profit_factor" type="string">
+  Gross profit / gross loss. Non-negative, at most 6 decimals. Wallets with no gross loss are excluded.
+</ParamField>
+
+<ParamField query="min_win_rate · max_win_rate" type="string">
+  Win rate, `0`–`1`. `window=all_time` only. Compared with the served `win_rate`, which is truncated to 6 decimals: a wallet shown as `0.666666` is kept by `min_win_rate=0.666666` and dropped by `0.666667`. Wallets with no closed positions are excluded.
+</ParamField>
+
+<ParamField query="min_avg_trade_usd · max_avg_trade_usd" type="string">
+  Average trade size in USD, defined as volume / trades. Non-negative, at most 6 decimals. Wallets with no trades are excluded.
+</ParamField>
+
+<ParamField query="min_avg_buy_price · max_avg_buy_price · min_avg_sell_price · max_avg_sell_price" type="string">
+  Average buy or sell price, `0`–`1`. Non-negative, at most 6 decimals. Wallets with no buys (or no sells) are excluded.
+</ParamField>
+
+<ParamField query="min_entry_edge · max_entry_edge" type="string">
+  Entry edge (average sell price − average buy price). Can be negative. At most 6 decimals.
+</ParamField>
+
+<ParamField query="min_wallet_age_days · max_wallet_age_days" type="integer">
+  Whole days since the wallet's first on-chain activity. Wallets with no recorded first activity are excluded.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="50">
+  Rows per page, 1–100.
 </ParamField>
 
 <ParamField query="pagination_key" type="string">
   Opaque cursor from the previous page's `pagination.pagination_key`.
 </ParamField>
 
+Range bounds are inclusive and compared exactly: ratios are compared on the same 6-decimal value the response prints, and averages and win rates are compared by integer cross-multiplication, never in floating point. A `min_` above its `max_` is a `400`.
+
 ### Response
 
-<ResponseField name="entries" type="array">
-  <Expandable title="entry">
-    <ResponseField name="user" type="string">Wallet address.</ResponseField>
-    <ResponseField name="rank" type="integer">1-based rank within this page's ordering.</ResponseField>
-    <ResponseField name="entry_edge" type="string">Decimal string; `null` when unknown.</ResponseField>
-    <ResponseField name="first_trade_at" type="integer">Unix seconds; `null` when unknown.</ResponseField>
-    <ResponseField name="metrics" type="object">
-      Window metrics. `realized_pnl`, `total_pnl`, `volume` (USD decimal strings); `roi`, `win_rate` (`0`–`1` decimals); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_refunded`. Every field is a decimal string or `null` (see [conventions](/api/polymarket/overview) — `fees_paid` is `null` on day windows, `fees_refunded` is always `null`).
-    </ResponseField>
-    <ResponseField name="trading_styles" type="object">
-      `is_whale`, `is_market_maker`, `is_active_trader`, `is_buy_and_hold`, `is_degen`, `is_high_conviction`, `is_contrarian`, `is_value_hunter` (booleans) and `primary_style` (string or `null`).
-    </ResponseField>
-  </Expandable>
+<ResponseField name="entries" type="array" required>
+  The ranked wallets. The entry fields are in the table below.
 </ResponseField>
 
-<ResponseField name="pagination" type="object">
+<ResponseField name="pagination" type="object" required>
   `limit`, `count`, `has_more` (boolean), `pagination_key` (string or `null`).
 </ResponseField>
 
-<ResponseField name="computed_at" type="integer">
+<ResponseField name="computed_at" type="integer" required>
   Unix seconds the snapshot was computed.
 </ResponseField>
+
+| Entry field | Meaning |
+| --- | --- |
+| `user` | Wallet address. |
+| `rank` | 1-based rank within the ordering. |
+| `entry_edge` | Decimal; `null` when unknown. |
+| `first_trade_at` | Unix seconds; `null` when unknown. |
+| `metrics` | The window metrics: `realized_pnl`, `total_pnl`, `volume` (USD); `roi`, `win_rate` (`0`–`1`, truncated to 6 decimals); `trades`, `wins`, `losses`, `positions_closed` (counts); `profit_factor`, `avg_buy_price`, `avg_sell_price`; `fees_paid`, `fees_paid_source`, `fees_paid_exchange_scope`, `fees_refunded`. Each is a number, a label or `null`. |
+| `trading_styles` | `is_whale`, `is_market_maker`, `is_active_trader`, `is_buy_and_hold`, `is_degen`, `is_high_conviction`, `is_contrarian`, `is_value_hunter` (booleans) and `primary_style` (string or `null`). |
+
+On the leaderboard, `fees_paid` is served on `window=all_time` only and is `null` on the day windows. Use the [wallet profile](/api/polymarket/wallet) for per-window fees. It follows the same rules as the profile: CLOB V2 fees only (`fees_paid_exchange_scope: "ctf_v2"`), and `null` with `fees_paid_source: "v1_fee_unvalued"` for a wallet that also paid V1 fees, so a board row and the profile agree. `fees_refunded` is always `null`.
+
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `unknown_param` | A query parameter this endpoint does not accept. |
+| `400` | `invalid_param` | A value with the wrong shape: a range value that is not a decimal with at most 6 places, a non-integer `limit` or `min_trades`, a `limit` of `0`, or a repeated parameter. |
+| `400` | `BAD_REQUEST` | Refused by the analytics service: an unknown `window`, `sort_by`, `order` or style; a negative value where only non-negative is allowed; a `min_` above its `max_`; `win_rate`, `wins` or `losses` outside `all_time`; a `limit` above 100; or an invalid `pagination_key`. |
+| `401` / `403` / `402` / `429` | | Signature, scope, credit allowance, rate limit. |
+| `503` | `UNAVAILABLE` | The analytics source is unavailable. Retry. |
+
+Two layers answer a `400`, and their envelopes differ. The API edge sends `{"error": "<message>", "code": "unknown_param" | "invalid_param", "param": "<name>"}`. The analytics service sends `{"error": "BAD_REQUEST" | "NOT_FOUND" | "UNAVAILABLE", "message": "<message>"}`. Read the typed code from `code` when it is present, otherwise from `error`.
