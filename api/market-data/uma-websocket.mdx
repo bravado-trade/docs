@@ -63,7 +63,9 @@ The `uma` frame carries `stage`, `answer`, `question_id`, `condition_id`, `condi
 | `pv2_request_not_observed` | A Protocol V2 question whose same-transaction `RequestInitialized` was not seen. |
 | `pv2_request_id_ambiguous` | More than one distinct Protocol V2 request id was seen for the question. |
 | `no_mined_request` | A standard-adapter question that has so far been seen only as a pending event. |
-| `not_in_live_store` | The question is not held in the live store. |
+| `not_in_live_store` | The event's question is not served by the live store. The same question answers `404 not_in_live_window` on the [live REST routes](/api/analytics/uma-live). |
+
+The stream never sends `question_unreadable`, which is REST-only. A question outside the family table is never served on either surface, so no frame carries an `unknown_family` reason.
 
 ## Breaking change: condition_id on uma frames
 
