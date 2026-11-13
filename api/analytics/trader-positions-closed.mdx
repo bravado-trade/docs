@@ -8,7 +8,7 @@ description: "The wallet's closed positions."
 <Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
 
 
-Returns only the wallet's closed positions. Response shape matches [/positions](/api/analytics/trader-positions).
+Returns only the wallet's closed positions: every position the wallet no longer holds (under one share open), including those that closed at break-even (`realized_pnl` of `0`). A position is a token the wallet actually bought, received or sold; cash collected on a market's redemption record without any shares moving is not listed. Response shape matches [/positions](/api/analytics/trader-positions).
 
 ```text
 GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/positions/closed
@@ -16,9 +16,27 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Path Parameters
 
+<ParamField path="address" type="string" required>
+  Wallet address: `0x` followed by 40 hex characters.
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="limit" type="integer" default="100">
+  Page size, 1 to 1000. A value outside that range returns `400`.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+  Number of closed positions to skip. Page with `limit` and `offset` until `positions` is shorter than `limit`.
+</ParamField>
+
 ### Response
 
-Array of position objects. See [/positions field reference](/api/analytics/trader-positions#response-position-fields).
+<ResponseField name="trader" type="string" required>The wallet, as requested.</ResponseField>
+<ResponseField name="positions" type="array" required>Closed positions, most recently closed first (ties by `token_id`). Same row shape as [/positions](/api/analytics/trader-positions#response-position-fields). `mark_price_cents` is the average exit price in cents: cash received over shares exited, counting sells (including merges), resolutions and redemptions only. It is `null` when no exit carried cash, for example a position that left only by conversion or transfer.</ResponseField>
+<ResponseField name="total" type="integer" required>Number of closed positions.</ResponseField>
+<ResponseField name="limit" type="integer" required>The page size applied.</ResponseField>
+<ResponseField name="offset" type="integer" required>The offset applied.</ResponseField>
 
 ### Example
 
