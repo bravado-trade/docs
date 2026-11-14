@@ -10,7 +10,7 @@ description: "Position state across every indexed wallet: one wallet, all holder
 Returns position **state** across all wallets Bravado indexes, not just one wallet at a time. Use it to answer three questions:
 
 - What does this wallet hold? Pass `wallet`.
-- Who holds this market or token? Pass `market_id`, `condition_id` or `token_id`.
+- Who holds this market or token? Pass `market_id`, `condition_id` or `token_id`. Protocol, operator and relayer contracts are left out of holder lists and of the `updated_after` feed (they hold millions of mechanical positions); query one with `wallet` and its rows carry `is_operator: true`.
 - What changed since I last looked? Pass `updated_after` and follow the cursor.
 
 ```text
@@ -89,6 +89,11 @@ A request must be **bounded**. Send at least one of `wallet`, `token_id`, `condi
 
 ### Response
 
+<ResponseField name="data" type="array" required>Position rows, in the ordering of the query. Empty when nothing matches.</ResponseField>
+<ResponseField name="next_cursor" type="string or null" required>Pass as `cursor` for the next page. `null` on the last page.</ResponseField>
+<ResponseField name="served_at" type="integer" required>Unix milliseconds at which the live marks were read.</ResponseField>
+<ResponseField name="unpriced_positions" type="integer" required>Open positions with an unknown mark among the rows this response covered.</ResponseField>
+
 ```json Response
 {
   "data": [
@@ -105,12 +110,14 @@ A request must be **bounded**. Send at least one of `wallet`, `token_id`, `condi
       "current_price": "0.610000",
       "current_value": "152.500000",
       "realized_pnl": "-3.250000",
+      "realized_pnl_source": "fifo_fills",
       "unrealized_pnl": "47.500000",
       "status": "open",
       "last_updated_at": 1780001000000,
       "mark_source": "quote",
       "mark_ts": 1780000990,
-      "open_value_source": "book"
+      "open_value_source": "book",
+      "is_operator": false
     }
   ],
   "next_cursor": "AQEBq83vEjRWeJD_nNuTfHcEQw",
@@ -118,13 +125,6 @@ A request must be **bounded**. Send at least one of `wallet`, `token_id`, `condi
   "unpriced_positions": 0
 }
 ```
-
-| Field | Type | Description |
-|---|---|---|
-| `data` | array | Position rows, in the ordering of the query (see [pagination](#pagination)). |
-| `next_cursor` | string or null | Pass as `cursor` for the next page. `null` on the last page. |
-| `served_at` | integer | Unix milliseconds at which the live marks were read. |
-| `unpriced_positions` | integer | Open positions with an unknown mark among the rows this response covered, including rows a `min_position_value` floor excluded. |
 
 ### Position fields
 
@@ -143,13 +143,15 @@ Money and share fields are exact decimal **strings** with 6 decimal places, comp
 | `cost_basis` | string or null | Remaining cost basis in USDC. `null` when cost is unknown. Never `"0.000000"` as a stand-in for unknown. |
 | `current_price` | string or null | Live mark in USDC per share, `0` to `1`. `null` when `mark_source` is `unknown`. |
 | `current_value` | string or null | `shares` times `current_price`. `null` when the mark is unknown. |
-| `realized_pnl` | string | Realized PnL in USDC (signed). See [venue semantics](#venue-semantics). |
+| `realized_pnl` | string or null | Realized PnL in USDC (signed). `null` when `realized_pnl_source` is `not_in_projection`. See [venue semantics](#venue-semantics). |
+| `realized_pnl_source` | string | Where `realized_pnl` comes from. `fifo_fills`: the sum over the position's recorded fills. `not_in_projection`: the positions projection holds no fills for this key (not a claim that the wallet never traded the token), and `realized_pnl` is `null`. Always present. |
 | `unrealized_pnl` | string or null | On **covered** shares only: `min(shares, covered) × (current_price − cost per covered share)`. `null` when the mark or cost is unknown. |
 | `status` | string | `open` or `closed`. |
 | `last_updated_at` | integer | Unix **milliseconds** of the position's latest economic event. |
 | `mark_source` | string | `resolution`, `quote`, `trade` or `unknown`. |
 | `mark_ts` | integer or null | Unix seconds of the quote or trade the mark rests on. `null` for `resolution` and `unknown`. |
 | `open_value_source` | string | `book`, `fifo_lot` or `unknown_book_unseeded`. |
+| `is_operator` | boolean | `true` when the wallet is a protocol, operator or relayer contract rather than a trader. Always present. Such wallets never appear in holder lists or the `updated_after` feed; they are returned only when you ask for them with `wallet`. |
 
 ### Marks and unknown values
 
@@ -158,6 +160,7 @@ Marks are computed **live on every request** (responses are not cached), in this
 - When no defensible mark exists, `mark_source` is `unknown` and `current_price`, `current_value` and `unrealized_pnl` are JSON `null`. The keys are always present. Unknown is never reported as `0`.
 - When the cost basis cannot be determined, `cost_basis` and `avg_entry_price` are `null`.
 - When `open_value_source` is `unknown_book_unseeded` (a Polymarket wallet whose on-chain balances have not been indexed yet), `shares`, `cost_basis`, `avg_entry_price`, `current_value` and `unrealized_pnl` are all `null`. The row's `status` is a placeholder in that case; rely on `open_value_source`.
+- When `realized_pnl_source` is `not_in_projection` (the positions projection holds no fills for the key), `realized_pnl` is `null`: the realized result is unknown here, not zero.
 - A position with `shares` of `"0.000000"` has a `current_value` and `unrealized_pnl` of exactly `"0.000000"`: nothing held is worth nothing, which is known.
 
 ### Pagination
@@ -193,14 +196,14 @@ Use `updated_after` to keep a local copy of position **state** current.
 
 Partner keys need the venue enabled for the request: `venue=predictfun` requires `predictfun` in your enabled venues (otherwise `403 VENUE_NOT_ENABLED`). The same data is available on the predict.fun mount, `GET /trader-analytics/predict/positions`, where `venue` defaults to `predictfun`.
 
-### Errors
+## Errors
 
 Errors return `{"error": "...", "code": "..."}`.
 
 | Status | `code` | Meaning |
 |---|---|---|
 | 400 | `unbounded_scan` | None of `wallet`, `token_id`, `condition_id`, `market_id`, `updated_after` was sent. |
-| 400 | `invalid_wallet`, `invalid_token_id`, `invalid_condition_id`, `invalid_market_id`, `invalid_status`, `invalid_limit`, `invalid_min_position_value`, `invalid_range` | A parameter failed validation. |
+| 400 | `invalid_wallet`, `invalid_token_id`, `invalid_condition_id`, `invalid_market_id`, `invalid_status`, `invalid_limit`, `invalid_min_position_value`, `invalid_min_timestamp`, `invalid_max_timestamp`, `invalid_min_block`, `invalid_max_block`, `invalid_updated_after`, `invalid_range` | A parameter failed validation. `invalid_range` means a `min_*` bound is greater than its `max_*` bound. |
 | 400 | `unknown_parameter`, `duplicate_parameter` | An unsupported or repeated parameter. |
 | 400 | `invalid_cursor`, `cursor_mismatch` | The cursor is malformed, or was issued for different filters or ordering. |
 | 400 / 501 | `venue_not_captured` | Unknown venue (400) or `kalshi` (501). |
