@@ -430,10 +430,16 @@
                             "type": "string"
                           },
                           "realized_pnl": {
-                            "type": "string"
+                            "type": ["string", "null"],
+                            "description": "Null when not computed (see realized_pnl_source)."
                           },
                           "percent_realized_pnl": {
-                            "type": "string"
+                            "type": ["string", "null"],
+                            "description": "Null when not computed; always null for closed positions."
+                          },
+                          "realized_pnl_source": {
+                            "type": "string",
+                            "enum": ["polymarket_data_api", "not_computed"]
                           },
                           "total_bought": {
                             "type": "string"
@@ -484,6 +490,7 @@
                           "percent_pnl",
                           "realized_pnl",
                           "percent_realized_pnl",
+                          "realized_pnl_source",
                           "total_bought",
                           "redeemable",
                           "mergeable",

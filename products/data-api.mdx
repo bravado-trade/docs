@@ -150,14 +150,17 @@ Bravado maintains two live leaderboards ranked by the `window` you specify:
       "volume_usdc": "18234567890.123000",
       "trades": 9812340,
       "realized_pnl": "1234567.890000",
+      "fees_basis": "all_time",
       "unrealized_pnl": "-45678.120000",
+      "unrealized_pnl_priced": "-45678.120000",
+      "unpriced_traders": 0,
       "total_pnl": "1188889.770000",
       "profitable_traders": 13102,
       "unprofitable_traders": 11343
     }
     ```
 
-    `traders` always equals `total`. `profitable_traders`/`unprofitable_traders` classify by the sign of `total_pnl` (realized + current open mark-to-market) — the one figure defined the same way on every window. `totals` is `null` only if it could not be computed; it never adds latency, since it's computed alongside the ranked page rather than after it.
+    `traders` always equals `total`. `profitable_traders`/`unprofitable_traders` classify by the sign of `total_pnl` (realized + current open mark-to-market) — the one figure defined the same way on every window. `unrealized_pnl` is `null` (never a zero) when `unpriced_traders > 0`; `unrealized_pnl_priced` is then the sum over the priced wallets, and `fees_basis` names which fees `realized_pnl` had deducted. `totals` is `null` only if it could not be computed; it never adds latency, since it's computed alongside the ranked page rather than after it.
   </Tab>
   <Tab title="Volume leaderboard">
     Returns traders ranked by USDC trading volume over the selected window. CTF infrastructure transactions are excluded. Ranked in the database over the complete candidate set, with the same deterministic wallet tie-break as the PnL leaderboard.
