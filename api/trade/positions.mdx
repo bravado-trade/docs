@@ -71,11 +71,14 @@ Returns a paginated list of outcome token positions associated with your account
     <ResponseField name="percent_pnl" type="string">
       Unrealized PnL as a percentage of initial_value. Present for `active` positions only.
     </ResponseField>
-    <ResponseField name="realized_pnl" type="string">
-      Dollar PnL locked in through partial exits or redemption. Always present; most meaningful for `closed` positions.
+    <ResponseField name="realized_pnl" type="string | null" required>
+      Dollar PnL locked in through partial exits or redemption; most meaningful for `closed` positions. `null` when it is not computed (see `realized_pnl_source`) — never a placeholder `"0"`. Always `null` on `venue=predictfun` (the venue does not expose it) and on positions read from the on-chain balance path.
     </ResponseField>
-    <ResponseField name="percent_realized_pnl" type="string">
-      Realized PnL as a percentage of initial_value.
+    <ResponseField name="percent_realized_pnl" type="string | null" required>
+      Realized PnL as a percentage of initial_value. `null` when not computed, and always `null` for `closed` positions (the closed feed carries no percentage).
+    </ResponseField>
+    <ResponseField name="realized_pnl_source" type="string" required>
+      Provenance of `realized_pnl` / `percent_realized_pnl`: `polymarket_data_api` (the venue's own figure) or `not_computed` (both fields are `null`).
     </ResponseField>
     <ResponseField name="total_bought" type="string">
       Total dollar spend on this position across all fills.
@@ -130,6 +133,7 @@ Returns a paginated list of outcome token positions associated with your account
       "percent_pnl": "8.62",
       "realized_pnl": "0",
       "percent_realized_pnl": "0",
+      "realized_pnl_source": "polymarket_data_api",
       "total_bought": "290.00",
       "redeemable": false,
       "mergeable": false,

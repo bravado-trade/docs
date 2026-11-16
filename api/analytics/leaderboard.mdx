@@ -118,8 +118,20 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard
       Sum of realized PnL over the candidate set (respects `?basis=`).
     </ResponseField>
 
-    <ResponseField name="unrealized_pnl" type="string">
-      Sum of current open mark-to-market over the candidate set.
+    <ResponseField name="fees_basis" type="string" required>
+      Which fees were deducted to produce `realized_pnl` (and every other net figure in `totals`). The same board-level label each row's `fees_basis` carries: `all_time`, `window_daily`, `unavailable_sub_day`, `none`, `engine_net` or `engine_gross`. Under `basis=gross` an individual row can downgrade to `v1_fee_unvalued`; `totals` carries the board-level label.
+    </ResponseField>
+
+    <ResponseField name="unrealized_pnl" type="string | null" required>
+      Sum of current open mark-to-market over the candidate set. `null` when `unpriced_traders > 0`: those wallets' open value is unknown (their per-row `unrealized_pnl` is `null`) and is not in the sum, so the sum is not a total.
+    </ResponseField>
+
+    <ResponseField name="unrealized_pnl_priced" type="string" required>
+      The same sum over the priced wallets only. Equals `unrealized_pnl` when `unpriced_traders` is `0`.
+    </ResponseField>
+
+    <ResponseField name="unpriced_traders" type="integer" required>
+      Count of wallets in the candidate set whose open value is unknown (book not seeded). Always `0` on predict.fun, which has no on-chain balance book.
     </ResponseField>
 
     <ResponseField name="total_pnl" type="string">
