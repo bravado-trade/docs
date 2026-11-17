@@ -79,7 +79,7 @@ Trade history and activity timeline endpoints use cursor-based pagination. Inste
 | Send | From the response | Notes |
 |------|-------------------|-------|
 | `cursor_ts` | `next_cursor` | |
-| `cursor_block` | `next_cursor_block` | Required with any cursor. `0` means no trade row served yet and carries no other field. |
+| `cursor_block` | `next_cursor_block` | Required with any cursor. `0` means no trade row served yet (for example a page of only redemptions): the response then omits `next_cursor_log_idx`, `next_cursor_tx` and `next_cursor_token`, and you send just `cursor_ts` and `cursor_block=0`. |
 | `cursor_log_idx` | `next_cursor_log_idx` | Required when `cursor_block > 0`. `0` is a real value. |
 | `cursor_tx` | `next_cursor_tx` | Required when `cursor_block > 0`. |
 | `cursor_token` | `next_cursor_token` | Required when `cursor_block > 0`. |
@@ -100,17 +100,15 @@ while True:
     if not data["next_cursor"]:
         break
 
-    cursor = {
-        "cursor_ts": data["next_cursor"],
-        "cursor_block": data["next_cursor_block"],
-        "cursor_log_idx": data["next_cursor_log_idx"],
-        "cursor_tx": data["next_cursor_tx"],
-        "cursor_token": data["next_cursor_token"],
-    }
+    # pass back every field the response carries; the key fields are absent on a "no trade row yet" page
+    cursor = {"cursor_ts": data["next_cursor"], "cursor_block": data["next_cursor_block"]}
+    for src, dst in (("next_cursor_log_idx", "cursor_log_idx"), ("next_cursor_tx", "cursor_tx"), ("next_cursor_token", "cursor_token")):
+        if src in data:
+            cursor[dst] = data[src]
 ```
 
 <Note>
-Send all five fields, unchanged. `cursor_log_idx=0` is a real value, not an omitted one.
+Send every field the response carries, unchanged. `cursor_log_idx=0` is a real value, not an omitted one.
 </Note>
 
 ### Activity timeline cursor

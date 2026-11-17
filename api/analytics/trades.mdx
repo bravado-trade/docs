@@ -29,7 +29,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/trades
 </ParamField>
 
 <ParamField query="cursor_block" type="integer">
-  Previous page's `next_cursor_block`. Required with any cursor on the default, `TRADE` and `SETTLE` feeds; `0` means no trade row served yet.
+  Previous page's `next_cursor_block`. Required with any cursor on the default, `TRADE` and `SETTLE` feeds; `0` means no trade row served yet; the response then omits `next_cursor_log_idx`, `next_cursor_tx` and `next_cursor_token`.
 </ParamField>
 
 <ParamField query="cursor_log_idx" type="integer">

@@ -51,19 +51,19 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
 </ResponseField>
 
 <ResponseField name="next_cursor_block" type="integer">
-  `block_number` of the last trade row served; `0` on the last page (and mid-walk only when the page contained no trade row). Send as `cursor_block`.
+  `block_number` of the last trade row served; `0` on the last page, and mid-walk only when the page contained no trade row (for example, only redemptions). In that case the three fields below are omitted. Send as `cursor_block`.
 </ResponseField>
 
 <ResponseField name="next_cursor_log_idx" type="integer">
-  Send as `cursor_log_idx`.
+  Send as `cursor_log_idx`. Omitted when `next_cursor_block` is `0` on a page that has a next page.
 </ResponseField>
 
 <ResponseField name="next_cursor_tx" type="string">
-  Send as `cursor_tx`.
+  Send as `cursor_tx`. Omitted when `next_cursor_block` is `0` on a page that has a next page.
 </ResponseField>
 
 <ResponseField name="next_cursor_token" type="string">
-  Send as `cursor_token`.
+  Send as `cursor_token`. Omitted when `next_cursor_block` is `0` on a page that has a next page.
 </ResponseField>
 
 <ResponseField name="trades" type="array">
@@ -131,7 +131,7 @@ The default, `TRADE` and `SETTLE` feeds are ordered and paged by one key, `(bloc
 | Send | From the previous response | Notes |
 | --- | --- | --- |
 | `cursor_ts` | `next_cursor` | |
-| `cursor_block` | `next_cursor_block` | **Required** with any cursor. `0` means "no trade row served yet" and carries no other cursor field. |
+| `cursor_block` | `next_cursor_block` | **Required** with any cursor. `0` means "no trade row served yet": the response then **omits** `next_cursor_log_idx`, `next_cursor_tx` and `next_cursor_token`, so send only `cursor_ts` and `cursor_block=0` (`cursor_log_idx=0` and empty `cursor_tx`/`cursor_token` are also accepted; any non-zero key part is `invalid_cursor`). |
 | `cursor_log_idx` | `next_cursor_log_idx` | Required when `cursor_block > 0`. `0` is a real value; send it. |
 | `cursor_tx` | `next_cursor_tx` | Required when `cursor_block > 0`. 64 hex characters. |
 | `cursor_token` | `next_cursor_token` | Required when `cursor_block > 0`. Decimal token id. |
