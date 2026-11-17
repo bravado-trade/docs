@@ -24,6 +24,28 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/stat
 
  
 
+### Pagination
+
+Page with the keyset cursor. Each page returns `has_more` and, when there is another page, `next_cursor`: pass it back as `cursor`. It has the form `<batch_block>:<row_seq>` and is bound to the R1 batch it was issued for. `total` and `offset` appear on the first page only.
+
+<ParamField query="cursor" type="string">
+  The previous page's `next_cursor` (`<batch_block>:<row_seq>`).
+</ParamField>
+
+<ParamField query="offset" type="integer">
+  Deprecated. Reads from the start, so it is limited to `100000`. Use `cursor`.
+</ParamField>
+
+If the wallet's R1 statement is rebuilt while you are paging, the next request returns `409 stale_cursor`. Restart from the first page; do not mix rows of the two batches. Statements exist on Polymarket only; predict.fun has no PMWAS statements.
+
+### Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_cursor` | `cursor` is not `<batch_block>:<row_seq>`. |
+| `400` | `offset_too_deep` | `offset` is above `100000`. Page with `cursor`. |
+| `409` | `stale_cursor` | The cursor was issued for an older R1 batch than the wallet's current one. Restart from the first page. |
+
 ### Response: R1 Disposition Row Fields
 
  
@@ -55,8 +77,7 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../s
   -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
   -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
   -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
-  -d limit=50 \
-  -d offset=0
+  -d limit=50
 ```
 
 ```json Response (abbreviated)
@@ -65,6 +86,8 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../s
   "total": 842,
   "limit": 50,
   "offset": 0,
+  "has_more": true,
+  "next_cursor": "1780000000:49",
   "rows": [
     {
       "acquire_tx": "0xacquire...",

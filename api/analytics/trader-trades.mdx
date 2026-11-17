@@ -21,10 +21,50 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
   
 
 <ParamField query="type" type="string">
-  Filter by event type: `TRADE`, `REDEEM`, `REWARD`, `MAKER_REBATE`, `REFERRAL_REWARD`, `SPLIT`, `MERGE`, `CONVERSION`, `DEPOSIT`, `WITHDRAW`.
+  Filter by event type: `TRADE`, `SETTLE` (synthetic resolution closes), `REDEEM`, `REWARD`, `MAKER_REBATE`, `REFERRAL_REWARD`, `SPLIT`, `MERGE`, `CONVERSION`, `DEPOSIT`, `WITHDRAW`.
+</ParamField>
+
+<ParamField query="cursor_ts" type="integer">
+  Previous page's `next_cursor`. See [Pagination](#pagination-keyset-cursor).
+</ParamField>
+
+<ParamField query="cursor_block" type="integer">
+  Previous page's `next_cursor_block`. Required with any cursor on the default, `TRADE` and `SETTLE` feeds.
+</ParamField>
+
+<ParamField query="cursor_log_idx" type="integer">
+  Previous page's `next_cursor_log_idx`.
+</ParamField>
+
+<ParamField query="cursor_tx" type="string">
+  Previous page's `next_cursor_tx`.
+</ParamField>
+
+<ParamField query="cursor_token" type="string">
+  Previous page's `next_cursor_token`.
 </ParamField>
 
 ### Response
+
+<ResponseField name="next_cursor" type="integer">
+  `block_timestamp` of the last row; `0` on the last page. Send as `cursor_ts`.
+</ResponseField>
+
+<ResponseField name="next_cursor_block" type="integer">
+  `block_number` of the last trade row served; `0` on the last page (and mid-walk only when the page contained no trade row). Send as `cursor_block`.
+</ResponseField>
+
+<ResponseField name="next_cursor_log_idx" type="integer">
+  Send as `cursor_log_idx`.
+</ResponseField>
+
+<ResponseField name="next_cursor_tx" type="string">
+  Send as `cursor_tx`.
+</ResponseField>
+
+<ResponseField name="next_cursor_token" type="string">
+  Send as `cursor_token`.
+</ResponseField>
 
 <ResponseField name="trades" type="array">
   <Expandable title="Trade event fields">
@@ -84,7 +124,29 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
 
  
 
-### Pagination Example
+### Pagination (keyset cursor)
+
+The default, `TRADE` and `SETTLE` feeds are ordered and paged by one key, `(block_number, log_index, tx_hash, token_id)`, newest first. A page boundary between blocks that share a `block_timestamp` (predict.fun blocks are sub-second but timestamps are whole seconds) therefore never skips or repeats a row. To fetch the next page, pass the five `next_cursor*` fields of the previous response back, unchanged:
+
+| Send | From the previous response | Notes |
+| --- | --- | --- |
+| `cursor_ts` | `next_cursor` | |
+| `cursor_block` | `next_cursor_block` | **Required** with any cursor. `0` means "no trade row served yet" and carries no other cursor field. |
+| `cursor_log_idx` | `next_cursor_log_idx` | Required when `cursor_block > 0`. `0` is a real value; send it. |
+| `cursor_tx` | `next_cursor_tx` | Required when `cursor_block > 0`. 64 hex characters. |
+| `cursor_token` | `next_cursor_token` | Required when `cursor_block > 0`. Decimal token id. |
+
+When `next_cursor` is `0`, you have reached the end. A cursor that is not a complete position, including a bare `cursor_ts`, is rejected with `400 invalid_cursor`; a cursor from a previous version of this API is not accepted. Other `type` values keep their own cursor (`cursor_ts`, plus `cursor_log_idx`/`cursor_tx` where documented) and ignore `cursor_block`.
+
+**Both venues.** The Polymarket and predict.fun (`/trader-analytics/predict/...`) routes use the same key and the same rules.
+
+### Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_cursor` | A cursor field is malformed, repeated, or missing a part of the key (see the table above). |
+
+### Pagination example
 
 <CodeGroup>
 
@@ -103,7 +165,10 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../t
   -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
   -d limit=100 \
   -d cursor_ts=1736800000 \
-  -d cursor_log_idx=42
+  -d cursor_block=96947230 \
+  -d cursor_log_idx=42 \
+  -d cursor_tx=<next_cursor_tx> \
+  -d cursor_token=<next_cursor_token>
 ```
 
 </CodeGroup>

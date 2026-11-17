@@ -16,7 +16,37 @@ GET https://partner-api.bravadotrade.com/trader-analytics/trades
 
 ### Query Parameters
 
-    
+<ParamField query="address" type="string" required>
+  Wallet address (`wallet` and `user` are accepted aliases).
+</ParamField>
+
+<ParamField query="type" type="string">
+  Event type, as on [`/traders/{address}/trades`](/api/analytics/trader-trades): `TRADE`, `SETTLE`, `REDEEM`, and the others listed there.
+</ParamField>
+
+<ParamField query="cursor_ts" type="integer">
+  Previous page's `next_cursor`.
+</ParamField>
+
+<ParamField query="cursor_block" type="integer">
+  Previous page's `next_cursor_block`. Required with any cursor on the default, `TRADE` and `SETTLE` feeds; `0` means no trade row served yet.
+</ParamField>
+
+<ParamField query="cursor_log_idx" type="integer">
+  Previous page's `next_cursor_log_idx`.
+</ParamField>
+
+<ParamField query="cursor_tx" type="string">
+  Previous page's `next_cursor_tx`.
+</ParamField>
+
+<ParamField query="cursor_token" type="string">
+  Previous page's `next_cursor_token`.
+</ParamField>
+
+### Pagination and errors
+
+Identical to [`/traders/{address}/trades`](/api/analytics/trader-trades#pagination-keyset-cursor): pass the five `next_cursor*` fields back as `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx`, `cursor_token`. A cursor missing its block, or any part of the key, is `400 invalid_cursor`. Both venues (`/trader-analytics/predict/trades` for predict.fun) follow the same rules.
 
 ### Response
 
