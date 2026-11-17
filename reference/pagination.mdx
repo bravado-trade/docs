@@ -107,7 +107,7 @@ while True:
             cursor[dst] = data[src]
 ```
 
-`type=SPLIT`, `MERGE` and `CONVERSION` use the key `(block_number, log_index, token_id)`: pass back `cursor_ts`, `cursor_block`, `cursor_log_idx` and `cursor_token` (no `cursor_tx`).
+`type=REDEEM` pages by `(block_number, log_index, tx_hash, condition_id)`: pass back `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx` and `cursor_condition` (`next_cursor_condition`). The default feed of `/traders/{address}/trades` merges trade and redemption rows into one stream; its cursor is the last row served and carries `next_cursor_token` (a trade) or `next_cursor_condition` (a redemption), never both: send back whichever you received. `type=SPLIT`, `MERGE` and `CONVERSION` use the key `(block_number, log_index, token_id)`: pass back `cursor_ts`, `cursor_block`, `cursor_log_idx` and `cursor_token` (no `cursor_tx`).
 
 <Note>
 Send every field the response carries, unchanged. `cursor_log_idx=0` is a real value, not an omitted one.

@@ -138,6 +138,19 @@ The default, `TRADE` and `SETTLE` feeds are ordered and paged by one key, `(bloc
 
 When `next_cursor` is `0`, you have reached the end. A cursor that is not a complete position, including a bare `cursor_ts`, is rejected with `400 invalid_cursor`; a cursor from a previous version of this API is not accepted. Other `type` values keep their own cursor (`cursor_ts`, plus `cursor_log_idx`/`cursor_tx` where documented) and ignore `cursor_block`.
 
+### Redemption cursors
+
+The default feed and `type=REDEEM` page by a total key too, because several blocks can share one timestamp (predict.fun) and one transaction can redeem several markets.
+
+| Feed | Key (newest first) | Send back |
+| --- | --- | --- |
+| `type=REDEEM` | `(block_number, log_index, tx_hash, condition_id)` | `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx`, **`cursor_condition`** (from `next_cursor_condition`). No `cursor_token`. |
+| default (no `type`) on `/traders/{address}/trades` | trade rows and redemption rows merged into one stream, ordered by `(block_number, log_index, tx_hash)`, then trade rows before redemption rows, then the id | The five `next_cursor*` fields exactly as returned. The cursor is the last row served, of either kind: it carries **`next_cursor_token`** when that row is a trade and **`next_cursor_condition`** when it is a redemption, never both. Send back whichever the response carried. |
+
+A redemption logged twice in one transaction (the NegRisk double log: the wallet's own log and the adapter's log) is served once, at the wallet's own log. `400 invalid_cursor` for a REDEEM cursor without `cursor_condition`, or with a token; for a default-feed cursor with both ids or neither; for `cursor_condition` on `TRADE`, `SETTLE` or the lifecycle types; or for a malformed `cursor_condition` (64 lowercase hex).
+
+**Behaviour change.** Redemptions are now found from the venue's own first block: on Polymarket from block 85,049,190 (earlier redemptions paid by pUSD transfers that the old floor skipped are now served), and on predict.fun from the start of its history.
+
 **`SPLIT`, `MERGE` and `CONVERSION`** page by the keyset `(block_number, log_index, token_id)` instead: send `cursor_ts`, `cursor_block`, `cursor_log_idx` and `cursor_token` from the matching `next_cursor*` fields (no `cursor_tx`). The same `invalid_cursor` rules apply. This matters most on predict.fun, where several blocks share one timestamp.
 
 **Both venues.** The Polymarket and predict.fun (`/trader-analytics/predict/...`) routes use the same key and the same rules.
