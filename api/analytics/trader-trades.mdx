@@ -138,6 +138,8 @@ The default, `TRADE` and `SETTLE` feeds are ordered and paged by one key, `(bloc
 
 When `next_cursor` is `0`, you have reached the end. A cursor that is not a complete position, including a bare `cursor_ts`, is rejected with `400 invalid_cursor`; a cursor from a previous version of this API is not accepted. Other `type` values keep their own cursor (`cursor_ts`, plus `cursor_log_idx`/`cursor_tx` where documented) and ignore `cursor_block`.
 
+**`SPLIT`, `MERGE` and `CONVERSION`** page by the keyset `(block_number, log_index, token_id)` instead: send `cursor_ts`, `cursor_block`, `cursor_log_idx` and `cursor_token` from the matching `next_cursor*` fields (no `cursor_tx`). The same `invalid_cursor` rules apply. This matters most on predict.fun, where several blocks share one timestamp.
+
 **Both venues.** The Polymarket and predict.fun (`/trader-analytics/predict/...`) routes use the same key and the same rules.
 
 ### Errors

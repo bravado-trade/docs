@@ -46,7 +46,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/trades
 
 ### Pagination and errors
 
-Identical to [`/traders/{address}/trades`](/api/analytics/trader-trades#pagination-keyset-cursor): pass the five `next_cursor*` fields back as `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx`, `cursor_token`. A cursor missing its block, or any part of the key, is `400 invalid_cursor`. Both venues (`/trader-analytics/predict/trades` for predict.fun) follow the same rules.
+Identical to [`/traders/{address}/trades`](/api/analytics/trader-trades#pagination-keyset-cursor): pass the five `next_cursor*` fields back as `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx`, `cursor_token`. A cursor missing its block, or any part of the key, is `400 invalid_cursor`. Both venues (`/trader-analytics/predict/trades` for predict.fun) follow the same rules. `SPLIT`, `MERGE` and `CONVERSION` use the key `(block_number, log_index, token_id)`: send `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_token` (no `cursor_tx`).
 
 ### Response
 

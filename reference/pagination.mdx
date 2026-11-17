@@ -107,6 +107,8 @@ while True:
             cursor[dst] = data[src]
 ```
 
+`type=SPLIT`, `MERGE` and `CONVERSION` use the key `(block_number, log_index, token_id)`: pass back `cursor_ts`, `cursor_block`, `cursor_log_idx` and `cursor_token` (no `cursor_tx`).
+
 <Note>
 Send every field the response carries, unchanged. `cursor_log_idx=0` is a real value, not an omitted one.
 </Note>
