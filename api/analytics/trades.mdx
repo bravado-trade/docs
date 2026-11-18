@@ -8,7 +8,7 @@ description: "Trade log for a wallet supplied as a query parameter. Alternative 
 <Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
 
 
-Returns the same trade log as [`/traders/{address}/trades`](/api/analytics/trader-trades), but the wallet address is passed as a query parameter instead of a path segment. Response shape is identical.
+Returns the same trade log as [`/traders/{address}/trades`](/api/analytics/trader-trades), but the wallet address is passed as a query parameter instead of a path segment. The row shape is the same; the envelope and the default feed differ, as set out under [Response](#response).
 
 ```text
 GET https://partner-api.bravadotrade.com/trader-analytics/trades
@@ -22,6 +22,10 @@ GET https://partner-api.bravadotrade.com/trader-analytics/trades
 
 <ParamField query="type" type="string">
   Event type, as on [`/traders/{address}/trades`](/api/analytics/trader-trades): `TRADE`, `SETTLE`, `REDEEM`, and the others listed there.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="50">
+  Page size, `1` to `500`. A value outside that range, or not a number, is a `400` without a `code` (the body is `{"error": "..."}`).
 </ParamField>
 
 <ParamField query="cursor_ts" type="integer">
@@ -44,13 +48,68 @@ GET https://partner-api.bravadotrade.com/trader-analytics/trades
   Previous page's `next_cursor_token`.
 </ParamField>
 
+<ParamField query="cursor_condition" type="string">
+  Previous page's `next_cursor_condition` (64 lowercase hex characters). Only with `type=REDEEM`.
+</ParamField>
+
 ### Pagination and errors
 
 Identical to [`/traders/{address}/trades`](/api/analytics/trader-trades#pagination-keyset-cursor): pass the five `next_cursor*` fields back as `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx`, `cursor_token`. A cursor missing its block, or any part of the key, is `400 invalid_cursor`. Both venues (`/trader-analytics/predict/trades` for predict.fun) follow the same rules. `type=REDEEM` pages by `(block_number, log_index, tx_hash, condition_id)`: send `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx` and `cursor_condition` (see [redemption cursors](/api/analytics/trader-trades#redemption-cursors)). `SPLIT`, `MERGE` and `CONVERSION` use the key `(block_number, log_index, token_id)`: send `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_token` (no `cursor_tx`).
 
 ### Response
 
-Same shape as [/traders/](/api/analytics/trader-trades#response){address}[/trades](/api/analytics/trader-trades#response).
+<ResponseField name="trader" type="string" required>
+  The wallet, as requested.
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  The event type applied: the `type` you sent, or `ALL` when you sent none. Not served with `type=DEPOSIT` or `type=WITHDRAW`.
+</ResponseField>
+
+<ResponseField name="limit" type="integer">
+  The page size applied. Not served with `type=DEPOSIT` or `type=WITHDRAW`.
+</ResponseField>
+
+<ResponseField name="trades" type="array" required>
+  Event rows, newest first. Row fields are the [Trade event fields](/api/analytics/trader-trades#trade-event-fields) of `/traders/{address}/trades`.
+</ResponseField>
+
+<ResponseField name="next_cursor" type="integer" required>
+  `block_timestamp` of the last row; `0` on the last page. Send as `cursor_ts`.
+</ResponseField>
+
+<ResponseField name="next_cursor_block" type="integer">
+  Send as `cursor_block`; `0` on the last page. Not served with `type=DEPOSIT` or `type=WITHDRAW`. See [Pagination](/api/analytics/trader-trades#pagination-keyset-cursor).
+</ResponseField>
+
+<ResponseField name="next_cursor_log_idx" type="integer">
+  Send as `cursor_log_idx`.
+</ResponseField>
+
+<ResponseField name="next_cursor_tx" type="string">
+  Send as `cursor_tx`.
+</ResponseField>
+
+<ResponseField name="next_cursor_token" type="string">
+  Send as `cursor_token`. Not served when the cursor row is a redemption.
+</ResponseField>
+
+<ResponseField name="next_cursor_condition" type="string">
+  Send as `cursor_condition`. Served with `type=REDEEM`.
+</ResponseField>
+
+<ResponseField name="mode" type="string">
+  `onchain`. Served only with `type=DEPOSIT` or `type=WITHDRAW`, whose envelope is `trader`, `mode`, `trades` and `next_cursor`.
+</ResponseField>
+
+**Differences from `/traders/{address}/trades`.** The envelope echoes `trader`, `type` and `limit`. With no `type`, this route serves exchange fills only, with `event_type` `TRADE`: it does not merge redemption rows into the stream and does not label fills `CLOB`. Pass `type=REDEEM` for redemptions.
+
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_cursor` | A cursor field is malformed, repeated, or missing a part of the key. |
+| `400` | none | `address` is missing or not a 40-hex wallet, or `limit` or `type` is not a valid value. The body is `{"error": "..."}` without a `code`. |
 
 ### Example
 
