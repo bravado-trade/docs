@@ -69,6 +69,7 @@
               "api/analytics/leaderboard",
               "api/analytics/leaderboard-volume",
               "api/analytics/trader",
+              "api/analytics/traders-batch",
               "api/analytics/trader-pnl",
               "api/analytics/trader-positions",
               "api/analytics/trader-positions-active",

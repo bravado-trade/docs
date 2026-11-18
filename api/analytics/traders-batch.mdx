@@ -1,0 +1,114 @@
+---
+title: "GET /traders/batch: Screen Several Traders"
+sidebarTitle: "/traders/batch"
+api: "GET /trader-analytics/traders/batch"
+description: "Headline performance for up to 50 wallets in one request, with explicit unknown provenance."
+---
+
+<Note>Sign each request with a fresh HMAC signature. The cURL and HTTP header values below are placeholders, not reusable credentials. For runnable signing code, use [request signing examples](/authentication-examples). Python examples use the signed session from that page; Node.js examples use its `bravadoFetch` helper.</Note>
+
+Returns headline performance for up to 50 wallets in one call, so you can screen a holder list before you open individual wallets with [`/traders/{address}`](/api/analytics/trader). At least 20 addresses per call are always accepted.
+
+```text
+GET https://partner-api.bravadotrade.com/trader-analytics/traders/batch
+```
+
+### Query Parameters
+
+<ParamField query="addresses" type="string" required>
+  Comma-separated wallet addresses, at most 50. The `0x` prefix is optional. Duplicates are collapsed and request order is kept.
+</ParamField>
+
+### Response
+
+<ResponseField name="requested" type="integer">
+  Number of distinct addresses requested.
+</ResponseField>
+
+<ResponseField name="found" type="integer">
+  Number of addresses with indexed activity.
+</ResponseField>
+
+<ResponseField name="traders" type="array">
+  <Expandable title="Trader fields">
+    <ResponseField name="trader" type="string">
+      Wallet address.
+    </ResponseField>
+
+    <ResponseField name="found" type="boolean">
+      `false` when the wallet has no indexed activity. Such wallets are returned, not dropped, and listed under `not_found`.
+    </ResponseField>
+
+    <ResponseField name="realized_pnl" type="string">
+      All-time settled realized PnL, from the per-fill ledger (the same figure as [`/traders/{address}`](/api/analytics/trader)). **Omitted when `realized_pnl_status` is `unknown`. It is never `0` in that case.**
+    </ResponseField>
+
+    <ResponseField name="realized_pnl_status" type="string">
+      `known` or `unknown`. `unknown` means the exact realized PnL could not be read within the service's read budget for this wallet, usually because it has a very large history.
+    </ResponseField>
+
+    <ResponseField name="realized_pnl_unknown_reason" type="string">
+      Present only when `realized_pnl_status` is `unknown`. Currently `read_cap_exceeded`. Request the wallet alone from [`/traders/{address}/pnl`](/api/analytics/trader-pnl) to get its figure.
+    </ResponseField>
+
+    <ResponseField name="volume_usdc" type="string">
+      All-time volume.
+    </ResponseField>
+
+    <ResponseField name="trades" type="integer">
+      Trade count.
+    </ResponseField>
+
+    <ResponseField name="markets_traded" type="integer">
+      Markets traded.
+    </ResponseField>
+
+    <ResponseField name="decided_markets" type="integer">
+      `markets_won + markets_lost`, the denominator behind `win_rate`.
+    </ResponseField>
+
+    <ResponseField name="win_rate" type="string">
+      Won divided by decided markets.
+    </ResponseField>
+
+    <ResponseField name="is_mm_bot" type="boolean">
+      Market-maker flag.
+    </ResponseField>
+
+    <ResponseField name="windows" type="object">
+      The 1d, 7d, 30d and all-time profile windows, as on [`/traders/{address}`](/api/analytics/trader).
+    </ResponseField>
+
+    <ResponseField name="style" type="object">
+      Trading-style flags.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="not_found" type="array">
+  Addresses with no indexed activity and a provably empty ledger.
+</ResponseField>
+
+<ResponseField name="unresolved" type="array">
+  Addresses that are neither found nor provably empty: the service had no score row for them and could not read their ledger within budget. Treat them as unknown, not as "no data".
+</ResponseField>
+
+**Unknown is not zero.** A wallet with `realized_pnl_status: "unknown"` has no `realized_pnl` field. Do not sum it as `0`.
+
+**Venues.** The same contract is served for predict.fun at `/trader-analytics/predict/traders/batch`.
+
+### Errors
+
+| Status | Meaning |
+| --- | --- |
+| `400` | `addresses` is missing, empty, has more than 50 entries, or contains an invalid address. |
+
+### Example
+
+```bash cURL
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/batch \
+  -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
+  -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
+  -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
+  -d addresses=0xabc...,0xdef...
+```

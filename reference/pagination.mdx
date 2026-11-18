@@ -21,7 +21,7 @@ For most list endpoints, you control pagination using `limit` and `offset` query
 - `GET /traders/{address}/positions`
 - `GET /v2/trade/positions`
 - `GET /v2/trade/combo/positions`
-- PMWAS statement endpoints (with `r1_limit` / `r1_offset`, see [PMWAS R1 pagination](#pmwas-r1-pagination))
+- PMWAS statement endpoints (with `r1_limit` / `r1_offset`, see [PMWAS R1 pagination](#pmwas-r1-pagination)); `GET /traders/{address}/statements/r1` pages by cursor
 
 **Example request:**
 
@@ -74,29 +74,25 @@ Trade history and activity timeline endpoints use cursor-based pagination. Inste
 
 ### Trade history cursors
 
-`GET /traders/{address}/trades` and `GET /trades` use a compound cursor made up of two fields:
+`GET /traders/{address}/trades` and `GET /trades` (default, `TRADE` and `SETTLE` feeds) page by the key `(block_number, log_index, tx_hash, token_id)`, the order the rows are served in. Pass the five `next_cursor*` fields of the previous response back as the cursor:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `cursor_ts` | integer | Exclusive upper bound on `block_timestamp`, pass the `next_cursor` from the previous response |
-| `next_cursor_log_idx` | integer | Secondary cursor to disambiguate when multiple trades share the same `block_timestamp` |
+| Send | From the response | Notes |
+|------|-------------------|-------|
+| `cursor_ts` | `next_cursor` | |
+| `cursor_block` | `next_cursor_block` | Required with any cursor. `0` means no trade row served yet (for example a page of only redemptions): the response then omits `next_cursor_log_idx`, `next_cursor_tx` and `next_cursor_token`, and you send just `cursor_ts` and `cursor_block=0`. |
+| `cursor_log_idx` | `next_cursor_log_idx` | Required when `cursor_block > 0`. `0` is a real value. |
+| `cursor_tx` | `next_cursor_tx` | Required when `cursor_block > 0`. |
+| `cursor_token` | `next_cursor_token` | Required when `cursor_block > 0`. |
 
-The response includes `next_cursor` (a `block_timestamp` value) and `next_cursor_log_idx`. When `next_cursor` is `null`, you have reached the end of the dataset.
+When `next_cursor` is `0`, you have reached the end. An incomplete cursor, including a bare `cursor_ts`, is `400 invalid_cursor`. The key is total, so a page boundary between blocks that share a timestamp neither skips nor repeats rows, on Polymarket and on predict.fun alike.
 
 **Python iteration example:**
 
 ```python
-cursor_ts = None
-cursor_log_idx = None
+cursor = {}
 
 while True:
-    params = {"limit": 100}
-    if cursor_ts is not None:
-        params["cursor_ts"] = cursor_ts
-    if cursor_log_idx is not None:
-        params["next_cursor_log_idx"] = cursor_log_idx
-
-    resp = get(f"/traders/{address}/trades", params=params)
+    resp = get(f"/traders/{address}/trades", params={"limit": 100, **cursor})
     data = resp.json()
 
     process(data["trades"])
@@ -104,12 +100,17 @@ while True:
     if not data["next_cursor"]:
         break
 
-    cursor_ts = data["next_cursor"]
-    cursor_log_idx = data.get("next_cursor_log_idx")
+    # pass back every field the response carries; the key fields are absent on a "no trade row yet" page
+    cursor = {"cursor_ts": data["next_cursor"], "cursor_block": data["next_cursor_block"]}
+    for src, dst in (("next_cursor_log_idx", "cursor_log_idx"), ("next_cursor_tx", "cursor_tx"), ("next_cursor_token", "cursor_token")):
+        if src in data:
+            cursor[dst] = data[src]
 ```
 
+`type=REDEEM` pages by `(block_number, log_index, tx_hash, condition_id)`: pass back `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx` and `cursor_condition` (`next_cursor_condition`). The default feed of `/traders/{address}/trades` merges trade and redemption rows into one stream; its cursor is the last row served and carries `next_cursor_token` (a trade) or `next_cursor_condition` (a redemption), never both: send back whichever you received. `type=SPLIT`, `MERGE` and `CONVERSION` use the key `(block_number, log_index, token_id)`: pass back `cursor_ts`, `cursor_block`, `cursor_log_idx` and `cursor_token` (no `cursor_tx`).
+
 <Note>
-Always pass both `cursor_ts` and `next_cursor_log_idx` together when available. Omitting `next_cursor_log_idx` when multiple trades share the same timestamp can cause duplicates or skipped records.
+Send every field the response carries, unchanged. `cursor_log_idx=0` is a real value, not an omitted one.
 </Note>
 
 ### Activity timeline cursor
@@ -178,10 +179,10 @@ X-BRAVADO-SIGNATURE: <signature-for-this-request>
 
 Check `has_more_r1` in the response to determine whether additional R1 rows exist for the current statement page.
 
-For direct access to R1 rows without the parent statement wrapper, use the standalone endpoint:
+For direct access to R1 rows without the parent statement wrapper, use the standalone endpoint, which pages by cursor. Pass each response's `next_cursor` (`<batch_block>:<row_seq>`) back as `cursor` until `has_more` is `false`. `offset` is deprecated and limited to `100000` (`400 offset_too_deep`). If the wallet's R1 is rebuilt mid-walk, the next request is `409 stale_cursor`: restart from the first page.
 
 ```http
-GET /traders/{address}/statements/r1?limit=500&offset=0 HTTP/1.1
+GET /traders/{address}/statements/r1?limit=500 HTTP/1.1
 X-BRAVADO-API-KEY: <public-key>
 X-BRAVADO-TIMESTAMP: <unix-ms>
 X-BRAVADO-SIGNATURE: <signature-for-this-request>
@@ -200,3 +201,4 @@ Requesting more than the maximum allowed limit for an endpoint will result in a 
 | `GET /v2/trade/activity` | 200 |
 | `GET /v2/trade/combo/positions` | 500 |
 | `GET /traders/{address}/statements` (R1 rows) | 5000 |
+| `GET /traders/{address}/statements/r1` | 5000 |
