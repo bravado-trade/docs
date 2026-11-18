@@ -25,7 +25,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
 </ParamField>
 
 <ParamField query="limit" type="integer" default="50">
-  Page size, `1` to `500`. A value outside that range, or not a number, is a `400` without a `code` (the body is `{"error": "..."}`).
+  Page size, `1` to `500`. A value outside that range, or not a whole number (`2.5`, `abc`), is a `400` without a `code` (the body is `{"error": "..."}`).
 </ParamField>
 
 <ParamField query="cursor_ts" type="integer">
@@ -45,7 +45,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
 </ParamField>
 
 <ParamField query="cursor_token" type="string">
-  Previous page's `next_cursor_token`.
+  Previous page's `next_cursor_token`: a decimal token id, or the counterparty address on `type=WITHDRAW`.
 </ParamField>
 
 <ParamField query="cursor_condition" type="string">
@@ -55,7 +55,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
 ### Response
 
 <ResponseField name="trader" type="string" required>
-  The wallet, as requested.
+  The wallet, normalised: lowercase with a `0x` prefix, whatever case or prefix you sent.
 </ResponseField>
 
 <ResponseField name="trades" type="array" required>
@@ -67,19 +67,19 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
 </ResponseField>
 
 <ResponseField name="next_cursor_block" type="integer" required>
-  `block_number` of the last trade row served; `0` on the last page, and mid-walk only when the page contained no trade row (for example, only redemptions). In that case the three fields below are omitted. Send as `cursor_block`.
+  `block_number` of the last row served, whatever its kind: the block of the redemption when the page ends with a redemption. `0` on the last page. On the feeds that page by `(cursor_ts, cursor_log_idx, ...)` and not by block (`DEPOSIT`, `WITHDRAW`, `REWARD`, `REFERRAL_REWARD`, `MAKER_REBATE`; see [Cursors of the other feeds](#cursors-of-the-other-feeds)) it is always `0` and is not sent back. On the default, `TRADE` and `SETTLE` feeds a `0` with a next page is the "no key yet" cursor, and the three fields below are then omitted. Send as `cursor_block`.
 </ResponseField>
 
 <ResponseField name="next_cursor_log_idx" type="integer">
-  Send as `cursor_log_idx`. `0` on the last page. Omitted when `next_cursor_block` is `0` on a page that has a next page.
+  Send as `cursor_log_idx`. `0` on the last page. On the default, `TRADE` and `SETTLE` feeds, omitted when `next_cursor_block` is `0` on a page that has a next page. On the other feeds it is served on every page with a next page.
 </ResponseField>
 
 <ResponseField name="next_cursor_tx" type="string">
-  Send as `cursor_tx`. Empty on the last page. Omitted when `next_cursor_block` is `0` on a page that has a next page.
+  Send as `cursor_tx`: 64 lowercase hex characters, no `0x`. Empty on the last page, and empty on the `REWARD`, `REFERRAL_REWARD` and `MAKER_REBATE` feeds, which do not page by transaction. On the default, `TRADE` and `SETTLE` feeds, omitted when `next_cursor_block` is `0` on a page that has a next page.
 </ResponseField>
 
 <ResponseField name="next_cursor_token" type="string">
-  Send as `cursor_token`. Empty on the last page. Omitted when `next_cursor_block` is `0` on a page that has a next page. Not served when the cursor row is a redemption (see `next_cursor_condition`).
+  Send as `cursor_token`. A decimal token id on the default, `TRADE`, `SETTLE`, `SPLIT`, `MERGE` and `CONVERSION` feeds. On `type=WITHDRAW` it is the 40-hex-character counterparty address of the last row (no `0x`); on `type=DEPOSIT` and the reward and rebate feeds it is empty. Empty on the last page. On the default, `TRADE` and `SETTLE` feeds, omitted when `next_cursor_block` is `0` on a page that has a next page. Not served when the cursor row is a redemption (see `next_cursor_condition`).
 </ResponseField>
 
 <ResponseField name="next_cursor_condition" type="string">
@@ -92,25 +92,31 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
 
 #### Trade event fields
 
-Fields marked optional are absent (not `null`, not `0`) when the event does not have them.
+Fields marked optional are absent (not `null`, not `0`) when the event does not have them. Which fields a row carries depends on its `event_type`; the table says where a field is empty or absent.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `ts` | integer | Unix timestamp of the block, in seconds. Same value as `block_timestamp`. |
 | `block_timestamp` | integer | Unix timestamp of the block, in seconds. |
-| `event_type` | string | `CLOB` for an exchange fill on the default feed, `TRADE` for a fill under `type=TRADE`, otherwise the requested type (`SETTLE`, `REDEEM`, and the others listed under `type`). |
-| `side` | string | `B` (buy) or `S` (sell). A redemption and a settlement are `S`. |
-| `shares` | string | Number of shares, a decimal string. Empty (`""`) on a redemption: the shares redeemed are not served on that row. |
+| `event_type` | string | `CLOB` for an exchange fill on the default feed, `TRADE` for a fill under `type=TRADE`, otherwise the requested type. The default feed also serves the wallet's other ledger events, each under its own name: `SETTLE`, `REDEEM`, `SPLIT`, `MERGE`, `CONVERT`, `TRANSFER_IN`, `TRANSFER_OUT` (and `FPMM_FUND_ADD`, `FPMM_FUND_REMOVE` for pre-CLOB liquidity). `TRANSFER_IN`, `TRANSFER_OUT`, `CONVERT` and the `FPMM_*` names are served on the default feed only: they are not `type` values. |
+| `side` | string | `B` (buy) or `S` (sell), by the direction of the position: an inbound transfer (`TRANSFER_IN`) and a convert-in are `B`, an outbound transfer is `S`, a redemption and a settlement are `S`. `SPLIT`, `MERGE` and `CONVERSION` legs are each `B` or `S` by their own direction on the default feed; `type=SPLIT`, `type=MERGE` and `type=CONVERSION` rows carry the leg's direction too (a merge leg is `S`). Empty (`""`) on `DEPOSIT`, `WITHDRAW`, `REWARD` and `REFERRAL_REWARD` rows, which are cash movements and have no side. |
+| `shares` | string | Number of shares, a decimal string. `"0"` on a cash movement. On a redemption: the shares redeemed when the source event determines them (`shares_source` says where from), and empty (`""`) when it does not. Empty means unknown, never zero. |
+| `shares_source` | string, optional | REDEEM rows only: provenance of `shares`, `payload` (exact, from the on-chain redemption event). Absent when `shares` is empty. |
 | `usdc_amount` | string | USDC value exchanged, a decimal string. |
-| `price_cents` | integer | Implied price in cents (0 to 100). `0` on a redemption row, which has no price. |
-| `token_id` | string | ERC-1155 token ID. |
-| `market_id` | string | Market identifier of the event's market. |
-| `question` | string | Market question. |
+| `price_cents` | number | Implied price in cents, a decimal number from 0 to 100, fractional for sub-cent and non-round fills (for example `77.9999997816`). Not an integer. `0` on a cash movement, and on a redemption whose `shares` are unknown (a placeholder, not a payout of zero). On a redemption with known shares it is the payout per share in cents (`100` for a full payout). |
+| `price_cents_source` | string, optional | REDEEM rows only: provenance of `price_cents`, as `shares_source`. Present only when `price_cents` was computed. |
+| `token_id` | string | ERC-1155 token ID. Empty (`""`) on cash movements (`DEPOSIT`, `WITHDRAW`, `REWARD`, `REFERRAL_REWARD`). On a `REDEEM` row it is the token the wallet actually redeemed, read from the wallet's own outbound token transfers in the redemption transaction, and empty when no single token is determined; `token_id_source` says which. |
+| `token_id_source` | string, optional | REDEEM rows only: `wallet_leg` (exactly one outcome token left the wallet in the redemption transaction: `token_id` is it), `wallet_legs_multiple` (both outcomes of the market were redeemed in one call: `token_id` is empty and `token_ids` lists them), `unknown_no_wallet_leg` (the wallet's transfer is not in the warehouse, for example an adapter-routed redemption below block 89,101,431: `token_id` is empty, not a guess) or `unknown_unmapped_token` (a token of the transaction is unknown to the market catalogue, so it cannot be ruled out). |
+| `token_ids` | array of string, optional | REDEEM rows with `token_id_source` `wallet_legs_multiple` only: every token redeemed, in ascending order. |
+| `market_id` | string, optional | Market identifier of the event's market. Absent on cash movements, reward rows and the `SPLIT`, `MERGE` and `CONVERSION` rows of `type=SPLIT`, `type=MERGE` and `type=CONVERSION`, which are keyed by token. |
+| `question` | string, optional | Market question. Absent wherever `market_id` is absent. |
 | `outcome` | string, optional | Outcome label. Absent on a redemption. |
-| `category` | string, optional | Market category. Absent on a redemption. |
-| `tx_hash` | string, optional | Transaction hash. Absent on a `SETTLE` row: a settlement is synthetic and has no transaction. |
-| `log_index` | integer, optional | Log index within the transaction. Served on redemption rows. |
+| `category` | string, optional | Market category. Present on a redemption when the market has one. |
+| `tx_hash` | string, optional | Transaction hash: 64 lowercase hex characters, no `0x`, on every row. Absent on a `SETTLE` row: a settlement is synthetic and has no transaction. |
+| `log_index` | integer, optional | Log index within the transaction. Served on redemption and cash rows that come from a logged event; absent on a `DEPOSIT` row that comes from the USDC.e transfer history, which carries no log index. |
 | `price_kind` | string, optional | Provenance of `price_cents`, for example `execution`. Served on fill rows. |
+| `counterparty` | string, optional | `WITHDRAW` and the other pUSD cash rows: the 40-hex-character address (no `0x`) the funds went to or came from. Same value as `next_cursor_token` on `type=WITHDRAW`. |
+| `coverage` | string, optional | A stated gap or provenance caveat for the row's source, for example the date before which `WITHDRAW` history is not in the warehouse, or how `DEPOSIT` excludes a wallet's own re-wrap. Present on `DEPOSIT` and `WITHDRAW` rows from the warehouse; absent means the row has no caveat. |
 
 ### Pagination (keyset cursor)
 
@@ -137,9 +143,21 @@ The default feed and `type=REDEEM` page by a total key too, because several bloc
 
 A redemption logged twice in one transaction (the NegRisk double log: the wallet's own log and the adapter's log) is served once, at the wallet's own log. `400 invalid_cursor` for a REDEEM cursor without `cursor_condition`, or with a token; for a default-feed cursor with both ids or neither; for `cursor_condition` on `TRADE`, `SETTLE` or the lifecycle types; or for a malformed `cursor_condition` (64 lowercase hex).
 
-**Behaviour change.** Redemptions are now found from the venue's own first block: on Polymarket from block 85,049,190 (earlier redemptions paid by pUSD transfers that the old floor skipped are now served), and on predict.fun from the start of its history.
+**Which redemptions are served, and from where.** Redemptions the wallet made itself (it is the redeemer of the on-chain event) are served from the start of the venue's history, with no block floor: a wallet's direct redemption at block 64,198,789 is served. Redemptions made for the wallet through a relaying contract (the NegRisk adapter, the collateral adapter, a batch relayer) are recognised by the pUSD payout the wallet received, so they exist from the first pUSD transfer, block 85,049,190 on Polymarket. That floor applies to the adapter-routed redemptions only. predict.fun has no pUSD and no floor.
 
 **`SPLIT`, `MERGE` and `CONVERSION`** page by the keyset `(block_number, log_index, token_id)` instead: send `cursor_ts`, `cursor_block`, `cursor_log_idx` and `cursor_token` from the matching `next_cursor*` fields (no `cursor_tx`). The same `invalid_cursor` rules apply. This matters most on predict.fun, where several blocks share one timestamp.
+
+### Cursors of the other feeds
+
+The cash, reward and rebate feeds do not page by block. Their cursor is read back from the response unchanged, and `cursor_block` is ignored on them.
+
+| Feed | Send back | Notes |
+| --- | --- | --- |
+| `type=REWARD`, `type=REFERRAL_REWARD`, `type=MAKER_REBATE` | `cursor_ts` and `cursor_log_idx` | `next_cursor_tx` and `next_cursor_token` are empty. |
+| `type=WITHDRAW` | `cursor_ts`, `cursor_log_idx`, `cursor_tx`, `cursor_token` | `cursor_token` is the row's counterparty address (40 hex characters, `0x` optional), not a token id. |
+| `type=DEPOSIT` | `cursor_ts`, `cursor_log_idx`, `cursor_tx`, `cursor_token` | `next_cursor_log_idx` is `0` when the last row came from the USDC.e transfer history, and `next_cursor_token` is empty. |
+
+`cursor_tx` is accepted with or without a `0x` prefix on these feeds. A malformed value (a non-hex or wrong-length `cursor_tx`, a `cursor_token` that is not an address on `WITHDRAW` or not a decimal integer on the others, a non-numeric `cursor_ts` or `cursor_log_idx`) is `400 invalid_cursor`.
 
 **Both venues.** The Polymarket and predict.fun (`/trader-analytics/predict/...`) routes use the same key and the same rules.
 
@@ -147,8 +165,8 @@ A redemption logged twice in one transaction (the NegRisk double log: the wallet
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `400` | `invalid_cursor` | A cursor field is malformed, repeated, or missing a part of the key (see the tables above). |
-| `400` | none | `limit`, `type` or the address is not a valid value. The body is `{"error": "..."}` without a `code`. |
+| `400` | `invalid_cursor` | A cursor field is malformed, repeated, or missing a part of the key (see the tables above), on any feed. |
+| `400` | none | `limit`, `type` or the address is not a valid value; `limit` must be a whole number. The body is `{"error": "..."}` without a `code`. |
 
 ### Pagination example
 

@@ -83,17 +83,21 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 
 <ParamField query="series_kind" default="cumulative_all_time" type="string">
   `cumulative_all_time` (default since 2026-09-12): the behavior described on
-  this page. `window_delta`: the pre-2026-09-12 numbers — each point is a
-  delta relative to window start (`0` at the first bucket) — still gap-filled
-  and carried forward, so an inactive-in-window wallet is a flat line at
-  `0.000000`, never `[]`. Use this if your integration depends on the older
+  this page. `window_delta`: the pre-2026-09-12 numbers — the realized part of each
+  point is the sum of the fills since the window start (the baseline before the
+  window is `0`, so a wallet with no fills in the window is a flat line at
+  `0.000000`, never `[]`). The first point is therefore not `0` when the wallet
+  traded in the first bucket. With `pnl_type=overall` the unrealized part is the
+  mark-to-market level of the open positions in each bucket (an absolute value,
+  not a change since the window start), so an `overall` `window_delta` series
+  starts at that level plus the first bucket's realized change. Use this if your integration depends on the older
   relative-delta shape; the response always echoes which one you got.
 </ParamField>
 
 ### Response
 
 <ResponseField name="trader" type="string" required>
-  The wallet, as requested.
+  The wallet, normalised: lowercase with a `0x` prefix, whatever case or prefix you sent.
 </ResponseField>
 
 <ResponseField name="window" type="string" required>
@@ -293,16 +297,18 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../p
 
 ### Example: a wallet with no history at all
 
+A wallet the platform has never seen. A well-known burn address such as `0x…dead` is not an example: it has a history, and is served a full series.
+
 <CodeGroup>
 
 ```json Response
 {
-  "trader": "0x000000000000000000000000000000000000dead",
+  "trader": "0x5f3b9c2a7d1e4f8a6b0c9d2e1f3a4b5c6d7e8f90",
   "window": "30d",
   "interval": "1h",
   "pnl_type": "overall",
   "basis": "net",
-  "fees_basis": "none",
+  "fees_basis": "engine_net",
   "series_kind": "cumulative_all_time",
   "unrealized_marks": "none",
   "empty_reason": "no_wallet_history",

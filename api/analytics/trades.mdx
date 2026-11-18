@@ -25,7 +25,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/trades
 </ParamField>
 
 <ParamField query="limit" type="integer" default="50">
-  Page size, `1` to `500`. A value outside that range, or not a number, is a `400` without a `code` (the body is `{"error": "..."}`).
+  Page size, `1` to `500`. A value outside that range, or not a whole number (`2.5`, `abc`), is a `400` without a `code` (the body is `{"error": "..."}`).
 </ParamField>
 
 <ParamField query="cursor_ts" type="integer">
@@ -54,12 +54,12 @@ GET https://partner-api.bravadotrade.com/trader-analytics/trades
 
 ### Pagination and errors
 
-Identical to [`/traders/{address}/trades`](/api/analytics/trader-trades#pagination-keyset-cursor): pass the five `next_cursor*` fields back as `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx`, `cursor_token`. A cursor missing its block, or any part of the key, is `400 invalid_cursor`. Both venues (`/trader-analytics/predict/trades` for predict.fun) follow the same rules. `type=REDEEM` pages by `(block_number, log_index, tx_hash, condition_id)`: send `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx` and `cursor_condition` (see [redemption cursors](/api/analytics/trader-trades#redemption-cursors)). `SPLIT`, `MERGE` and `CONVERSION` use the key `(block_number, log_index, token_id)`: send `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_token` (no `cursor_tx`).
+`REWARD`, `REFERRAL_REWARD`, `MAKER_REBATE`, `DEPOSIT` and `WITHDRAW` page by `cursor_ts` and `cursor_log_idx` (plus `cursor_tx` and `cursor_token` on `DEPOSIT` and `WITHDRAW`), sent back as returned, and ignore `cursor_block`: see [Cursors of the other feeds](/api/analytics/trader-trades#cursors-of-the-other-feeds). Otherwise identical to [`/traders/{address}/trades`](/api/analytics/trader-trades#pagination-keyset-cursor): pass the five `next_cursor*` fields back as `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx`, `cursor_token`. A cursor missing its block, or any part of the key, is `400 invalid_cursor`. Both venues (`/trader-analytics/predict/trades` for predict.fun) follow the same rules. `type=REDEEM` pages by `(block_number, log_index, tx_hash, condition_id)`: send `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_tx` and `cursor_condition` (see [redemption cursors](/api/analytics/trader-trades#redemption-cursors)). `SPLIT`, `MERGE` and `CONVERSION` use the key `(block_number, log_index, token_id)`: send `cursor_ts`, `cursor_block`, `cursor_log_idx`, `cursor_token` (no `cursor_tx`).
 
 ### Response
 
 <ResponseField name="trader" type="string" required>
-  The wallet, as requested.
+  The wallet, normalised: lowercase with a `0x` prefix, whatever case or prefix you sent.
 </ResponseField>
 
 <ResponseField name="type" type="string">
@@ -91,7 +91,7 @@ Identical to [`/traders/{address}/trades`](/api/analytics/trader-trades#paginati
 </ResponseField>
 
 <ResponseField name="next_cursor_token" type="string">
-  Send as `cursor_token`. Not served when the cursor row is a redemption.
+  Send as `cursor_token`. A decimal token id; on `type=WITHDRAW` the counterparty address (40 hex characters). Not served when the cursor row is a redemption.
 </ResponseField>
 
 <ResponseField name="next_cursor_condition" type="string">
@@ -102,7 +102,7 @@ Identical to [`/traders/{address}/trades`](/api/analytics/trader-trades#paginati
   `onchain`. Served only with `type=DEPOSIT` or `type=WITHDRAW`, whose envelope is `trader`, `mode`, `trades` and `next_cursor`.
 </ResponseField>
 
-**Differences from `/traders/{address}/trades`.** The envelope echoes `trader`, `type` and `limit`. With no `type`, this route serves exchange fills only, with `event_type` `TRADE`: it does not merge redemption rows into the stream and does not label fills `CLOB`. Pass `type=REDEEM` for redemptions.
+**Differences from `/traders/{address}/trades`.** The envelope echoes `trader`, `type` and `limit`. With no `type`, this route serves the wallet's trade ledger without merging redemption rows into it: fills (`event_type` `TRADE`, not `CLOB`), settlements (`SETTLE`), the legs of splits, merges and converts (`SPLIT`, `MERGE`, `CONVERT`) and transfers of tokens between wallets (`TRANSFER_IN`, `TRANSFER_OUT`), in one stream ordered by `(block_number, log_index, tx_hash, token_id)`. `TRANSFER_IN`, `TRANSFER_OUT` and `CONVERT` rows are not values of `type`: they appear on the default feed only. Pass `type=TRADE` for exchange fills only and `type=REDEEM` for redemptions. The row fields, including the `side` of a transfer (`TRANSFER_IN` is `B`), are those of [`/traders/{address}/trades`](/api/analytics/trader-trades#trade-event-fields).
 
 ## Errors
 
