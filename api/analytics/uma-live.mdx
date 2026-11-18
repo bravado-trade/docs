@@ -139,6 +139,12 @@ GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100
 <ParamField query="stage" type="string">Filter by current `status`: `requested`, `proposed`, `disputed` or `settled`. Omit for all.</ParamField>
 <ParamField query="limit" type="integer" default="100">Maximum question records in this response, from 1 to 500. This is a result cap, not a page size: there is no cursor, offset or next page. To page an event log over a time range, use [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent).</ParamField>
 
+<ParamField query="cursor" type="string">Not supported on this route. If you send it, the response is `400 unsupported_parameter`. Paging exists only on [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent).</ParamField>
+<ParamField query="from" type="string">Not supported on this route. If you send it, the response is `400 unsupported_parameter`. Time filtering exists only on [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent).</ParamField>
+<ParamField query="to" type="string">Not supported on this route. If you send it, the response is `400 unsupported_parameter`. Time filtering exists only on [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent).</ParamField>
+
+Only `cursor`, `from` and `to` are refused, because they mean something on the history route and a silent ignore would hand you an unfiltered list. Any other unknown query key is ignored.
+
 <ResponseField name="questions" type="array" required>Question records, each in the v2 body of [`/uma/question`](#get-/uma/question). Inside an item, `status_reason` is present with `too_early_awaiting_rerequest` (see `status_reason` on `/uma/question`) or with `question_unreadable`. A held question that cannot be read is listed, not dropped: `status` is `unknown`, `status_reason` and `condition_id_reason` are both `question_unreadable`, `condition_id_source` is `unknown`, and `active_request` is `null`. The rest of the page is still served.</ResponseField>
 <ResponseField name="count" type="integer" required>Number of records in `questions`.</ResponseField>
 
@@ -160,6 +166,7 @@ On the live routes:
 | `400` | `invalid_condition_id` | `/uma/market`: `condition_id` is missing, or is not a 32-byte hex id (the `0x` prefix is optional). |
 | `400` | `invalid_stage` | `/uma/recent`: `stage` is not one of `requested`, `proposed`, `disputed`, `settled`. |
 | `400` | `invalid_limit` | `/uma/recent`: `limit` is not an integer from 1 to 500. |
+| `400` | `unsupported_parameter` | `/uma/recent`: `cursor`, `from` or `to` was sent. They exist only on [`/uma/history/recent`](/api/analytics/uma-history#get-/uma/history/recent), which pages and filters by time. |
 | `404` | `not_in_live_window` | No retained record for that id. The body has a `history` field that points to the history route. |
 | `401` | `INVALID_SIGNATURE`, `STALE_TIMESTAMP`, `INVALID_KEY`, `KEY_DISABLED` | Signature or key refused. See [HMAC authentication](/authentication). |
 | `402` | | Credit allowance exhausted. See [API credits](/api-credits). |
