@@ -130,7 +130,7 @@ A market is found by a standard adapter's derived condition id or by a Protocol 
 
 ## `GET /uma/recent`
 
-Recently updated question records, most recently updated first. Each question appears once, with its current captured state, not as one row per proposal, dispute or settlement event. The `stage` filter selects the current `status`: a question that has settled is not returned as `proposed`, even if its record includes an earlier proposal.
+Recently updated question records, most recently updated first: ordered by `updated_ms` descending, so the order is the same whichever `stage` you filter on and across service restarts. Records with no mined event yet (`updated_ms` is `0`) come last. Each question appears once, with its current captured state, not as one row per proposal, dispute or settlement event. The `stage` filter selects the current `status`: a question that has settled is not returned as `proposed`, even if its record includes an earlier proposal.
 
 ```text
 GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100

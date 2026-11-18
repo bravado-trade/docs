@@ -102,7 +102,7 @@ GET https://partner-api.bravadotrade.com/uma/history/question?id=<0x questionId>
 <ResponseField name="coverage.to_ms" type="integer" required>Unix ms of the end of the read, which is now.</ResponseField>
 <ResponseField name="coverage.truncated" type="boolean" required>`true` when older requests were cut from `requests`.</ResponseField>
 
-A `404` with code `not_found` means no event for that id exists in the window you requested.
+A `404` with code `not_found` means no event for that id exists in the window you requested. [`/uma/history/market`](#get-/uma/history/market) answers the same way when you pass `from` or `to`.
 
 ### Worked example: a disputed question
 
@@ -267,11 +267,13 @@ GET https://partner-api.bravadotrade.com/uma/history/market?condition_id=<0x con
   The `0x` 32-byte CTF condition id. The `0x` prefix is optional.
 </ParamField>
 <ParamField query="from" type="string">
-  Pins the search window start: RFC3339, unix seconds or unix milliseconds. Default: all history for the market.
+  Pins the search window start: RFC3339, unix seconds or unix milliseconds. The question must have an event at or after it. Default: all history for the market.
 </ParamField>
 <ParamField query="to" type="string">
-  Pins the search window end: RFC3339, unix seconds or unix milliseconds. Default: now.
+  Pins the search window end: RFC3339, unix seconds or unix milliseconds. The question must have an event before it. Default: now.
 </ParamField>
+
+`from` and `to` select the question, they never truncate its lifecycle. If the market resolves to a question that has no event in the window, the answer is `404 not_found`, not an unknown answer.
 
 `condition_id` is always the **real** condition id, including for NegRisk markets. The route answers in one of two shapes, both with HTTP `200`. A resolved answer carries the v2 body. An unknown answer carries the fields marked `shape="unknown"`. Check `condition_id_source` first: it is present in both shapes.
 
@@ -296,7 +298,7 @@ GET https://partner-api.bravadotrade.com/uma/history/market?condition_id=<0x con
 
 ### Unknown answers
 
-When the market cannot be tied to an oracle request, the answer is an explicit unknown: HTTP `200`, `condition_id_source` set to `unknown`, and a `reason`. It is never an empty success and never a `404`. An unknown answer carries no `status`, `active_request` or `outcome`, so do not read it as an unsettled market.
+When the market cannot be tied to an oracle request, the answer is an explicit unknown: HTTP `200`, `condition_id_source` set to `unknown`, and a `reason`. Without `from` and `to` it is never an empty success and never a `404`. With a window, a market whose question has no event in that window is `404 not_found`, as on [`/uma/history/question`](#get-/uma/history/question). An unknown answer carries no `status`, `active_request` or `outcome`, so do not read it as an unsettled market.
 
 ```json Unknown example
 {
@@ -315,15 +317,17 @@ When the market cannot be tied to an oracle request, the answer is an explicit u
 | `negrisk_map_unavailable` | The id is not a standard or Protocol V2 market, and the NegRisk exact map is not enabled on this server. |
 | `negrisk_not_in_exact_map` | The NegRisk exact map is enabled, and it holds no entry for this id. |
 | `requester_family_mismatch` | A map entry names this market, but the question's requester is not the family that mapping requires. The entry is not served. |
-| `no_stage_events` | The question was found, but no oracle events for it were found in the read. `question_id` is then set. |
+| `no_stage_events` | Only without `from` and `to`: the question was found, but no oracle events for it were found in the read. `question_id` is then set. With a window and no event in it the answer is `404 not_found` instead. |
 
 ## `GET /uma/history/recent`
 
 Questions with proposal, dispute or settlement activity in a time range, most recent activity first, one entry per question, paged with a cursor.
 
 ```text
-GET https://partner-api.bravadotrade.com/uma/history/recent?stage=settled&limit=100&from=1792000000
+GET https://partner-api.bravadotrade.com/uma/history/recent?stage=settled&limit=100&from=1792000000&to=1792086400
 ```
+
+The range is `from` to `to`, at most 7 days. Both are required here because `to` defaults to now: a `from` older than 7 days with no `to` is refused with `400 range_too_large`. Omit `from` for the last 24 hours.
 
 <ParamField query="stage" type="string">
   Filter on the question's `status` (the active request's stage over its whole lifecycle): `requested`, `proposed`, `disputed` or `settled`. Omit for all.
@@ -369,9 +373,9 @@ Each question's lifecycle is read from up to 30 days before `from`. `coverage.fr
 | `400` | `invalid_limit` | `/uma/history/recent`: `limit` is not an integer from 1 to 500. |
 | `400` | `invalid_from`, `invalid_to` | `from` or `to` is not RFC3339, unix seconds or unix milliseconds. |
 | `400` | `invalid_range` | `from` is not before `to`. |
-| `400` | `invalid_cursor` | `/uma/history/recent`: `cursor` is not a value returned as `next_cursor`. |
+| `400` | `invalid_cursor` | `/uma/history/recent`: `cursor` is not a value returned as `next_cursor`: a malformed value, or one the server could not have issued (for example `1.2.3`). |
 | `400` | `range_too_large` | `/uma/history/recent`: the range is wider than 7 days. Page with consecutive windows. |
-| `404` | `not_found` | `/uma/history/question`: no event for that id in the window. |
+| `404` | `not_found` | `/uma/history/question`, or `/uma/history/market` when `from` or `to` is given: no event of that question in the window. |
 | `401` | `INVALID_SIGNATURE`, `STALE_TIMESTAMP`, `INVALID_KEY`, `KEY_DISABLED` | Signature or key refused. See [HMAC authentication](/authentication). |
 | `402` | | Credit allowance exhausted. See [API credits](/api-credits). |
 | `403` | `INSUFFICIENT_SCOPE` | Your credential does not carry `analytics.read`. |
