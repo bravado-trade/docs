@@ -40,7 +40,7 @@ Page with the keyset cursor. Each page returns `has_more` and, when there is ano
   Deprecated. Reads from the start, so it is limited to `100000`. Use `cursor`.
 </ParamField>
 
-If the wallet's R1 statement is rebuilt while you are paging, the next request returns `409 stale_cursor`. Restart from the first page; do not mix rows of the two batches. Statements exist on Polymarket only; predict.fun has no PMWAS statements.
+If the wallet's R1 statement is rebuilt while you are paging, or the cursor names a batch the wallet does not have (an older one, or one that does not exist yet), the next request returns `409 stale_cursor`. Restart from the first page; do not mix rows of the two batches. Statements exist on Polymarket only; predict.fun has no PMWAS statements.
 
 ## Errors
 
@@ -48,13 +48,13 @@ If the wallet's R1 statement is rebuilt while you are paging, the next request r
 | --- | --- | --- |
 | `400` | `invalid_cursor` | `cursor` is not `<batch_block>:<row_seq>`. |
 | `400` | `offset_too_deep` | `offset` is above `100000`. Page with `cursor`. |
-| `409` | `stale_cursor` | The cursor was issued for an older R1 batch than the wallet's current one. Restart from the first page. |
+| `409` | `stale_cursor` | The cursor's `batch_block` is not the wallet's current R1 batch: an older batch (the statement was rebuilt while you paged), or a number that has not been issued yet. Restart from the first page. |
 | `400` | none | `limit` is not a number, or is outside `1` to `5000`. The body is `{"error": "..."}` without a `code`. |
 
 ### Response
 
 <ResponseField name="trader" type="string" required>
-  The wallet, as requested.
+  The wallet, normalised: lowercase with a `0x` prefix, whatever case or prefix you sent.
 </ResponseField>
 
 <ResponseField name="batch_block" type="integer" required>
@@ -82,7 +82,7 @@ If the wallet's R1 statement is rebuilt while you are paging, the next request r
 </ResponseField>
 
 <ResponseField name="rows" type="array" required>
-  Disposition rows, in batch order. Row fields are listed under [R1 disposition row fields](#r1-disposition-row-fields).
+  Disposition rows, in batch order; `[]` (never `null`) on a page with no rows, for example a cursor or `offset` past the last row. Row fields are listed under [R1 disposition row fields](#r1-disposition-row-fields).
 </ResponseField>
 
 #### R1 disposition row fields
@@ -91,7 +91,7 @@ Every row carries every field. Amounts are exact integers in micro-units, served
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `asset` | object | `{"token_id": "..."}`: the disposed token. `token_id` is the ERC-1155 token id, or an `NR:`-prefixed id for a NegRisk leg (for example `NR:YES_...`). No other asset field is served. |
+| `asset` | object | `{"token_id": "..."}`: the disposed asset. `token_id` is a namespaced label, never a bare number: `T:<decimal ERC-1155 token id>` for an ordinary outcome token (every row of a wallet that never held a NegRisk leg), and `NR:YES_<id>` or `NR:NO_<id>` for a NegRisk leg. Strip the prefix to get the ERC-1155 id. No other asset field is served. |
 | `quantity_ushare` | string | Shares disposed, in micro-shares. |
 | `date_acquired` | string | RFC 3339 UTC date of acquisition. |
 | `date_disposed` | string | RFC 3339 UTC date of disposal. |
@@ -132,7 +132,7 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../s
   "next_cursor": "97504029:49",
   "rows": [
     {
-      "asset": { "token_id": "7123..." },
+      "asset": { "token_id": "T:7123..." },
       "quantity_ushare": "2995990000",
       "date_acquired": "2026-05-19T00:00:00Z",
       "date_disposed": "2026-05-19T00:00:00Z",
