@@ -21,87 +21,63 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/batch
 
 ### Response
 
-<ResponseField name="requested" type="integer">
+<ResponseField name="requested" type="integer" required>
   Number of distinct addresses requested.
 </ResponseField>
 
-<ResponseField name="found" type="integer">
+<ResponseField name="found" type="integer" required>
   Number of addresses with indexed activity.
 </ResponseField>
 
-<ResponseField name="traders" type="array">
-  <Expandable title="Trader fields">
-    <ResponseField name="trader" type="string">
-      Wallet address.
-    </ResponseField>
-
-    <ResponseField name="found" type="boolean">
-      `false` when the wallet has no indexed activity. Such wallets are returned, not dropped, and listed under `not_found`.
-    </ResponseField>
-
-    <ResponseField name="realized_pnl" type="string">
-      All-time settled realized PnL, from the per-fill ledger (the same figure as [`/traders/{address}`](/api/analytics/trader)). **Omitted when `realized_pnl_status` is `unknown`. It is never `0` in that case.**
-    </ResponseField>
-
-    <ResponseField name="realized_pnl_status" type="string">
-      `known` or `unknown`. `unknown` means the exact realized PnL could not be read within the service's read budget for this wallet, usually because it has a very large history.
-    </ResponseField>
-
-    <ResponseField name="realized_pnl_unknown_reason" type="string">
-      Present only when `realized_pnl_status` is `unknown`. Currently `read_cap_exceeded`. Request the wallet alone from [`/traders/{address}/pnl`](/api/analytics/trader-pnl) to get its figure.
-    </ResponseField>
-
-    <ResponseField name="volume_usdc" type="string">
-      All-time volume.
-    </ResponseField>
-
-    <ResponseField name="trades" type="integer">
-      Trade count.
-    </ResponseField>
-
-    <ResponseField name="markets_traded" type="integer">
-      Markets traded.
-    </ResponseField>
-
-    <ResponseField name="decided_markets" type="integer">
-      `markets_won + markets_lost`, the denominator behind `win_rate`.
-    </ResponseField>
-
-    <ResponseField name="win_rate" type="string">
-      Won divided by decided markets.
-    </ResponseField>
-
-    <ResponseField name="is_mm_bot" type="boolean">
-      Market-maker flag.
-    </ResponseField>
-
-    <ResponseField name="windows" type="object">
-      The 1d, 7d, 30d and all-time profile windows, as on [`/traders/{address}`](/api/analytics/trader).
-    </ResponseField>
-
-    <ResponseField name="style" type="object">
-      Trading-style flags.
-    </ResponseField>
-  </Expandable>
+<ResponseField name="traders" type="array" required>
+  One row per distinct address, in request order. Row fields are listed under [Trader fields](#trader-fields).
 </ResponseField>
 
-<ResponseField name="not_found" type="array">
-  Addresses with no indexed activity and a provably empty ledger.
+<ResponseField name="not_found" type="array" required>
+  Addresses with no indexed activity and a provably empty ledger. An empty array when every address was found.
 </ResponseField>
 
-<ResponseField name="unresolved" type="array">
-  Addresses that are neither found nor provably empty: the service had no score row for them and could not read their ledger within budget. Treat them as unknown, not as "no data".
+<ResponseField name="unresolved" type="array" required>
+  Addresses that are neither found nor provably empty: the service had no score row for them and could not read their ledger within budget. Treat them as unknown, not as "no data". An empty array when there are none.
 </ResponseField>
+
+<ResponseField name="note" type="string" required>
+  A fixed caveat: this is a screening view, realized PnL is all-time and settled, and it excludes open positions.
+</ResponseField>
+
+#### Trader fields
+
+A row for a wallet with `found: false` carries only `trader`, `found` and `is_mm_bot`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `trader` | string | Wallet address. |
+| `found` | boolean | `false` when the wallet has no indexed activity. Such wallets are returned, not dropped, and listed under `not_found`. |
+| `realized_pnl` | string | All-time settled realized PnL, from the per-fill ledger (the same figure as [`/traders/{address}`](/api/analytics/trader)). **Omitted when `realized_pnl_status` is `unknown`. It is never `0` in that case.** |
+| `realized_pnl_status` | string | `known` or `unknown`. `unknown` means the exact realized PnL could not be read within the service's read budget for this wallet, usually because it has a very large history. |
+| `realized_pnl_unknown_reason` | string | Present only when `realized_pnl_status` is `unknown`. Currently `read_cap_exceeded`. Request the wallet alone from [`/traders/{address}/pnl`](/api/analytics/trader-pnl) to get its figure. |
+| `volume_usdc` | string | All-time volume, a decimal string. |
+| `trades` | integer | Trade count. |
+| `markets_traded` | integer | Markets traded. |
+| `markets_won` | integer | Number of markets won. |
+| `markets_lost` | integer | Number of markets lost. |
+| `decided_markets` | integer | `markets_won + markets_lost`, the denominator behind `win_rate`. |
+| `win_rate` | string | Won divided by decided markets, a decimal string. |
+| `is_mm_bot` | boolean | Market-maker flag. |
+| `windows` | object | The profile windows (`1d`, `7d`, `30d` and all-time), as on [`/traders/{address}`](/api/analytics/trader). |
+| `style` | object | Trading-style flags, and `primary_style`. |
+| `style_source` | string | Where `style` was read from. |
+| `computed_at` | integer | Unix timestamp, in seconds, of the score computation behind the row. |
 
 **Unknown is not zero.** A wallet with `realized_pnl_status: "unknown"` has no `realized_pnl` field. Do not sum it as `0`.
 
 **Venues.** The same contract is served for predict.fun at `/trader-analytics/predict/traders/batch`.
 
-### Errors
+## Errors
 
-| Status | Meaning |
-| --- | --- |
-| `400` | `addresses` is missing, empty, has more than 50 entries, or contains an invalid address. |
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | none | `addresses` is missing, empty, has more than 50 entries, or contains an invalid address. The body is `{"error": "..."}` without a `code`. |
 
 ### Example
 

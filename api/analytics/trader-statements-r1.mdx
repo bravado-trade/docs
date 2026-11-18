@@ -26,7 +26,11 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/stat
 
 ### Pagination
 
-Page with the keyset cursor. Each page returns `has_more` and, when there is another page, `next_cursor`: pass it back as `cursor`. It has the form `<batch_block>:<row_seq>` and is bound to the R1 batch it was issued for. `total` and `offset` appear on the first page only.
+Page with the keyset cursor. Each page returns `has_more` and, when there is another page, `next_cursor`: pass it back as `cursor`. It has the form `<batch_block>:<row_seq>` and is bound to the R1 batch it was issued for. `total` and `offset` appear on the first page (no `cursor`) and on `offset` pages only. A page read with `offset` carries `has_more` but no `next_cursor`.
+
+<ParamField query="limit" type="integer" default="500">
+  Page size, `1` to `5000`. A value outside that range, or not a number, is a `400` without a `code` (the body is `{"error": "..."}`).
+</ParamField>
 
 <ParamField query="cursor" type="string">
   The previous page's `next_cursor` (`<batch_block>:<row_seq>`).
@@ -38,35 +42,72 @@ Page with the keyset cursor. Each page returns `has_more` and, when there is ano
 
 If the wallet's R1 statement is rebuilt while you are paging, the next request returns `409 stale_cursor`. Restart from the first page; do not mix rows of the two batches. Statements exist on Polymarket only; predict.fun has no PMWAS statements.
 
-### Errors
+## Errors
 
 | Status | Code | Meaning |
 | --- | --- | --- |
 | `400` | `invalid_cursor` | `cursor` is not `<batch_block>:<row_seq>`. |
 | `400` | `offset_too_deep` | `offset` is above `100000`. Page with `cursor`. |
 | `409` | `stale_cursor` | The cursor was issued for an older R1 batch than the wallet's current one. Restart from the first page. |
+| `400` | none | `limit` is not a number, or is outside `1` to `5000`. The body is `{"error": "..."}` without a `code`. |
 
-### Response: R1 Disposition Row Fields
+### Response
 
- 
-
-<ResponseField name="asset" type="object">
-  <Expandable title="Asset fields">
-    <ResponseField name="market" type="string">
-      Polymarket condition ID.
-    </ResponseField>
-
-    <ResponseField name="outcome_label" type="string">
-      Outcome name.
-    </ResponseField>
-
-    <ResponseField name="token_id" type="string">
-      ERC-1155 token ID.
-    </ResponseField>
-  </Expandable>
+<ResponseField name="trader" type="string" required>
+  The wallet, as requested.
 </ResponseField>
 
-            
+<ResponseField name="batch_block" type="integer" required>
+  Block number of the R1 batch the page was read from. It is the first part of `next_cursor`.
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Number of disposition rows in the batch. First page and `offset` pages only.
+</ResponseField>
+
+<ResponseField name="limit" type="integer" required>
+  The page size applied.
+</ResponseField>
+
+<ResponseField name="offset" type="integer">
+  The offset applied. First page and `offset` pages only.
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean" required>
+  `true` when another page follows.
+</ResponseField>
+
+<ResponseField name="next_cursor" type="string">
+  `<batch_block>:<row_seq>`. Send as `cursor`. Absent on the last page and on pages read with `offset`.
+</ResponseField>
+
+<ResponseField name="rows" type="array" required>
+  Disposition rows, in batch order. Row fields are listed under [R1 disposition row fields](#r1-disposition-row-fields).
+</ResponseField>
+
+#### R1 disposition row fields
+
+Every row carries every field. Amounts are exact integers in micro-units, served as decimal strings.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `asset` | object | `{"token_id": "..."}`: the disposed token. `token_id` is the ERC-1155 token id, or an `NR:`-prefixed id for a NegRisk leg (for example `NR:YES_...`). No other asset field is served. |
+| `quantity_ushare` | string | Shares disposed, in micro-shares. |
+| `date_acquired` | string | RFC 3339 UTC date of acquisition. |
+| `date_disposed` | string | RFC 3339 UTC date of disposal. |
+| `proceeds_uusdc` | string | Proceeds, in micro-USDC. |
+| `cost_basis_uusdc` | string | Cost basis, in micro-USDC. |
+| `fees_uusdc` | string | Fees, in micro-USDC. |
+| `gain_loss_uusdc` | string | Gain or loss on the row, in micro-USDC. |
+| `term` | string | Holding-period class, for example `SHORT`. |
+| `disposal_kind` | string | How the position was disposed, for example `SELL`. |
+| `taxable` | boolean | Whether the row is a taxable disposition. |
+| `acquire_tx` | string | Reference for the acquisition leg. Served as a `ref://` reference where no chain transaction is attached. |
+| `dispose_tx` | string | Reference for the disposal leg, as `acquire_tx`. |
+| `source_lot_id` | string | Identifier of the lot the row was drawn from. |
+| `cost_basis_method` | integer | Code of the cost-basis method applied. |
+| `evidence_level` | string | Evidence grade of the row, for example `C`. |
+| `era` | string | Protocol era of the disposal, for example `V2`. |
 
 ### Example
 
@@ -83,22 +124,31 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../s
 ```json Response (abbreviated)
 {
   "trader": "0xabc...",
+  "batch_block": 97504029,
   "total": 842,
   "limit": 50,
   "offset": 0,
   "has_more": true,
-  "next_cursor": "1780000000:49",
+  "next_cursor": "97504029:49",
   "rows": [
     {
-      "acquire_tx": "0xacquire...",
-      "dispose_tx": "0xdispose...",
-      "date_acquired": "2024-03-15T09:22:00Z",
-      "date_disposed": "2024-04-02T14:05:00Z",
-      "disposal_kind": "SELL",
-      "gain_loss_uusdc": "135100000",
+      "asset": { "token_id": "7123..." },
+      "quantity_ushare": "2995990000",
+      "date_acquired": "2026-05-19T00:00:00Z",
+      "date_disposed": "2026-05-19T00:00:00Z",
+      "proceeds_uusdc": "8987970",
+      "cost_basis_uusdc": "0",
+      "fees_uusdc": "0",
+      "gain_loss_uusdc": "8987970",
       "term": "SHORT",
+      "disposal_kind": "SELL",
       "taxable": true,
-      "evidence_level": "A"
+      "acquire_tx": "ref://acquire",
+      "dispose_tx": "ref://dispose",
+      "source_lot_id": "lot#0",
+      "cost_basis_method": 1,
+      "evidence_level": "C",
+      "era": "V2"
     }
   ]
 }

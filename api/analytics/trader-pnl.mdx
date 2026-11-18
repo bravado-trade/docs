@@ -92,13 +92,29 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 
 ### Response
 
-<ResponseField name="interval" type="string">
+<ResponseField name="trader" type="string" required>
+  The wallet, as requested.
+</ResponseField>
+
+<ResponseField name="window" type="string" required>
+  The window applied. The alias `1y` is echoed as `365d`.
+</ResponseField>
+
+<ResponseField name="pnl_type" type="string" required>
+  The `pnl_type` applied: `overall`, `realized` or `unrealized`.
+</ResponseField>
+
+<ResponseField name="basis" type="string" required>
+  The fee basis actually applied, `net` or `gross`. See the `basis` parameter.
+</ResponseField>
+
+<ResponseField name="interval" type="string" required>
   The bucket resolution actually used (`1h` or `1d`) — the resolved value
   even when you didn't pass `interval`/`resolution`.
 </ResponseField>
 
-<ResponseField name="fees_basis" type="string">
-  Which fees were actually deducted: `all_time` (exact, `series_kind=
+<ResponseField name="fees_basis" type="string" required>
+  Which fees were actually deducted. With the ledger engine's figures, which every probed request is served from, it is `engine_net` (`basis=net`: the engine's realized PnL is already fee-net) or `engine_gross` (`basis=gross`: the fee is added back). Outside that path, for example during a recompute hold, the earlier values apply: `all_time` (exact, `series_kind=
   cumulative_all_time` + `basis=net`, either interval), `window_daily` /
   `window_hourly` (`series_kind=window_delta` + `basis=net` at `interval=1d` /
   `1h` — the window's own fees, cumulative from `0`), `unavailable_sub_day`
@@ -108,14 +124,14 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
   realized PnL is already fee-net).
 </ResponseField>
 
-<ResponseField name="series_kind" type="string">
+<ResponseField name="series_kind" type="string" required>
   Echoes the `series_kind` parameter you sent (or the default,
   `cumulative_all_time`) — a marker so your integration can detect which
   contract a response is on (see the changelog note above) without guessing
   from the numbers.
 </ResponseField>
 
-<ResponseField name="unrealized_marks" type="string">
+<ResponseField name="unrealized_marks" type="string" required>
   How the series' unrealized component is sourced: `none` (`pnl_type=realized`
   — no unrealized component), `day_grained` (`interval=1d` — an exact daily
   mark), `day_grained_carried_forward` (`interval=1h` — no hourly
@@ -136,18 +152,20 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
   above — so this field is otherwise omitted.
 </ResponseField>
 
-<ResponseField name="series" type="array">
-  <Expandable title="Series point fields">
-    <ResponseField name="ts" type="integer">
-      Unix timestamp of the bucket boundary. One point per bucket, gap-free,
-      from window start to now.
-    </ResponseField>
+<ResponseField name="series" type="array" required>
+  One point per bucket, gap-free, from window start to now. Each point has two fields: `ts` (integer) is the Unix timestamp of the bucket boundary, and `pnl` (string) is the wallet's cumulative PnL **as of this bucket** (a decimal string in USDC): its running total, not a value relative to window start.
+</ResponseField>
 
-    <ResponseField name="pnl" type="string">
-      The wallet's cumulative PnL **as of this bucket** (decimal string,
-      USDC) — its running total, not a value relative to window start.
-    </ResponseField>
-  </Expandable>
+<ResponseField name="exchange_surplus" type="object" required>
+  The wallet's exchange-surplus income over the window: income outside trading PnL, served beside the series and not inside it. Fields: `status` (`known` or `unknown`), `amount_uusdc` (integer micro-USDC), `amount` (decimal string), `count`, `classification` (`income_outside_trading_pnl`), `in_realized_pnl` (`false` means the amount is on top of the series, `true` means it is already inside it), `scope` (`all_time` or `window:<window>`), `through_block` (rows above this block are not derived yet), `coverage` and `source`. When `status` is `unknown` the amount fields are `null` and `unknown_reason` is present: an unknown amount is never served as `0`. Read `coverage` before treating a `0` as complete.
+</ResponseField>
+
+<ResponseField name="third_party_fees" type="object" required>
+  The wallet's redemption-service and collector fees over the window: an expense outside trading PnL, beside the series and never inside it (`in_realized_pnl` is always `false`). Same fields as `exchange_surplus`, with `classification` `expense_outside_trading_pnl`. Only registered fee collectors are counted, as `coverage` states.
+</ResponseField>
+
+<ResponseField name="book_status" type="string" required>
+  `ok`, or `quarantined` when the wallet's book stopped at a transfer leg that could not be booked. A quarantined response also carries `unknown_from_ts` (and, where dated, `unknown_from_block` and `quarantine_reason`): every point at or after `unknown_from_ts` is the last good state carried forward, not a current figure.
 </ResponseField>
 
 <Note>
@@ -158,6 +176,12 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
   `pnl_type=overall`), same `basis` — a useful sanity check if you're
   reconciling a chart against the profile card next to it.
 </Note>
+
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | none | `window`, `interval`, `pnl_type`, `basis` or `series_kind` is not one of its allowed values. The body is `{"error": "..."}` without a `code`. |
 
 ### Example: hourly resolution over the last 24 hours
 
@@ -180,7 +204,7 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../p
   "interval": "1h",
   "pnl_type": "overall",
   "basis": "net",
-  "fees_basis": "all_time",
+  "fees_basis": "engine_net",
   "series_kind": "cumulative_all_time",
   "unrealized_marks": "day_grained_carried_forward",
   "series": [
@@ -216,7 +240,7 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../p
   "interval": "1h",
   "pnl_type": "overall",
   "basis": "net",
-  "fees_basis": "all_time",
+  "fees_basis": "engine_net",
   "series_kind": "cumulative_all_time",
   "unrealized_marks": "day_grained_carried_forward",
   "series": [
@@ -254,7 +278,7 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xdef.../p
   "interval": "1h",
   "pnl_type": "overall",
   "basis": "net",
-  "fees_basis": "window_hourly",
+  "fees_basis": "engine_net",
   "series_kind": "window_delta",
   "unrealized_marks": "day_grained_carried_forward",
   "series": [

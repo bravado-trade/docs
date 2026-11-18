@@ -24,6 +24,10 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
   Filter by event type: `TRADE`, `SETTLE` (synthetic resolution closes), `REDEEM`, `REWARD`, `MAKER_REBATE`, `REFERRAL_REWARD`, `SPLIT`, `MERGE`, `CONVERSION`, `DEPOSIT`, `WITHDRAW`.
 </ParamField>
 
+<ParamField query="limit" type="integer" default="50">
+  Page size, `1` to `500`. A value outside that range, or not a number, is a `400` without a `code` (the body is `{"error": "..."}`).
+</ParamField>
+
 <ParamField query="cursor_ts" type="integer">
   Previous page's `next_cursor`. See [Pagination](#pagination-keyset-cursor).
 </ParamField>
@@ -44,85 +48,69 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/trad
   Previous page's `next_cursor_token`.
 </ParamField>
 
+<ParamField query="cursor_condition" type="string">
+  Previous page's `next_cursor_condition`: 64 lowercase hex characters. Only with `type=REDEEM`, or on the default feed when the last row served was a redemption. See [Redemption cursors](#redemption-cursors).
+</ParamField>
+
 ### Response
 
-<ResponseField name="next_cursor" type="integer">
+<ResponseField name="trader" type="string" required>
+  The wallet, as requested.
+</ResponseField>
+
+<ResponseField name="trades" type="array" required>
+  Event rows, newest first. Row fields are listed under [Trade event fields](#trade-event-fields).
+</ResponseField>
+
+<ResponseField name="next_cursor" type="integer" required>
   `block_timestamp` of the last row; `0` on the last page. Send as `cursor_ts`.
 </ResponseField>
 
-<ResponseField name="next_cursor_block" type="integer">
+<ResponseField name="next_cursor_block" type="integer" required>
   `block_number` of the last trade row served; `0` on the last page, and mid-walk only when the page contained no trade row (for example, only redemptions). In that case the three fields below are omitted. Send as `cursor_block`.
 </ResponseField>
 
 <ResponseField name="next_cursor_log_idx" type="integer">
-  Send as `cursor_log_idx`. Omitted when `next_cursor_block` is `0` on a page that has a next page.
+  Send as `cursor_log_idx`. `0` on the last page. Omitted when `next_cursor_block` is `0` on a page that has a next page.
 </ResponseField>
 
 <ResponseField name="next_cursor_tx" type="string">
-  Send as `cursor_tx`. Omitted when `next_cursor_block` is `0` on a page that has a next page.
+  Send as `cursor_tx`. Empty on the last page. Omitted when `next_cursor_block` is `0` on a page that has a next page.
 </ResponseField>
 
 <ResponseField name="next_cursor_token" type="string">
-  Send as `cursor_token`. Omitted when `next_cursor_block` is `0` on a page that has a next page.
+  Send as `cursor_token`. Empty on the last page. Omitted when `next_cursor_block` is `0` on a page that has a next page. Not served when the cursor row is a redemption (see `next_cursor_condition`).
 </ResponseField>
 
-<ResponseField name="trades" type="array">
-  <Expandable title="Trade event fields">
-    <ResponseField name="block_timestamp" type="integer">
-      Unix timestamp of the block.
-    </ResponseField>
-
-    <ResponseField name="ts" type="string">
-      ISO 8601 UTC string.
-    </ResponseField>
-
-    <ResponseField name="tx_hash" type="string">
-      Polygon transaction hash.
-    </ResponseField>
-
-    <ResponseField name="market_id" type="string">
-      Polymarket condition ID.
-    </ResponseField>
-
-    <ResponseField name="question" type="string">
-      Market question.
-    </ResponseField>
-
-    <ResponseField name="category" type="string">
-      Market category.
-    </ResponseField>
-
-    <ResponseField name="outcome" type="string">
-      Outcome label.
-    </ResponseField>
-
-    <ResponseField name="token_id" type="string">
-      ERC-1155 token ID.
-    </ResponseField>
-
-    <ResponseField name="side" type="string">
-      `"BUY"` or `"SELL"`.
-    </ResponseField>
-
-    <ResponseField name="shares" type="string">
-      Number of shares.
-    </ResponseField>
-
-    <ResponseField name="usdc_amount" type="string">
-      USDC value exchanged.
-    </ResponseField>
-
-    <ResponseField name="price_cents" type="string">
-      Implied price in cents (0–100).
-    </ResponseField>
-
-    <ResponseField name="event_type" type="string">
-      Event classification.
-    </ResponseField>
-  </Expandable>
+<ResponseField name="next_cursor_condition" type="string">
+  64 lowercase hex characters: the condition id of the last row served, when that row is a redemption (`type=REDEEM`, or the default feed ending on a redemption). Send as `cursor_condition`. Absent otherwise.
 </ResponseField>
 
- 
+<ResponseField name="excluded_self_wrap" type="integer">
+  Served only with `type=DEPOSIT`, and then always (`0` included): the number of this wallet's candidate deposit rows that this page dropped as self-wraps, the wallet wrapping its own previously acquired USDC.e into pUSD. A self-wrap is a format conversion, not new capital.
+</ResponseField>
+
+#### Trade event fields
+
+Fields marked optional are absent (not `null`, not `0`) when the event does not have them.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `ts` | integer | Unix timestamp of the block, in seconds. Same value as `block_timestamp`. |
+| `block_timestamp` | integer | Unix timestamp of the block, in seconds. |
+| `event_type` | string | `CLOB` for an exchange fill on the default feed, `TRADE` for a fill under `type=TRADE`, otherwise the requested type (`SETTLE`, `REDEEM`, and the others listed under `type`). |
+| `side` | string | `B` (buy) or `S` (sell). A redemption and a settlement are `S`. |
+| `shares` | string | Number of shares, a decimal string. Empty (`""`) on a redemption: the shares redeemed are not served on that row. |
+| `usdc_amount` | string | USDC value exchanged, a decimal string. |
+| `price_cents` | integer | Implied price in cents (0 to 100). `0` on a redemption row, which has no price. |
+| `token_id` | string | ERC-1155 token ID. |
+| `market_id` | string | Market identifier of the event's market. |
+| `question` | string | Market question. |
+| `outcome` | string, optional | Outcome label. Absent on a redemption. |
+| `category` | string, optional | Market category. Absent on a redemption. |
+| `tx_hash` | string, optional | Transaction hash. Absent on a `SETTLE` row: a settlement is synthetic and has no transaction. |
+| `log_index` | integer, optional | Log index within the transaction. Served on redemption rows. |
+| `price_kind` | string, optional | Provenance of `price_cents`, for example `execution`. Served on fill rows. |
 
 ### Pagination (keyset cursor)
 
@@ -155,11 +143,12 @@ A redemption logged twice in one transaction (the NegRisk double log: the wallet
 
 **Both venues.** The Polymarket and predict.fun (`/trader-analytics/predict/...`) routes use the same key and the same rules.
 
-### Errors
+## Errors
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `400` | `invalid_cursor` | A cursor field is malformed, repeated, or missing a part of the key (see the table above). |
+| `400` | `invalid_cursor` | A cursor field is malformed, repeated, or missing a part of the key (see the tables above). |
+| `400` | none | `limit`, `type` or the address is not a valid value. The body is `{"error": "..."}` without a `code`. |
 
 ### Pagination example
 
