@@ -91,7 +91,7 @@ GET https://partner-api.bravadotrade.com/uma/question?id=<0x questionId>
 <ResponseField name="updated_ms" type="integer" required>Block time (unix ms) of the latest mined event in the record. It is not the time of your request, and it is not the time Bravado last touched the record.</ResponseField>
 <ResponseField name="coverage" type="object" required>What the response is based on. Present on every response.</ResponseField>
 <ResponseField name="coverage.source" type="string" required>`live_store`.</ResponseField>
-<ResponseField name="coverage.from_ms" type="integer" required>Unix ms when the live service began continuous capture. Events from before that point come from a restored snapshot.</ResponseField>
+<ResponseField name="coverage.from_ms" type="integer" required>Unix ms (chain time) of the start of the range the live record is proven complete for. The service catches its record up from the chain on every start and every few minutes, so this is normally about 14 days back (the open-question window). For a few minutes after a restart, before the catch-up has proven continuity, it is the restart time.</ResponseField>
 <ResponseField name="coverage.to_ms" type="integer" required>Block time (unix ms) of the latest event the service has ingested.</ResponseField>
 <ResponseField name="coverage.truncated" type="boolean" required>`true` when older requests were cut from `requests`, or when the oldest events of this question were evicted at the per-question event cap. The lifecycle is then incomplete.</ResponseField>
 <ResponseField name="coverage.restored_from_v1" type="boolean" conditional>Present and `true` when this record was restored from the previous release's snapshot. Steps restored from that snapshot carry the time Bravado received them as `block_ms`, not the on-chain block time, and the RequestPrice was not captured; steps captured after the restore carry on-chain block times.</ResponseField>
@@ -110,7 +110,7 @@ GET https://partner-api.bravadotrade.com/uma/market?condition_id=<0x conditionId
   The `0x` 32-byte CTF condition id. The `0x` prefix is optional.
 </ParamField>
 
-A market is found by a standard adapter's derived condition id or by a Protocol V2 `request_id`. A Protocol V2 market is found by `request_id` only when its request was captured live; a question requested before capture began has `condition_id: null` with `condition_id_reason: pv2_request_not_observed`, and its market lookup returns `404 not_in_live_window` with a pointer to the history route. A NegRisk condition id is not indexed on the live route, so it returns `404 not_in_live_window` with a pointer to the history route.
+A market is found by a standard adapter's derived condition id or by a Protocol V2 `request_id`. A Protocol V2 market is found by `request_id` when its request is inside the live record (from `coverage.from_ms`); a question requested before that has `condition_id: null` with `condition_id_reason: pv2_request_not_observed`, and its market lookup returns `404 not_in_live_window` with a pointer to the history route.
 
 <ResponseField name="fold_version" type="string" required>Always `uma-lifecycle/2`.</ResponseField>
 <ResponseField name="question_id" type="string" required>Hex question id (`keccak256` of the ancillary data).</ResponseField>
@@ -153,7 +153,7 @@ Only `cursor`, `from` and `to` are refused, because they mean something on the h
 On the live routes:
 
 - A `404 not_in_live_window` from a question or market lookup means no retained record is available for that ID. It does not establish that the market never existed, never resolved or never had a dispute. The body carries a `history` field with the matching history route. For anything older than the live window, query the [history API](/api/analytics/uma-history).
-- Questions that were open when the live service moved to the v2 record (2026-11-17) can be missing from the live routes, or held without their earlier requests, until they are next updated or age out of the window (by 2026-12-02 at the latest). This includes questions that were disputed at that time, so `stage=disputed` can omit them. The history API has their complete record.
+- The live record is caught up from the chain, so events mined while the service was restarting are filled in within minutes. `coverage.from_ms` tells you how far back the record is proven complete; a question whose earlier requests predate it is held without them.
 - A `proposed`, `disputed` or `settled` stage is present only when its events are in the captured record. Do not infer a complete event history from the absence of a request or stage.
 - `updated_ms` is the block time of the latest mined event, not the time of your request. Responses can be cached. Check `updated_ms` and `coverage` before you rely on freshness or completeness.
 - A `503` or `504` can indicate that the resolution feed is unavailable or slow. Do not interpret it as an empty result or an unresolved market.
