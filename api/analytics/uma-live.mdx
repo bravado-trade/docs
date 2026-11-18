@@ -87,14 +87,14 @@ GET https://partner-api.bravadotrade.com/uma/question?id=<0x questionId>
 <ResponseField name="outcome.via" type="string">`dvm` when the active request was disputed and settled by UMA's vote, or `optimistic` when it settled without a dispute.</ResponseField>
 <ResponseField name="outcome.settle" type="object">Where the Settle was mined: `block`, `block_ms`, `tx`, `log_index`.</ResponseField>
 <ResponseField name="requests" type="array" required>Every oracle request of the question that the record holds, ascending by `request_ts`. Each item carries `requester`, `request_ts`, `origin`, `request` (the RequestPrice location, or `null` when unobserved), `proposals`, `disputes` and `settles`. Each step has `block`, `block_ms`, `tx`, `log_index`, `price_raw`, `answer`, and `proposer` or `disputer` when known. A settle carries `payout`, and `superseded: true` when it belongs to a request that is not the active one. At most 50 requests are listed: the newest is always kept, and `coverage.truncated` is `true` when older requests were cut.</ResponseField>
-<ResponseField name="pending" type="array" required>Mempool events that are not yet mined, as an overlay. Items carry `kind` (`RequestPrice`, `ProposePrice` or `DisputePrice`), `requester`, `request_ts`, `tx`, `seen_ms`, and `proposer` or `disputer`, `price_raw` and `answer` when known. A pending event never changes `status`, `active_request` or `outcome`. An event leaves `pending` when its transaction is mined, or after 10 minutes without a mined match.</ResponseField>
+<ResponseField name="pending" type="array" required>Mempool events that are not yet mined, as an overlay. Items carry `kind` (`RequestPrice`, `ProposePrice` or `DisputePrice`), `requester`, `request_ts`, `tx`, `seen_ms`, and `proposer` or `disputer`, `price_raw` and `answer` when known. A pending event never changes `status`, `active_request` or `outcome`. An event leaves `pending` when a mined event matches it, or after 10 minutes without one. A transaction that is mined but reverted emits no event, so its pending item stays until the 10-minute timeout.</ResponseField>
 <ResponseField name="updated_ms" type="integer" required>Block time (unix ms) of the latest mined event in the record. It is not the time of your request, and it is not the time Bravado last touched the record.</ResponseField>
 <ResponseField name="coverage" type="object" required>What the response is based on. Present on every response.</ResponseField>
 <ResponseField name="coverage.source" type="string" required>`live_store`.</ResponseField>
 <ResponseField name="coverage.from_ms" type="integer" required>Unix ms when the live service began continuous capture. Events from before that point come from a restored snapshot.</ResponseField>
 <ResponseField name="coverage.to_ms" type="integer" required>Block time (unix ms) of the latest event the service has ingested.</ResponseField>
 <ResponseField name="coverage.truncated" type="boolean" required>`true` when older requests were cut from `requests`, or when the oldest events of this question were evicted at the per-question event cap. The lifecycle is then incomplete.</ResponseField>
-<ResponseField name="coverage.restored_from_v1" type="boolean" conditional>Present and `true` when this record was restored from the previous release's snapshot. Its `block_ms` values are when Bravado received each event, not on-chain block times, and its RequestPrice was not captured.</ResponseField>
+<ResponseField name="coverage.restored_from_v1" type="boolean" conditional>Present and `true` when this record was restored from the previous release's snapshot. Steps restored from that snapshot carry the time Bravado received them as `block_ms`, not the on-chain block time, and the RequestPrice was not captured; steps captured after the restore carry on-chain block times.</ResponseField>
 
 Stage values and the full lifecycle are defined in the [UMA overview](/products/uma-api#the-resolution-lifecycle).
 
@@ -110,7 +110,7 @@ GET https://partner-api.bravadotrade.com/uma/market?condition_id=<0x conditionId
   The `0x` 32-byte CTF condition id. The `0x` prefix is optional.
 </ParamField>
 
-A market is found by a standard adapter's derived condition id or by a Protocol V2 `request_id`. A NegRisk condition id is not indexed on the live route, so it returns `404 not_in_live_window` with a pointer to the history route.
+A market is found by a standard adapter's derived condition id or by a Protocol V2 `request_id`. A Protocol V2 market is found by `request_id` only when its request was captured live; a question requested before capture began has `condition_id: null` with `condition_id_reason: pv2_request_not_observed`, and its market lookup returns `404 not_in_live_window` with a pointer to the history route. A NegRisk condition id is not indexed on the live route, so it returns `404 not_in_live_window` with a pointer to the history route.
 
 <ResponseField name="fold_version" type="string" required>Always `uma-lifecycle/2`.</ResponseField>
 <ResponseField name="question_id" type="string" required>Hex question id (`keccak256` of the ancillary data).</ResponseField>
@@ -147,6 +147,7 @@ GET https://partner-api.bravadotrade.com/uma/recent?stage=settled&limit=100
 On the live routes:
 
 - A `404 not_in_live_window` from a question or market lookup means no retained record is available for that ID. It does not establish that the market never existed, never resolved or never had a dispute. The body carries a `history` field with the matching history route. For anything older than the live window, query the [history API](/api/analytics/uma-history).
+- Questions that were open when the live service moved to the v2 record (2026-11-17) can be missing from the live routes, or held without their earlier requests, until they are next updated or age out of the window (by 2026-12-02 at the latest). This includes questions that were disputed at that time, so `stage=disputed` can omit them. The history API has their complete record.
 - A `proposed`, `disputed` or `settled` stage is present only when its events are in the captured record. Do not infer a complete event history from the absence of a request or stage.
 - `updated_ms` is the block time of the latest mined event, not the time of your request. Responses can be cached. Check `updated_ms` and `coverage` before you rely on freshness or completeness.
 - A `503` or `504` can indicate that the resolution feed is unavailable or slow. Do not interpret it as an empty result or an unresolved market.

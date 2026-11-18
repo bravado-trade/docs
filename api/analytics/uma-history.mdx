@@ -321,13 +321,13 @@ When the market cannot be tied to an oracle request, the answer is an explicit u
 
 ## `GET /uma/history/recent`
 
-Questions with proposal, dispute or settlement activity in a time range, most recent activity first, one entry per question, paged with a cursor.
+Questions with any oracle activity (request, proposal, dispute or settlement) in a time range, most recent activity first, one entry per question, paged with a cursor.
 
 ```text
 GET https://partner-api.bravadotrade.com/uma/history/recent?stage=settled&limit=100&from=1792000000&to=1792086400
 ```
 
-The range is `from` to `to`, at most 7 days. Both are required here because `to` defaults to now: a `from` older than 7 days with no `to` is refused with `400 range_too_large`. Omit `from` for the last 24 hours.
+The range is `from` to `to`, at most 7 days. Both are optional: `to` defaults to now and `from` to 24 hours before `to`. Because `to` defaults to now, a `from` older than 7 days needs an explicit `to`, or it is refused with `400 range_too_large`, which is why the example sets both.
 
 <ParamField query="stage" type="string">
   Filter on the question's `status` (the active request's stage over its whole lifecycle): `requested`, `proposed`, `disputed` or `settled`. Omit for all.
