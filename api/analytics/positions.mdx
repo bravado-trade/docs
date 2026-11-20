@@ -117,7 +117,15 @@ A request must be **bounded**. Send at least one of `wallet`, `token_id`, `condi
       "mark_source": "quote",
       "mark_ts": 1780000990,
       "open_value_source": "book",
-      "is_operator": false
+      "is_operator": false,
+      "collateral": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+      "collateral_source": "pm_ctf_position",
+      "canonical": true,
+      "identity_source": "catalogue",
+      "cost_alloc_source": null,
+      "cost_alloc_evidence": null,
+      "recognized_capital": "0.000000",
+      "recognized_capital_source": "fifo_fills"
     }
   ],
   "next_cursor": "AQEBq83vEjRWeJD_nNuTfHcEQw",
@@ -152,6 +160,14 @@ Money and share fields are exact decimal **strings** with 6 decimal places, comp
 | `mark_ts` | integer or null | Unix seconds of the quote or trade the mark rests on. `null` for `resolution` and `unknown`. |
 | `open_value_source` | string | `book`, `fifo_lot` or `unknown_book_unseeded`. |
 | `is_operator` | boolean | `true` when the wallet is a protocol, operator or relayer contract rather than a trader. Always present. Such wallets never appear in holder lists or the `updated_after` feed; they are returned only when you ask for them with `wallet`. |
+| `collateral` | string or null | The ERC-20 the position token was minted with, as a lowercase `0x` address. `null` when it is not recorded (see `collateral_source`); never guessed from the venue's usual collateral. |
+| `collateral_source` | string | `pm_ctf_position` when `collateral` is known, `unknown` when it is `null`. Always present. |
+| `canonical` | boolean or null | `true`: the token is the market's catalogued outcome token. `false`: the token was minted with a **different collateral** than the catalogue lists (for example native USDC, pUSD or USDC.e on a NegRisk market); it is labelled, grouped and priced by its catalogued sibling of the same market outcome, and `token_id` is still the real on-chain id. `null`: unknown. `null` is **not** `false`. Always present. |
+| `identity_source` | string | How `market_id`, `condition_id` and `outcome` were resolved: `catalogue` (the token is catalogued), `collateral_sibling` (via its catalogued sibling, `canonical` is `false`), or `uncatalogued` (the market is not catalogued yet: `market_id`, `condition_id` and `outcome` are `null`, `mark_source` is `unknown`). Always present. |
+| `cost_alloc_source` | string or null | How the cost of the open lots was allocated when it came from splitting a bundle (PMWAS §6.4); the weakest source among the lots, in order `PROTOCOL_FIXED`, `RELATIVE_FAIR_VALUE`, `COMPLETE_SET_PARITY`, `EQUAL`. `null` means **no allocation source recorded**: it is not a claim of a direct purchase, and it is never `EQUAL`. Always present. |
+| `cost_alloc_evidence` | string or null | `"C"` when `cost_alloc_source` is `EQUAL` (an equal split of the bundle's cost: disclosed, lowest evidence level). `null` for every other value; the other sources are not graded here. Always present. |
+| `recognized_capital` | string or null | USDC, signed 6-decimal string. Proceeds on shares whose cost basis is unknown, recognized as **capital** (PMWAS §7.7(b)). It is **not** profit or loss and is never included in `realized_pnl`, `unrealized_pnl` or any total. `"0.000000"` means nothing was recognized. `null` when it is unknown. Always present. |
+| `recognized_capital_source` | string | `fifo_fills` when `recognized_capital` is a figure, `pre_convention` when it is `null` (the position's records predate the convention, or the book never saw the position). Always present. |
 
 ### Marks and unknown values
 
@@ -161,6 +177,8 @@ Marks are computed **live on every request** (responses are not cached), in this
 - When the cost basis cannot be determined, `cost_basis` and `avg_entry_price` are `null`.
 - When `open_value_source` is `unknown_book_unseeded` (a Polymarket wallet whose on-chain balances have not been indexed yet), `shares`, `cost_basis`, `avg_entry_price`, `current_value` and `unrealized_pnl` are all `null`. The row's `status` is a placeholder in that case; rely on `open_value_source`.
 - When `realized_pnl_source` is `not_in_projection` (the positions projection holds no fills for the key), `realized_pnl` is `null`: the realized result is unknown here, not zero.
+- `collateral`, `canonical`, `cost_alloc_source`, `cost_alloc_evidence` and `recognized_capital` are `null` when unknown, with a provenance sibling (`collateral_source`, `identity_source`, `recognized_capital_source`). Rows that have not been refreshed since these fields were introduced read as unknown, never as a default.
+- A `canonical: false` position is priced by its catalogued sibling, so its `current_price` and `mark_source` are those of the same market outcome.
 - A position with `shares` of `"0.000000"` has a `current_value` and `unrealized_pnl` of exactly `"0.000000"`: nothing held is worth nothing, which is known.
 
 ### Pagination
@@ -191,6 +209,8 @@ Use `updated_after` to keep a local copy of position **state** current.
 | `unknown_book_unseeded` | Possible | Never |
 | `mark_source` | `resolution`, `quote`, `trade`, `unknown` | `resolution`, `quote`, `unknown` (no `trade` tier) |
 | `realized_pnl` | As the PnL engine books it for the wallet | **Net of fees** |
+| `collateral`, `canonical` | Known for every token the CTF position map holds. A token minted with a non-catalogue collateral is served (`canonical: false`) with its `collateral` | The CTF position map is not populated for predict.fun yet: `collateral` is `null` (`collateral_source: "unknown"`) and `canonical` is `true` or `null`, never `false` |
+| `cost_alloc_source`, `recognized_capital` | As the PnL engine records them | `null` (`recognized_capital_source: "pre_convention"`) until the engine writes them for this venue |
 
 `open_shares` and `resolved_unredeemed_shares`, which decompose a `balanceOf` balance on the per-wallet endpoints, are not part of this response on either venue.
 
