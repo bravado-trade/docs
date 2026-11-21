@@ -23,7 +23,7 @@ Any other query parameter is refused with `400 unknown_param`.
 
 ### Response
 
-A JSON **array** of wallet-profile objects — each element has exactly the shape returned by [`GET /wallet/{wallet}`](/api/polymarket/wallet) (`user`, four-window `metrics` including `fees_paid` / `fees_paid_source` / `fees_paid_exchange_scope` per window and `max_loss_streak` / `max_loss_streak_unit` on `all_time`, `trading_styles`, `entry_edge`, `unrealized_pnl`, `total_pnl`, `first_trade_at`, `last_trade_at`, `computed_at`). There is no surrounding envelope.
+A JSON **array** of wallet-profile objects — each element has exactly the shape returned by [`GET /wallet/{wallet}`](/api/polymarket/wallet) (`user`, four-window `metrics` including `fees_paid` / `fees_paid_source` / `fees_paid_exchange_scope` per window and `max_loss_streak` / `max_loss_streak_unit` on `all_time`, `trading_styles`, `entry_edge`, `unrealized_pnl`, `total_pnl`, `recognized_capital`, `recognized_capital_source`, `first_trade_at`, `last_trade_at`, `computed_at`). There is no surrounding envelope.
 
 ```json
 [

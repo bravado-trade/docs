@@ -60,6 +60,8 @@ This endpoint takes no query parameters. Any query parameter is refused with `40
 <ResponseField name="entry_edge" type="number" required>Decimal; `null` when unknown.</ResponseField>
 <ResponseField name="unrealized_pnl" type="number" required>USD; `null` when unknown.</ResponseField>
 <ResponseField name="total_pnl" type="number" required>USD; `null` when unknown.</ResponseField>
+<ResponseField name="recognized_capital" type="number" required>USD. Proceeds on shares whose cost basis is unknown, recognized as **capital** (PMWAS §7.7(b)): in-kind capital, **not** profit or loss, and never part of `total_pnl` or any realized figure. All-time. `null` when unknown; see `recognized_capital_source`.</ResponseField>
+<ResponseField name="recognized_capital_source" type="string" required>`fifo_fills` when `recognized_capital` is a figure. `pre_convention` when it is `null` because part of the wallet's records predate the convention. `unavailable` when it could not be read. Always present.</ResponseField>
 <ResponseField name="first_trade_at" type="integer" required>Unix seconds; `null` when unknown.</ResponseField>
 <ResponseField name="last_trade_at" type="integer" required>Unix seconds; `null` when unknown.</ResponseField>
 <ResponseField name="computed_at" type="integer" required>Unix seconds the snapshot was computed.</ResponseField>
