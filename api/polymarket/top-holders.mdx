@@ -71,7 +71,7 @@ Unknown query parameters, and parameters given twice, are refused with `400`. Th
 | `collateral` / `collateral_source` | The ERC-20 the token was minted with (lowercase `0x`), or `null` with `collateral_source: "unknown"`. Otherwise `collateral_source` is `pm_ctf_position`. |
 | `canonical` | `true` for the market's catalogued token; `false` for a token minted with a different collateral (it is grouped under its catalogued sibling's outcome and ranked at the sibling's price; `token_id` is the real on-chain id); `null` when unknown (not `false`). |
 | `identity_source` | `catalogue`, `collateral_sibling` or `uncatalogued`. |
-| `cost_alloc_source` / `cost_alloc_evidence` | The weakest cost-allocation source of the open lots (`PROTOCOL_FIXED`, `RELATIVE_FAIR_VALUE`, `COMPLETE_SET_PARITY`, `EQUAL`); `null` means none recorded and is never `EQUAL`. `cost_alloc_evidence` is `"C"` for `EQUAL`, otherwise `null`. |
+| `cost_alloc_source` / `cost_alloc_evidence` | The weakest cost-allocation source of the open lots (`PROTOCOL_FIXED`, `RELATIVE_FAIR_VALUE`, `COMPLETE_SET_PARITY`, `EQUAL`, `IMPLIED_RFV`, `BASIS_RECOVERED`); `null` means none recorded and is never `EQUAL`. `cost_alloc_evidence` is `"C"` for `EQUAL` and `BASIS_RECOVERED`, `"D"` for `IMPLIED_RFV`, otherwise `null`. |
 | `recognized_capital` / `recognized_capital_source` | USD, plain number. Proceeds on unknown-basis shares recognized as capital (PMWAS §7.7(b)); **not** PnL and not part of `realized_pnl` or `total_pnl`. `null` with `recognized_capital_source: "pre_convention"` when unknown; otherwise `fifo_fills`. |
 
 <Info>
