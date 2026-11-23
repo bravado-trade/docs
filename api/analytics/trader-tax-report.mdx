@@ -64,6 +64,33 @@ An array of per-year summary objects (or a single object when `year` is specifie
   </Expandable>
 </ResponseField>
 
+<ResponseField name="total" type="object">
+  <Expandable title="Total fields">
+    <ResponseField name="proceeds_unknown" type="integer">
+      How many of the lines in this aggregate do not state their proceeds. The same field is on `short_term`, `long_term`, `quarters[]`, `top_markets[]` and event-graph edges. A NegRisk convert (`CONVERT_OUT`) line states no proceeds (`proceeds_uusdc` excludes the convert's cash leg); its realized share is in `gain_loss_uusdc`. `0` is a measured 0, and it is always `0` for wallets served from the PMWAS batch, which prices the cash leg.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="wash_candidate_count" type="integer">
+  Loss lines with a same-token acquisition within 30 days. Informational only: basis is never adjusted. Omitted when 0.
+</ResponseField>
+
+<ResponseField name="wash_candidate_loss_uusdc" type="string">
+  Sum of those loss lines, as a micro-USDC string. Omitted when 0.
+</ResponseField>
+
+### NegRisk converts and the wash-sale figures
+
+A NegRisk convert burns several outcome tokens at once and books one cash leg. Realized gain or loss of that cash leg is reported per burned token:
+
+- **Before the SV6 book (PMWAS rev 3.7.4):** the whole realized figure sits on the first burned token's line; the other burned lines show `0`.
+- **After:** each burned token's line carries its own share, and the shares sum to the same total.
+
+**What changes when your wallet's data moves to the new shape.** The number of lines, `proceeds_uusdc`, `proceeds_unknown`, and the total `gain_loss_uusdc` do not change. The per-line `gain_loss_uusdc`, the per-line `wash_candidate` flag on [`/tax-report/8949`](/api/analytics/trader-tax-report) and `wash_candidate_count` do change: a loss is judged on the token it was realized on, so a convert loss that was one wash-candidate line can become several, with the same total loss.
+
+**Venues.** Polymarket: as above. predict.fun: `/tax-report` is not available (404 `not available for this venue`), so these fields do not exist there. The closed-position `mark_price_cents` and `realized_pnl` on `/traders/{address}/positions/closed` follow the same engine and shapes: a convert is never a cash exit, so it never sets an exit price, and a burned token's `realized_pnl` includes its share.
+
      
 
 ### Example
