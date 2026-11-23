@@ -93,6 +93,14 @@ A NegRisk convert burns several outcome tokens at once and books one cash leg. R
 
      
 
+### Allocation provenance of merge, convert and split legs
+
+A merge, a convert and a split divide their cash or cost across the legs by a per-leg allocation mark. Since PMWAS rev 3.7.5 the ledger pins that mark when it first books the leg, and the lines that come from such a leg state where the mark came from, instead of leaving it implicit. The fields are `alloc_mark_source` (`pinned`, `fallback_50_50` or `unknown`), `alloc_mark_rung` (`RESOLUTION`, `TRADE_CLOSE`, `ABSENT` or `null`), `alloc_mark_uusdc` (micro-USDC per whole share as a string, `null` when unknown, never `0`), `alloc_rule` (`null` when none is recorded) and, only when the source is `unknown`, `alloc_mark_unknown_reason` (`no_pin`, `absent`, `conflict`, `pins_unavailable`, `lookup_failed` or `not_keyed`). `fallback_50_50` means a merge was split equally by outcome because some leg had no tax-grade mark.
+
+They are served per line, not in the summary above: the `/tax-report` aggregates carry none of them. The per-line Form 8949 export (and its CSV, which appends `alloc_mark_source`, `alloc_mark_rung`, `alloc_mark_uusdc`, `alloc_rule`, printing `UNKNOWN` for an unknown mark) and the trade-leg rows of [`/traders/{address}/trades`](/api/analytics/trader-trades) carry them. Lines that do not come from a merge, convert or split carry none of these fields.
+
+**Venues.** Polymarket: as above. predict.fun: `/tax-report` is not available, so the per-line export does not exist there; the same fields are served on its trade-leg rows (`/trader-analytics/predict/traders/{address}/trades`).
+
 ### Example
 
 <CodeGroup>
