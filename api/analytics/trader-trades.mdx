@@ -115,6 +115,11 @@ Fields marked optional are absent (not `null`, not `0`) when the event does not 
 | `tx_hash` | string, optional | Transaction hash: 64 lowercase hex characters, no `0x`, on every row. Absent on a `SETTLE` row: a settlement is synthetic and has no transaction. |
 | `log_index` | integer, optional | Log index within the transaction. Served on redemption and cash rows that come from a logged event; absent on a `DEPOSIT` row that comes from the USDC.e transfer history, which carries no log index. |
 | `price_kind` | string, optional | Provenance of `price_cents`, for example `execution`. Served on fill rows. |
+| `alloc_mark_source` | string, optional | Only on a split, merge or convert leg (`event_type` `SPLIT`, `MERGE`, `CONVERT`; every `type=SPLIT`, `MERGE` and `CONVERSION` row). Where the leg's allocation mark came from: `pinned` (a resolution payout or a completed-hour close, pinned when the ledger first booked the leg), `fallback_50_50` (a merge split equally by outcome because some leg had no tax-grade mark: the marks, where present, did not drive the split) or `unknown` (see `alloc_mark_unknown_reason`). Absent on every other row. |
+| `alloc_mark_rung` | string or null, optional | The ladder rung of the pinned mark: `RESOLUTION`, `TRADE_CLOSE` or `ABSENT`. `null` when the leg has no pinned mark to read it from. Present with the other `alloc_*` fields. |
+| `alloc_mark_uusdc` | string or null, optional | The leg's pinned mark in micro-USDC per whole share, as a decimal string. `null` means the mark is unknown, never `0`; `"0"` is a real value (a resolved losing outcome). |
+| `alloc_rule` | string or null, optional | The allocation rule recorded with the pin: `RELATIVE_FAIR_VALUE`, `EQUAL`, `IMPLIED_RFV`, `BASIS_RECOVERED`, `PROTOCOL_FIXED` or `FALLBACK_50_50`. `null` when none is recorded (a convert leg records none). |
+| `alloc_mark_unknown_reason` | string, optional | Only when `alloc_mark_source` is `unknown`: `no_pin` (no pinned mark exists for the leg, for example it was booked before marks were pinned), `absent` (no tax-grade mark existed for the leg), `conflict` (the stored marks disagree, so none is served), `pins_unavailable` (the pinned marks are not readable yet) or `lookup_failed` (the read failed on this request; the row is still served). |
 | `counterparty` | string, optional | `WITHDRAW` and the other pUSD cash rows: the 40-hex-character address (no `0x`) the funds went to or came from. Same value as `next_cursor_token` on `type=WITHDRAW`. |
 | `coverage` | string, optional | A stated gap or provenance caveat for the row's source, for example the date before which `WITHDRAW` history is not in the warehouse, or how `DEPOSIT` excludes a wallet's own re-wrap. Present on `DEPOSIT` and `WITHDRAW` rows from the warehouse; absent means the row has no caveat. |
 
@@ -159,7 +164,7 @@ The cash, reward and rebate feeds do not page by block. Their cursor is read bac
 
 `cursor_tx` is accepted with or without a `0x` prefix on these feeds. A malformed value (a non-hex or wrong-length `cursor_tx`, a `cursor_token` that is not an address on `WITHDRAW` or not a decimal integer on the others, a non-numeric `cursor_ts` or `cursor_log_idx`) is `400 invalid_cursor`.
 
-**Both venues.** The Polymarket and predict.fun (`/trader-analytics/predict/...`) routes use the same key and the same rules.
+**Both venues.** The Polymarket and predict.fun (`/trader-analytics/predict/...`) routes use the same key and the same rules. The `alloc_*` fields have the same shape and meaning on predict.fun, whose engine pins its own legs; a predict.fun leg booked before pinning is `unknown` with `no_pin`.
 
 ## Errors
 

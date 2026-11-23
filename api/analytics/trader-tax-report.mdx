@@ -64,7 +64,42 @@ An array of per-year summary objects (or a single object when `year` is specifie
   </Expandable>
 </ResponseField>
 
+<ResponseField name="total" type="object">
+  <Expandable title="Total fields">
+    <ResponseField name="proceeds_unknown" type="integer">
+      How many of the lines in this aggregate do not state their proceeds. The same field is on `short_term`, `long_term`, `quarters[]`, `top_markets[]` and event-graph edges. A NegRisk convert (`CONVERT_OUT`) line states no proceeds (`proceeds_uusdc` excludes the convert's cash leg); its realized share is in `gain_loss_uusdc`. `0` is a measured 0, and it is always `0` for wallets served from the PMWAS batch, which prices the cash leg.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="wash_candidate_count" type="integer">
+  Loss lines with a same-token acquisition within 30 days. Informational only: basis is never adjusted. Omitted when 0.
+</ResponseField>
+
+<ResponseField name="wash_candidate_loss_uusdc" type="string">
+  Sum of those loss lines, as a micro-USDC string. Omitted when 0.
+</ResponseField>
+
+### NegRisk converts and the wash-sale figures
+
+A NegRisk convert burns several outcome tokens at once and books one cash leg. Realized gain or loss of that cash leg is reported per burned token:
+
+- **Before the SV6 book (PMWAS rev 3.7.4):** the whole realized figure sits on the first burned token's line; the other burned lines show `0`.
+- **After:** each burned token's line carries its own share, and the shares sum to the same total.
+
+**What changes when your wallet's data moves to the new shape.** The number of lines, `proceeds_uusdc`, `proceeds_unknown`, and the total `gain_loss_uusdc` do not change. The per-line `gain_loss_uusdc`, the per-line `wash_candidate` flag on [`/tax-report/8949`](/api/analytics/trader-tax-report) and `wash_candidate_count` do change: a loss is judged on the token it was realized on, so a convert loss that was one wash-candidate line can become several, with the same total loss.
+
+**Venues.** Polymarket: as above. predict.fun: `/tax-report` is not available (404 `not available for this venue`), so these fields do not exist there. The closed-position `mark_price_cents` and `realized_pnl` on `/traders/{address}/positions/closed` follow the same engine and shapes: a convert is never a cash exit, so it never sets an exit price, and a burned token's `realized_pnl` includes its share.
+
      
+
+### Allocation provenance of merge, convert and split legs
+
+A merge, a convert and a split divide their cash or cost across the legs by a per-leg allocation mark. Since PMWAS rev 3.7.5 the ledger pins that mark when it first books the leg, and the lines that come from such a leg state where the mark came from, instead of leaving it implicit. The fields are `alloc_mark_source` (`pinned`, `fallback_50_50` or `unknown`), `alloc_mark_rung` (`RESOLUTION`, `TRADE_CLOSE`, `ABSENT` or `null`), `alloc_mark_uusdc` (micro-USDC per whole share as a string, `null` when unknown, never `0`), `alloc_rule` (`null` when none is recorded) and, only when the source is `unknown`, `alloc_mark_unknown_reason` (`no_pin`, `absent`, `conflict`, `pins_unavailable`, `lookup_failed` or `not_keyed`). `fallback_50_50` means a merge was split equally by outcome because some leg had no tax-grade mark.
+
+They are served per line, not in the summary above: the `/tax-report` aggregates carry none of them. The per-line Form 8949 export (and its CSV, which appends `alloc_mark_source`, `alloc_mark_rung`, `alloc_mark_uusdc`, `alloc_rule`, printing `UNKNOWN` for an unknown mark) and the trade-leg rows of [`/traders/{address}/trades`](/api/analytics/trader-trades) carry them. Lines that do not come from a merge, convert or split carry none of these fields.
+
+**Venues.** Polymarket: as above. predict.fun: `/tax-report` is not available, so the per-line export does not exist there; the same fields are served on its trade-leg rows (`/trader-analytics/predict/traders/{address}/trades`).
 
 ### Example
 
