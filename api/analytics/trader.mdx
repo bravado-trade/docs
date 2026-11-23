@@ -36,7 +36,13 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}
 
 ### Response
 
-                                 
+<ResponseField name="recognized_capital" type="string" required>
+  USDC, exact 6-decimal string. Proceeds on shares whose cost basis is unknown, recognized as **capital** (PMWAS §7.7(b)): in-kind capital, **not** profit or loss, and never part of `realized_pnl`, `total_pnl` or any total. `"0.000000"` means nothing was recognized. `null` means unknown, never zero; see `recognized_capital_source`. Always present. All-time only: it equals the sum of `recognized_capital` over the wallet's rows in [`GET /positions`](/api/analytics/positions), and is `null` if any of those rows is `null`.
+</ResponseField>
+
+<ResponseField name="recognized_capital_source" type="string" required>
+  Why `recognized_capital` is what it is. `fifo_fills` when it is a figure. When it is `null`: `pre_convention` (part of the wallet's records predate the convention), `window_unsupported` (`window` is not `all`; windowed rollups carry no such figure, so it is never served as `0`), or `unavailable` (the read failed). Always present.
+</ResponseField>
 
 <ResponseField name="combo" type="object">
   Present only when the wallet has Combos activity.
@@ -60,6 +66,13 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}
   </Expandable>
 </ResponseField>
 
+### Venue semantics
+
+| Venue | `recognized_capital` / `recognized_capital_source` |
+| --- | --- |
+| Polymarket (`/trader-analytics/traders/{address}`) | Read from the wallet's FIFO fills. `fifo_fills` once every one of the wallet's records carries the convention; `pre_convention` (`null`) until then. |
+| predict.fun (`/trader-analytics/predict/traders/{address}`) | The same read and the same shape. The predict.fun engine records no §7.7(b) recognition yet, so it is `null` with `pre_convention` until it does. |
+
 ### Example
 
 <CodeGroup>
@@ -81,6 +94,8 @@ curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc123de
   "realized_pnl": "3420.110000",
   "unrealized_pnl": "210.440000",
   "total_pnl": "3630.550000",
+  "recognized_capital": "0.000000",
+  "recognized_capital_source": "fifo_fills",
   "fees": "88.200000",
   "volume": "32100.000000",
   "active_positions": 5,

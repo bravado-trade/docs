@@ -68,6 +68,11 @@ Unknown query parameters, and parameters given twice, are refused with `400`. Th
 | `realized_pnl_source` | Where `realized_pnl` is read from (`pm_global_positions`). |
 | `unrealized_pnl_source` | `mark_and_lot_cost`, `unknown_mark` or `unknown_cost`. |
 | `updated_at` | Unix seconds of the position's latest economic event. |
+| `collateral` / `collateral_source` | The ERC-20 the token was minted with (lowercase `0x`), or `null` with `collateral_source: "unknown"`. Otherwise `collateral_source` is `pm_ctf_position`. |
+| `canonical` | `true` for the market's catalogued token; `false` for a token minted with a different collateral (it is grouped under its catalogued sibling's outcome and ranked at the sibling's price; `token_id` is the real on-chain id); `null` when unknown (not `false`). |
+| `identity_source` | `catalogue`, `collateral_sibling` or `uncatalogued`. |
+| `cost_alloc_source` / `cost_alloc_evidence` | The weakest cost-allocation source of the open lots (`PROTOCOL_FIXED`, `RELATIVE_FAIR_VALUE`, `COMPLETE_SET_PARITY`, `EQUAL`, `IMPLIED_RFV`, `BASIS_RECOVERED`); `null` means none recorded and is never `EQUAL`. `cost_alloc_evidence` is `"C"` for `EQUAL` and `BASIS_RECOVERED`, `"D"` for `IMPLIED_RFV`, otherwise `null`. |
+| `recognized_capital` / `recognized_capital_source` | USD, plain number. Proceeds on unknown-basis shares recognized as capital (PMWAS §7.7(b)); **not** PnL and not part of `realized_pnl` or `total_pnl`. `null` with `recognized_capital_source: "pre_convention"` when unknown; otherwise `fifo_fills`. |
 
 <Info>
 **Unknown is `null`, never `0`.** For many open holders, the cost of their shares cannot yet be attributed. Those rows have `cost_source: "unknown"`, with `avg_price`, `cost_basis`, `unrealized_pnl` and `total_pnl` all `null`. Do not read `null` as a zero cost or a breakeven position.
