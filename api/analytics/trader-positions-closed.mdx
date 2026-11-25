@@ -46,7 +46,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
     </ResponseField>
 
     <ResponseField name="sources" type="array">
-      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (`captured_fills` by module), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`.
+      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (`captured_fills` by module), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`. `fills` can be lower than the true number of omitted fills, never higher: a fill counts as booked when the wallet has any book entry in the same transaction, so a `none` means no transaction with such a fill lacks one, not proof that every fill is booked.
     </ResponseField>
 
     <ResponseField name="reason" type="string">

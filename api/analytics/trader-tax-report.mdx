@@ -24,6 +24,28 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/tax-
 
 An array of per-year summary objects (or a single object when `year` is specified).
 
+<ResponseField name="unbooked_activity" type="object" required>
+  Disclosure of activity the tax figures do **not** include (the IRS-facing numbers omit the same fills as the PnL). The same block is on `GET /traders/{address}/tax-report/8949` (JSON body field; on the CSV as the response headers `X-Unbooked-Status` and `X-Unbooked-Fills`). Always present; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
+
+  <Expandable title="unbooked_activity fields">
+    <ResponseField name="status" type="string">
+      `unbooked`: fills exist that the figures omit (see `sources`). `none`: this wallet has no such fills. `unknown`: the source could not be read, so whether fills are omitted is unknown (this is never served as `none`). `not_applicable`: the venue has no such activity (predict.fun has no Protocol V2 modules), or the address is not a valid wallet.
+    </ResponseField>
+
+    <ResponseField name="sources" type="array">
+      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (`captured_fills` by module), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`.
+    </ResponseField>
+
+    <ResponseField name="reason" type="string">
+      Present only when `status` is `unknown` or `not_applicable`: why.
+    </ResponseField>
+
+    <ResponseField name="as_of" type="integer">
+      Unix seconds of the snapshot the answer was read from. Refreshed every five minutes; a fill newer than `as_of` may not be counted yet.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
 <ResponseField name="short_term" type="object">
   <Expandable title="Short-term fields">
     <ResponseField name="count" type="integer">

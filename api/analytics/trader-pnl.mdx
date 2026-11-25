@@ -172,6 +172,22 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
   `ok`, or `quarantined` when the wallet's book stopped at a transfer leg that could not be booked. A quarantined response also carries `unknown_from_ts` (and, where dated, `unknown_from_block` and `quarantine_reason`): every point at or after `unknown_from_ts` is the last good state carried forward, not a current figure.
 </ResponseField>
 
+<ResponseField name="unbooked_activity" type="object" required>
+  Disclosure of activity the series does **not** include. Always present; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
+
+  <Expandable title="unbooked_activity fields">
+    <ResponseField name="status" type="string">
+      `unbooked`: fills exist that the figures omit (see `sources`). `none`: this wallet has no such fills. `unknown`: the source could not be read, so whether fills are omitted is unknown (this is never served as `none`). `not_applicable`: the venue has no such activity (predict.fun has no Protocol V2 modules), or the address is not a valid wallet.
+    </ResponseField>
+
+    <ResponseField name="sources" type="array">
+      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (`captured_fills` by module), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`. `fills` can be lower than the true number of omitted fills, never higher: a fill counts as booked when the wallet has any book entry in the same transaction, so a `none` means no transaction with such a fill lacks one, not proof that every fill is booked.
+    </ResponseField>
+
+    <ResponseField name="reason" type="string">
+      Present only when `status` is `unknown` or `not_applicable`: why.
+    </Resp
+
 <Note>
   The **last point of every window's series is the same number**: the
   wallet's current all-time total for the requested `pnl_type`/`basis`. That
