@@ -24,7 +24,35 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Response
 
-Array of position objects. See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the full schema.
+<ResponseField name="trader" type="string" required>The wallet, as requested.</ResponseField>
+<ResponseField name="positions" type="array" required>Open position rows. Same row shape as the [field reference](/api/analytics/trader-positions#response-position-fields).</ResponseField>
+<ResponseField name="total" type="integer" required>Number of positions before paging.</ResponseField>
+<ResponseField name="limit" type="integer" required>The page size applied.</ResponseField>
+<ResponseField name="offset" type="integer" required>The offset applied.</ResponseField>
+<ResponseField name="unpriced_positions" type="integer" required>Open positions with an unknown mark, over the whole list before paging (0 included).</ResponseField>
+<ResponseField name="unbooked_activity" type="object" required>
+  Disclosure of activity the positions and PnL on this response do **not** include. Same block as on [`GET /traders/{address}`](/api/analytics/trader#response). Always present; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
+
+  <Expandable title="unbooked_activity fields">
+    <ResponseField name="status" type="string">
+      `unbooked`: fills exist that the figures omit (see `sources`). `none`: this wallet has no such fills. `unknown`: the source could not be read, so whether fills are omitted is unknown (this is never served as `none`). `not_applicable`: the venue has no such activity (predict.fun has no Protocol V2 modules), or the address is not a valid wallet.
+    </ResponseField>
+
+    <ResponseField name="sources" type="array">
+      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (`captured_fills` by module), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`.
+    </ResponseField>
+
+    <ResponseField name="reason" type="string">
+      Present only when `status` is `unknown` or `not_applicable`: why.
+    </ResponseField>
+
+    <ResponseField name="as_of" type="integer">
+      Unix seconds of the snapshot the answer was read from. Refreshed every five minutes; a fill newer than `as_of` may not be counted yet.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the row schema.
 
 <ResponseField name="uncatalogued_count" type="integer">Held tokens that are not in the market catalogue and have no mark, over the whole open list regardless of paging. A subset of `unpriced_positions`. Omitted when the open list is unknown (`open_value_source` is set).</ResponseField>
 <ResponseField name="identity_source" type="string">`catalogue` or `uncatalogued` on each open row.</ResponseField>
