@@ -26,6 +26,17 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 Array of position objects. See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the full schema.
 
+<ResponseField name="uncatalogued_count" type="integer">Held tokens that are not in the market catalogue and have no mark, over the whole open list regardless of paging. A subset of `unpriced_positions`. Omitted when the open list is unknown (`open_value_source` is set).</ResponseField>
+<ResponseField name="identity_source" type="string">`catalogue` or `uncatalogued` on each open row.</ResponseField>
+
+### Errors
+
+Errors return `{"error": "...", "code": "..."}`.
+
+| Status | `code` | Meaning |
+|---|---|---|
+| 400 | `invalid_include_uncatalogued` | `include_uncatalogued` was not `true` or `false`. |
+
 ### Example
 
 ```bash cURL

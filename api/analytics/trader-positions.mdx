@@ -37,6 +37,14 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
              
 
+### Errors
+
+Errors return `{"error": "...", "code": "..."}`.
+
+| Status | `code` | Meaning |
+|---|---|---|
+| 400 | `invalid_include_uncatalogued` | `include_uncatalogued` was not `true` or `false`. |
+
 ### Example
 
 ```bash cURL
