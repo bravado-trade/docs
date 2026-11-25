@@ -33,7 +33,7 @@ An array of per-year summary objects (or a single object when `year` is specifie
     </ResponseField>
 
     <ResponseField name="sources" type="array">
-      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (`captured_fills` by module), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`.
+      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (they split `captured_fills`, not `fills`), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`.
     </ResponseField>
 
     <ResponseField name="reason" type="string">
