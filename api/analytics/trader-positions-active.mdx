@@ -16,6 +16,12 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Path Parameters
 
+### Query Parameters
+
+<ParamField query="include_uncatalogued" default="false" type="string">
+  `true` or `false`; any other value returns `400` with `"code": "invalid_include_uncatalogued"`. Also lists held tokens that are not in the market catalogue and have no mark (`identity_source` `uncatalogued`, `mark_source` `unknown`, null value). By default they are left out and counted in `uncatalogued_count`, a subset of `unpriced_positions`.
+</ParamField>
+
 ### Response
 
 Array of position objects. See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the full schema.
