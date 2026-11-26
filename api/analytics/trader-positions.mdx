@@ -27,7 +27,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 </ParamField>
 
 <ParamField query="offset" type="integer" default="0">
-  Number of positions to skip. Page with `limit` and `offset` until `positions` is shorter than `limit`.
+  Number of positions to skip. Page with `limit` and `offset` until `positions` is shorter than `limit`. Offset paging runs over a live set: if the wallet's positions open, close or re-rank between two requests, a row can be skipped or returned twice. For an exact enumeration use the cursor route, [`GET /positions?wallet=...&status=open`](/api/analytics/positions), which resumes after the last row served.
 </ParamField>
 
 <ParamField query="include_closed" default="true" type="boolean">

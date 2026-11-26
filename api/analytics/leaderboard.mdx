@@ -60,6 +60,14 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard
       Realized PnL in USDC over the window, net of fees. String for precision.
     </ResponseField>
 
+    <ResponseField name="fees" type="string">
+      The wallet's **all-time** fee total in USDC (alias `total_fees`), present on `window=all` rows and on net-basis windowed rows. On a windowed board it is **not** the fee that window's ranking deducted; that is the window's own fee. See `fees_scope`.
+    </ResponseField>
+
+    <ResponseField name="fees_scope" type="string">
+      Always `all_time` when `fees` is present: `fees` and `total_fees` are the all-time fee line at every `window`. The window's own fee is `windows.<window>.fees_paid` on the [trader profile](/api/analytics/trader). Both venues.
+    </ResponseField>
+
     <ResponseField name="volume_usdc" type="string">
       Total USDC notional traded in the window.
     </ResponseField>

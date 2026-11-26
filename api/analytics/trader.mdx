@@ -27,7 +27,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}
 </ParamField>
 
 <ParamField query="basis" default="net" type="string">
-  `net` deducts fees from `realized_pnl` and `total_pnl`; `gross` reports pre-fee figures.
+  `net` deducts fees from `realized_pnl` and `total_pnl`; `gross` adds fees back to report pre-fee figures **where the fees can be valued**. A `gross` request is declined, and `net` is served, for a wallet whose history holds any V1 share-denominated fee rows (those fees cannot be valued in USD, so a partial add-back would be wrong); the whole all-time add-back is declined, the V2 part included. Read the `basis` and `fees_basis` response fields to see what you actually got.
 </ParamField>
 
 <ParamField query="income" default="total" type="string">
@@ -36,7 +36,38 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}
 
 ### Response
 
-<ResponseField name="recognized_capital" type="string" required>
+<ResponseField name="basis" type="string" required>
+  The fee basis the served `realized_pnl`, `overall_pnl` and `total_pnl` actually carry: `net`, `gross` or `unknown`. It equals your `basis` parameter except where the service declined or neutralized it: a `gross` request that was declined reads `net` (`fees_basis` `v1_fee_unvalued`, or `unavailable_sub_day` on a fee-net venue); a `net` request served gross (a 1h/4h/24h window with no sub-day fee source, `fees_basis` `unavailable_sub_day`) reads `gross`; predict.fun always reads `net` (`fees_basis` `engine_net`); `unknown` is served only while a recompute holds the engine (`fees_basis` `recompute_in_flight`). Always present.
+</ResponseField>
+
+<ResponseField name="fees_basis" type="string" required>
+  Which fees were deducted from, or added back to, `realized_pnl`: `all_time` (window `all`, the wallet's all-time fees deducted), `window_daily` (7d, 30d, 90d, 365d: the window's own fees deducted), `unavailable_sub_day` (1h, 4h, 24h: there is no fee source at that grain, so no fee adjustment is made and the figure keeps whatever fee state the rollup has; see `basis`), `none` (you asked for `gross` and nothing was deducted), `engine_net` (the engine's `realized_pnl` is already net of fees, so nothing was deducted here; always the value on predict.fun), `engine_gross` (you asked for `gross` and the fee was added back exactly), `v1_fee_unvalued` (you asked for `gross`, but the wallet has V1 share-denominated fee rows that cannot be valued in USD, so the add-back was declined and `net` is served), `recompute_in_flight` (a recompute holds the engine, so the fee subtraction was declined for every wallet; the raw engine figure is served and `basis` is `unknown`). Always present.
+</ResponseField>
+
+<ResponseField name="fees" type="string" required>
+  The wallet's **all-time** fee total as an exact decimal string, at every `window`. It is a separate line, never netted into the figures above by this field. `total_fees` is an alias with the same value. The fee for the window you asked about is `windows.<window>.fees_paid`.
+</ResponseField>
+
+<ResponseField name="fees_scope" type="string" required>
+  Always `all_time`: the time scope of `fees` and `total_fees`, whatever `window` you sent. Do not subtract a windowed `fees` from a windowed PnL; use `windows.<window>.fees_paid`.
+</ResponseField>
+
+<ResponseField name="active_positions" type="integer or null" required>
+  Count of open positions worth at least $1, or whose value is unknown. This is a **snapshot** from the open-state rollup, refreshed about every 25 minutes. A live [`GET /positions?wallet=...&status=open`](/api/analytics/positions) read re-marks every position per request, so the two can differ by trades and price moves since the snapshot. `null` when the wallet's on-chain balances have not been indexed (`open_value_source` is `unknown_book_unseeded`) or its book is quarantined.
+</ResponseField>
+
+<ResponseField name="reference_engine" type="object">
+  Present only for the 12 wallets in the PMWAS reference cohort, and only with `window=all`. It is the PMWAS reference engine's figure, shown for comparison. **It is not the served PnL**: `realized_pnl`, `total_pnl` and every other figure on this page come from the production engine for every wallet, cohort wallets included. The two engines are under reconciliation and disagree on most cohort wallets.
+  <Expandable title="properties">
+    <ResponseField name="total_pnl" type="string">Reference-engine total economic return in USDC, net of fees.</ResponseField>
+    <ResponseField name="realized_pnl" type="string">Reference-engine net realized PnL in USDC.</ResponseField>
+    <ResponseField name="batch_block" type="integer">Block of the reference batch the figures come from.</ResponseField>
+    <ResponseField name="source" type="string">Always `pmwas_reference`.</ResponseField>
+    <ResponseField name="status" type="string">Always `under_reconciliation`.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="recognized_capital"  type="string" required>
   USDC, exact 6-decimal string. Proceeds on shares whose cost basis is unknown, recognized as **capital** (PMWAS §7.7(b)): in-kind capital, **not** profit or loss, and never part of `realized_pnl`, `total_pnl` or any total. `"0.000000"` means nothing was recognized. `null` means unknown, never zero; see `recognized_capital_source`. Always present. All-time only: it equals the sum of `recognized_capital` over the wallet's rows in [`GET /positions`](/api/analytics/positions), and is `null` if any of those rows is `null`.
 </ResponseField>
 
@@ -94,6 +125,14 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}
 | --- | --- |
 | Polymarket (`/trader-analytics/traders/{address}`) | Read from the wallet's FIFO fills. `fifo_fills` once every one of the wallet's records carries the convention; `pre_convention` (`null`) until then. |
 | predict.fun (`/trader-analytics/predict/traders/{address}`) | The same read and the same shape. The predict.fun engine records no §7.7(b) recognition yet, so it is `null` with `pre_convention` until it does. |
+
+| Field | Polymarket | predict.fun |
+| --- | --- | --- |
+| `basis` | `net`, `gross` or `unknown` (see the field) | Always `net`: the engine's realized PnL is already net of fees and `?basis=` is neutralized |
+| `fees_basis` | Any documented value | Always `engine_net` |
+| `fees`, `fees_scope` | All-time fee line, `all_time` | The same; informational only (not netted again) |
+| `reference_engine` | Cohort wallets only, `window=all` | Never present |
+| `active_positions` | Snapshot of the open-state rollup; `null` when unseeded or quarantined | Snapshot of the same rollup, from FIFO lots; never unseeded |
 
 `unbooked_activity` on predict.fun is always present with `status` `not_applicable`: predict.fun has no Protocol V2 modules, so nothing is captured-but-unbooked there. On Polymarket the count clears by itself when module 1/2 fills are booked (`fills` falls to `0`, `status` to `none`).
 
