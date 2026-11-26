@@ -16,55 +16,85 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/tax-
 
 ### Path Parameters
 
+<ParamField path="address" type="string" required>
+  Wallet address: `0x` followed by 40 hex characters.
+</ParamField>
+
 ### Query Parameters
 
- 
+<ParamField query="year" type="integer">
+  Restrict the report to one calendar year, 2020 to 2100. Omit it for every year. A value outside that range returns `400` with an `error` message and no `code`.
+</ParamField>
+
+<ParamField query="quarter" type="integer">
+  Restrict the dispositions to one calendar quarter of the disposal date, 1 to 4. Combine with `year`. A value outside that range returns `400` with an `error` message and no `code`.
+</ParamField>
+
+<ParamField query="format" type="string" default="json">
+  `json` (default) or `html`. `html` returns a self-contained statement as `text/html` instead of the JSON below.
+</ParamField>
+
 
 ### Response
 
-An array of per-year summary objects (or a single object when `year` is specified).
+An object. With `year`, `years` holds only that year. Amounts named `*_uusdc` are integer micro-USDC strings.
 
-<ResponseField name="short_term" type="object">
-  <Expandable title="Short-term fields">
-    <ResponseField name="count" type="integer">
-      Number of short-term dispositions.
+<ResponseField name="trader" type="string" required>The wallet, as requested.</ResponseField>
+<ResponseField name="batch_block" type="integer" required>The PMWAS batch the figures were read at. `0` when the figures come from the engine fallback source (see `disclosure.source`).</ResponseField>
+<ResponseField name="generated_at" type="string" required>When the report was assembled (UTC, ISO 8601).</ResponseField>
+<ResponseField name="disclosure" type="object" required>How the figures were produced: `source`, `cost_basis_method`, `fee_basis`, `term_split` and the explanatory notes (term, wash sale, fees, cash flows). Read it before using the figures for a filing.</ResponseField>
+<ResponseField name="years" type="array" required>One year summary per calendar year with dispositions. Fields in the table below.</ResponseField>
+<ResponseField name="totals" type="object" required>The same fields as a year summary, summed over `years` (`year` is `0`).</ResponseField>
+<ResponseField name="open_positions" type="object" required>The wallet's open positions at report time: `count`, `cost_basis_uusdc`, `value_uusdc`, `unrealized_uusdc` and `long_term_count` (positions held 365 days or more). `null` when they are unknown, with the reason in `disclosure.open_positions_note`; never a zero.</ResponseField>
+<ResponseField name="income_all_time" type="array">Program income by `kind` (`count`, `fmv_uusdc`), all time. Present for wallets served from the engine fallback source.</ResponseField>
+<ResponseField name="reconciliation" type="object">Engine rows with no real disposal date. They are kept out of the tax years. Present only when such rows exist.</ResponseField>
+<ResponseField name="book_status" type="string">`quarantined` when the wallet's book is quarantined; absent otherwise. Years from `unknown_from_ts` onward are then explicit unknowns.</ResponseField>
+<ResponseField name="unknown_from_ts" type="integer">Unix seconds from which the years are unknown. Present with `book_status` `quarantined`.</ResponseField>
+<ResponseField name="totals_known_years" type="object">The sum of the years that are known. Present with `book_status` `quarantined`.</ResponseField>
+
+<ResponseField name="unbooked_activity" type="object" required>
+  Disclosure of activity the tax figures do **not** include (the IRS-facing numbers omit the same fills as the PnL). The same block is on `GET /traders/{address}/tax-report/8949` (JSON body field; on the CSV as the response headers `X-Unbooked-Status` and `X-Unbooked-Fills`). Always present; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
+
+  <Expandable title="unbooked_activity fields">
+    <ResponseField name="status" type="string">
+      `unbooked`: fills exist that the figures omit (see `sources`). `none`: this wallet has no such fills. `unknown`: the source could not be read, so whether fills are omitted is unknown (this is never served as `none`). `not_applicable`: the venue has no such activity (predict.fun has no Protocol V2 modules), or the address is not a valid wallet.
     </ResponseField>
 
-    <ResponseField name="proceeds_uusdc" type="string">
-      Total proceeds.
+    <ResponseField name="sources" type="array">
+      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (they split `captured_fills`, not `fills`), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`.
     </ResponseField>
 
-    <ResponseField name="cost_uusdc" type="string">
-      Total cost basis.
+    <ResponseField name="reason" type="string">
+      Present only when `status` is `unknown` or `not_applicable`: why.
     </ResponseField>
 
-    <ResponseField name="gain_loss_uusdc" type="string">
-      Net short-term gain or loss.
-    </ResponseField>
-  </Expandable>
-</ResponseField>
-
-<ResponseField name="long_term" type="object">
-  <Expandable title="Long-term fields">
-    <ResponseField name="count" type="integer">
-      Number of long-term dispositions.
-    </ResponseField>
-
-    <ResponseField name="proceeds_uusdc" type="string">
-      Total proceeds.
-    </ResponseField>
-
-    <ResponseField name="cost_uusdc" type="string">
-      Total cost basis.
-    </ResponseField>
-
-    <ResponseField name="gain_loss_uusdc" type="string">
-      Net long-term gain or loss.
+    <ResponseField name="as_of" type="integer">
+      Unix seconds of the snapshot the answer was read from. Refreshed every five minutes; a fill newer than `as_of` may not be counted yet.
     </ResponseField>
   </Expandable>
 </ResponseField>
 
-     
+### Year summary fields
+
+Each element of `years`, and `totals`, has these fields.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `year` | integer | Calendar year; `0` on `totals`. |
+| `short_term`, `long_term` | object or null | Disposals held under or over a year: `count`, `proceeds_uusdc`, `cost_basis_uusdc`, `gain_loss_uusdc`, `proceeds_unknown`. `null` when the source has no acquisition dates to split by; the field is then named in `not_computed`. It is never a summary of zeros. |
+| `total` | object | The same fields over all disposals. `proceeds_unknown` counts lines whose proceeds the source does not state; the proceeds figure excludes them. |
+| `fees_uusdc` | string | Fees paid. A memo when the realized figures already contain fees. |
+| `taxable_gain_loss_uusdc` | string | Gain or loss over taxable disposals only. |
+| `non_taxable_count` | integer | Disposals that are not taxable. |
+| `by_disposal_kind`, `income_by_kind` | array or null | Gain or loss and income broken down by `kind`. |
+| `income_total_uusdc`, `deposits_uusdc`, `withdrawals_uusdc` | string or null | Income and cash flows for the year; `null` when the source cannot state them (named in `not_computed`). |
+| `net_taxable_uusdc` | string | Taxable gain or loss, minus `fees_uusdc` only where `fees_deducted_from_net_taxable` is `true`. |
+| `fees_deducted_from_net_taxable` | boolean | Whether `fees_uusdc` was subtracted to reach `net_taxable_uusdc`. |
+| `not_computed` | array | Names of fields this source cannot determine for the year. |
+| `quarters`, `top_markets` | array | Per-quarter and per-market proceeds and gain or loss. |
+| `wash_candidate_count`, `wash_candidate_loss_uusdc` | integer, string | Informational wash-sale candidates; cost basis is not adjusted. |
+| `exchange_surplus`, `third_party_fees` | object | Separate lines outside trading gain or loss: `status`, `amount_uusdc` and the classification. |
+| `redemption_cash` | object | Engine fallback only: redemptions of already-realized receivables (`count`, `uusdc`). Cash events, not dispositions. |
 
 ### Example
 

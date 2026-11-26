@@ -66,12 +66,36 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}
   </Expandable>
 </ResponseField>
 
+<ResponseField name="unbooked_activity" type="object" required>
+  Disclosure of activity the PnL and positions on this response do **not** include. Always present; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
+
+  <Expandable title="unbooked_activity fields">
+    <ResponseField name="status" type="string">
+      `unbooked`: fills exist that the figures omit (see `sources`). `none`: this wallet has no such fills. `unknown`: the source could not be read, so whether fills are omitted is unknown (this is never served as `none`). `not_applicable`: the venue has no such activity (predict.fun has no Protocol V2 modules), or the address is not a valid wallet.
+    </ResponseField>
+
+    <ResponseField name="sources" type="array">
+      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (they split `captured_fills`, not `fills`), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`. `fills` can be lower than the true number of omitted fills, never higher: a fill counts as booked when the wallet has a buy or sell book entry in the same transaction (a transfer, convert or redeem entry does not count), so a `none` means no transaction with such a fill lacks one, not proof that every fill is booked.
+    </ResponseField>
+
+    <ResponseField name="reason" type="string">
+      Present only when `status` is `unknown` or `not_applicable`: why.
+    </ResponseField>
+
+    <ResponseField name="as_of" type="integer">
+      Unix seconds of the snapshot the answer was read from. Refreshed every five minutes; a fill newer than `as_of` may not be counted yet.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
 ### Venue semantics
 
 | Venue | `recognized_capital` / `recognized_capital_source` |
 | --- | --- |
 | Polymarket (`/trader-analytics/traders/{address}`) | Read from the wallet's FIFO fills. `fifo_fills` once every one of the wallet's records carries the convention; `pre_convention` (`null`) until then. |
 | predict.fun (`/trader-analytics/predict/traders/{address}`) | The same read and the same shape. The predict.fun engine records no §7.7(b) recognition yet, so it is `null` with `pre_convention` until it does. |
+
+`unbooked_activity` on predict.fun is always present with `status` `not_applicable`: predict.fun has no Protocol V2 modules, so nothing is captured-but-unbooked there. On Polymarket the count clears by itself when module 1/2 fills are booked (`fills` falls to `0`, `status` to `none`).
 
 ### Example
 

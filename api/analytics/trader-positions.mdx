@@ -16,7 +16,19 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Path Parameters
 
+<ParamField path="address" type="string" required>
+  Wallet address: `0x` followed by 40 hex characters.
+</ParamField>
+
 ### Query Parameters
+
+<ParamField query="limit" type="integer" default="100">
+  Page size, 1 to 1000. A value outside that range returns `400`.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+  Number of positions to skip. Page with `limit` and `offset` until `positions` is shorter than `limit`.
+</ParamField>
 
 <ParamField query="include_closed" default="true" type="boolean">
   When `false`, returns only open positions (equivalent to `/positions/active`).
@@ -28,16 +40,65 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Response: Uncatalogued positions
 
+The `identity_source` row field is described in the position fields table below.
+
 <ResponseField name="uncatalogued_count" type="integer">Held tokens that are not in the market catalogue and have no mark, over the wallet's whole open list regardless of paging. A subset of `unpriced_positions`. Omitted when the open list is unknown (`open_value_source` is set).</ResponseField>
-<ResponseField name="identity_source" type="string">On open rows: `catalogue` or `uncatalogued`. Omitted on closed rows.</ResponseField>
 
  
 
+### Response
+
+<ResponseField name="trader" type="string" required>The wallet, as requested.</ResponseField>
+<ResponseField name="positions" type="array" required>Position rows. Same row shape as the [field reference](/api/analytics/trader-positions#response-position-fields).</ResponseField>
+<ResponseField name="total" type="integer" required>Number of positions before paging.</ResponseField>
+<ResponseField name="limit" type="integer" required>The page size applied.</ResponseField>
+<ResponseField name="offset" type="integer" required>The offset applied.</ResponseField>
+<ResponseField name="unpriced_positions" type="integer" required>Open positions with an unknown mark, over the whole list before paging (0 included). On Polymarket it equals the profile's unpriced count; predict.fun's profile has no such figure, so there it is counted from the listed open rows only.</ResponseField>
+<ResponseField name="unbooked_activity" type="object" required>
+  Disclosure of activity the positions and PnL on this response do **not** include. Same block as on [`GET /traders/{address}`](/api/analytics/trader#response). Always present; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
+
+  <Expandable title="unbooked_activity fields">
+    <ResponseField name="status" type="string">
+      `unbooked`: fills exist that the figures omit (see `sources`). `none`: this wallet has no such fills. `unknown`: the source could not be read, so whether fills are omitted is unknown (this is never served as `none`). `not_applicable`: the venue has no such activity (predict.fun has no Protocol V2 modules), or the address is not a valid wallet.
+    </ResponseField>
+
+    <ResponseField name="sources" type="array">
+      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (they split `captured_fills`, not `fills`), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`. `fills` can be lower than the true number of omitted fills, never higher: a fill counts as booked when the wallet has a buy or sell book entry in the same transaction (a transfer, convert or redeem entry does not count), so a `none` means no transaction with such a fill lacks one, not proof that every fill is booked.
+    </ResponseField>
+
+    <ResponseField name="reason" type="string">
+      Present only when `status` is `unknown` or `not_applicable`: why.
+    </ResponseField>
+
+    <ResponseField name="as_of" type="integer">
+      Unix seconds of the snapshot the answer was read from. Refreshed every five minutes; a fill newer than `as_of` may not be counted yet.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
 ### Response: Position Fields
 
-             
+Each element of `positions` has these fields. Open rows are the wallet's current holdings; closed rows are positions it no longer holds.
 
-### Errors
+| Field | Type | Meaning |
+|---|---|---|
+| `token_id` | string | Decimal ERC-1155 token id. |
+| `market_id`, `question`, `outcome`, `category` | string | The market the token belongs to. Absent when the token is not in the market catalogue (`identity_source` `uncatalogued`): unknown, not empty. |
+| `shares` | string | Number of shares in the position, decimal. |
+| `avg_cost_cents` | string | Average cost per share in cents of the remaining position; `"0"` when no cost basis is recorded. |
+| `mark_price_cents` | string or null | Open: the current mark in cents; `null` when `mark_source` is `unknown`. Closed: the exit price (volume-weighted). |
+| `value_usdc` | string or null | Open: `shares` at the mark; `null` when the mark is unknown, never `"0"`. Closed: `"0"`. |
+| `unrealized_pnl` | string or null | Open: unrealized profit and loss; `null` when the mark is unknown. Closed: `"0"`. |
+| `realized_pnl` | string | Realized profit and loss on this token. |
+| `mark_source` | string | Open rows: `resolution`, `quote`, `trade` or `unknown`, the rung of the mark ladder the mark came from. Absent on closed rows and on PMWAS-cohort wallets. |
+| `mark_ts` | integer | Unix seconds of the quote or trade the mark rests on. Absent for `resolution` and `unknown`. |
+| `identity_source` | string | Open rows: `catalogue`, or `uncatalogued` when the held token has no row in the market catalogue. Present on every open row, including PMWAS-cohort wallets. Absent on closed rows. |
+| `roi_pct` | number or null | Return on investment in percent; `null` when the cost basis is zero or the mark is unknown. |
+| `open_shares`, `resolved_unredeemed_shares` | string | Open rows on Polymarket: `shares` split into what is still open and what resolved while the wallet still holds the tokens. Absent on predict.fun, on PMWAS-cohort wallets and on closed rows. |
+| `first_open_ts` | integer | Unix seconds the position was opened. Closed rows and PMWAS-cohort open rows; absent when no acquisition is recorded. |
+| `closed_at` | integer | Unix seconds of the final disposal. Closed rows only. |
+
+## Errors
 
 Errors return `{"error": "...", "code": "..."}`.
 

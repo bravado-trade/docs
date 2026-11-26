@@ -16,7 +16,19 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Path Parameters
 
+<ParamField path="address" type="string" required>
+  Wallet address: `0x` followed by 40 hex characters.
+</ParamField>
+
 ### Query Parameters
+
+<ParamField query="limit" type="integer" default="100">
+  Page size, 1 to 1000. A value outside that range returns `400`.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+  Number of positions to skip. Page with `limit` and `offset` until `positions` is shorter than `limit`.
+</ParamField>
 
 <ParamField query="include_uncatalogued" default="false" type="string">
   `true` or `false`; any other value returns `400` with `"code": "invalid_include_uncatalogued"`. Also lists held tokens that are not in the market catalogue and have no mark (`identity_source` `uncatalogued`, `mark_source` `unknown`, null value). By default they are left out and counted in `uncatalogued_count`, a subset of `unpriced_positions`.
@@ -24,12 +36,39 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Response
 
-Array of position objects. See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the full schema.
+<ResponseField name="trader" type="string" required>The wallet, as requested.</ResponseField>
+<ResponseField name="positions" type="array" required>Open position rows. Same row shape as the [field reference](/api/analytics/trader-positions#response-position-fields).</ResponseField>
+<ResponseField name="total" type="integer" required>Number of positions before paging.</ResponseField>
+<ResponseField name="limit" type="integer" required>The page size applied.</ResponseField>
+<ResponseField name="offset" type="integer" required>The offset applied.</ResponseField>
+<ResponseField name="unpriced_positions" type="integer" required>Open positions with an unknown mark, over the whole list before paging (0 included). On Polymarket it equals the profile's unpriced count; predict.fun's profile has no such figure, so there it is counted from the listed open rows only.</ResponseField>
+<ResponseField name="unbooked_activity" type="object" required>
+  Disclosure of activity the positions and PnL on this response do **not** include. Same block as on [`GET /traders/{address}`](/api/analytics/trader#response). Always present; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
+
+  <Expandable title="unbooked_activity fields">
+    <ResponseField name="status" type="string">
+      `unbooked`: fills exist that the figures omit (see `sources`). `none`: this wallet has no such fills. `unknown`: the source could not be read, so whether fills are omitted is unknown (this is never served as `none`). `not_applicable`: the venue has no such activity (predict.fun has no Protocol V2 modules), or the address is not a valid wallet.
+    </ResponseField>
+
+    <ResponseField name="sources" type="array">
+      Empty unless `status` is `unbooked`. Then one object: `source` (`pv2_module`), `modules` (`[1, 2]`), `fills` (fills omitted from the figures), `captured_fills` (all module 1/2 fills the wallet made as maker, booked or not), `binary_fills` and `negrisk_fills` (they split `captured_fills`, not `fills`), `first_ts` and `last_ts` (unix seconds of the earliest and latest omitted fill), and `reason`. `fills` can be lower than the true number of omitted fills, never higher: a fill counts as booked when the wallet has a buy or sell book entry in the same transaction (a transfer, convert or redeem entry does not count), so a `none` means no transaction with such a fill lacks one, not proof that every fill is booked.
+    </ResponseField>
+
+    <ResponseField name="reason" type="string">
+      Present only when `status` is `unknown` or `not_applicable`: why.
+    </ResponseField>
+
+    <ResponseField name="as_of" type="integer">
+      Unix seconds of the snapshot the answer was read from. Refreshed every five minutes; a fill newer than `as_of` may not be counted yet.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the row schema. Every row carries `identity_source`: `catalogue`, or `uncatalogued` when the held token is not in the market catalogue (its market, outcome and title are then unknown). An invalid `limit` or `offset` returns `400` with an `error` message and no `code`.
 
 <ResponseField name="uncatalogued_count" type="integer">Held tokens that are not in the market catalogue and have no mark, over the whole open list regardless of paging. A subset of `unpriced_positions`. Omitted when the open list is unknown (`open_value_source` is set).</ResponseField>
-<ResponseField name="identity_source" type="string">`catalogue` or `uncatalogued` on each open row.</ResponseField>
 
-### Errors
+## Errors
 
 Errors return `{"error": "...", "code": "..."}`.
 
