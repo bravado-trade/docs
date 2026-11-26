@@ -53,7 +53,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/leaderboard/volume
     </ResponseField>
 
     <ResponseField name="trader" type="string">
-      Polygon wallet address.
+      Polygon wallet address: `0x` followed by 40 lowercase hex characters (for example `0x821dab0565ebf5b327f51db06223fdcfe01acf16`). Always in this form, so it can be compared with a string match and used directly as the `address` of the per-trader routes.
     </ResponseField>
 
     <ResponseField name="username" type="string | null">

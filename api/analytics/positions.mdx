@@ -99,43 +99,44 @@ A request must be **bounded**. Send at least one of `wallet`, `token_id`, `condi
 <ResponseField name="unpriced_positions" type="integer" required>Open positions with an unknown mark among the rows this response covered.</ResponseField>
 <ResponseField name="uncatalogued_count" type="integer" required>Open positions, among the rows this response covered, whose token is not in the market catalogue and has no mark. A subset of `unpriced_positions`. Counted whether or not `include_uncatalogued` lists them.</ResponseField>
 
-```json Response
+```json Response (a live call with wallet and status=open, first of 215 rows shown)
 {
   "data": [
     {
       "venue": "polymarket",
-      "wallet": "0x1111111111111111111111111111111111111111",
-      "market_id": "540816",
-      "condition_id": "0x2222222222222222222222222222222222222222222222222222222222222222",
-      "token_id": "1606938044258990275541962092341162602522202993782792835301377",
-      "outcome": "Yes",
-      "shares": "250.000000",
-      "avg_entry_price": "0.420000",
-      "cost_basis": "105.000000",
-      "current_price": "0.610000",
-      "current_value": "152.500000",
-      "realized_pnl": "-3.250000",
+      "wallet": "0x2c335066fe58fe9237c3d3dc7b275c2a034a0563",
+      "market_id": "2243308",
+      "condition_id": "0xf44cf137562b90cf6205e0b81a03aa63001c491e4d8f04c0098bfb9233f9d04f",
+      "token_id": "7390346044733703673979810981713454788217262553112973580159592257689325355057",
+      "outcome": "No",
+      "shares": "5155.920902",
+      "avg_entry_price": "0.865836",
+      "cost_basis": "4464.180294",
+      "current_price": "0.891500",
+      "current_value": "4596.503484",
+      "realized_pnl": "0.000000",
       "realized_pnl_source": "fifo_fills",
-      "unrealized_pnl": "47.500000",
+      "unrealized_pnl": "132.323190",
       "status": "open",
-      "last_updated_at": 1780001000000,
+      "last_updated_at": 1786203454000,
       "mark_source": "quote",
-      "mark_ts": 1780000990,
+      "mark_ts": 1795693341,
       "open_value_source": "book",
       "is_operator": false,
-      "collateral": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
-      "collateral_source": "pm_ctf_position",
-      "canonical": true,
+      "collateral": null,
+      "collateral_source": "unknown",
+      "canonical": null,
       "identity_source": "catalogue",
       "cost_alloc_source": null,
       "cost_alloc_evidence": null,
-      "recognized_capital": "0.000000",
-      "recognized_capital_source": "fifo_fills"
+      "recognized_capital": null,
+      "recognized_capital_source": "pre_convention"
     }
   ],
-  "next_cursor": "AQEBq83vEjRWeJD_nNuTfHcEQw",
-  "served_at": 1780001001234,
-  "unpriced_positions": 0
+  "next_cursor": null,
+  "served_at": 1795693804821,
+  "unpriced_positions": 0,
+  "uncatalogued_count": 0
 }
 ```
 
