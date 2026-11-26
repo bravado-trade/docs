@@ -16,7 +16,19 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Path Parameters
 
+<ParamField path="address" type="string" required>
+  Wallet address: `0x` followed by 40 hex characters.
+</ParamField>
+
 ### Query Parameters
+
+<ParamField query="limit" type="integer" default="100">
+  Page size, 1 to 1000. A value outside that range returns `400`.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+  Number of positions to skip. Page with `limit` and `offset` until `positions` is shorter than `limit`.
+</ParamField>
 
 <ParamField query="include_uncatalogued" default="false" type="string">
   `true` or `false`; any other value returns `400` with `"code": "invalid_include_uncatalogued"`. Also lists held tokens that are not in the market catalogue and have no mark (`identity_source` `uncatalogued`, `mark_source` `unknown`, null value). By default they are left out and counted in `uncatalogued_count`, a subset of `unpriced_positions`.
@@ -52,12 +64,11 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
   </Expandable>
 </ResponseField>
 
-See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the row schema.
+See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the row schema. Every row carries `identity_source`: `catalogue`, or `uncatalogued` when the held token is not in the market catalogue (its market, outcome and title are then unknown). An invalid `limit` or `offset` returns `400` with an `error` message and no `code`.
 
 <ResponseField name="uncatalogued_count" type="integer">Held tokens that are not in the market catalogue and have no mark, over the whole open list regardless of paging. A subset of `unpriced_positions`. Omitted when the open list is unknown (`open_value_source` is set).</ResponseField>
-<ResponseField name="identity_source" type="string">`catalogue` or `uncatalogued` on each open row.</ResponseField>
 
-### Errors
+## Errors
 
 Errors return `{"error": "...", "code": "..."}`.
 

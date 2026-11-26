@@ -16,7 +16,19 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Path Parameters
 
+<ParamField path="address" type="string" required>
+  Wallet address: `0x` followed by 40 hex characters.
+</ParamField>
+
 ### Query Parameters
+
+<ParamField query="limit" type="integer" default="100">
+  Page size, 1 to 1000. A value outside that range returns `400`.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+  Number of positions to skip. Page with `limit` and `offset` until `positions` is shorter than `limit`.
+</ParamField>
 
 <ParamField query="include_closed" default="true" type="boolean">
   When `false`, returns only open positions (equivalent to `/positions/active`).
@@ -28,8 +40,9 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Response: Uncatalogued positions
 
+The `identity_source` row field is described in the position fields table below.
+
 <ResponseField name="uncatalogued_count" type="integer">Held tokens that are not in the market catalogue and have no mark, over the wallet's whole open list regardless of paging. A subset of `unpriced_positions`. Omitted when the open list is unknown (`open_value_source` is set).</ResponseField>
-<ResponseField name="identity_source" type="string">On open rows: `catalogue` or `uncatalogued`. Omitted on closed rows.</ResponseField>
 
  
 
@@ -65,9 +78,27 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 ### Response: Position Fields
 
-             
+Each element of `positions` has these fields. Open rows are the wallet's current holdings; closed rows are positions it no longer holds.
 
-### Errors
+| Field | Type | Meaning |
+|---|---|---|
+| `token_id` | string | Decimal ERC-1155 token id. |
+| `market_id`, `question`, `outcome`, `category` | string | The market the token belongs to. Absent when the token is not in the market catalogue (`identity_source` `uncatalogued`): unknown, not empty. |
+| `shares` | string | Number of shares in the position, decimal. |
+| `avg_cost_cents` | string | Average cost per share in cents of the remaining position; `"0"` when no cost basis is recorded. |
+| `mark_price_cents` | string or null | Open: the current mark in cents; `null` when `mark_source` is `unknown`. Closed: the exit price (volume-weighted). |
+| `value_usdc` | string or null | Open: `shares` at the mark; `null` when the mark is unknown, never `"0"`. Closed: `"0"`. |
+| `unrealized_pnl` | string or null | Open: unrealized profit and loss; `null` when the mark is unknown. Closed: `"0"`. |
+| `realized_pnl` | string | Realized profit and loss on this token. |
+| `mark_source` | string | Open rows: `resolution`, `quote`, `trade` or `unknown`, the rung of the mark ladder the mark came from. Absent on closed rows and on PMWAS-cohort wallets. |
+| `mark_ts` | integer | Unix seconds of the quote or trade the mark rests on. Absent for `resolution` and `unknown`. |
+| `identity_source` | string | Open rows: `catalogue`, or `uncatalogued` when the held token has no row in the market catalogue. Present on every open row, including PMWAS-cohort wallets. Absent on closed rows. |
+| `roi_pct` | number or null | Return on investment in percent; `null` when the cost basis is zero or the mark is unknown. |
+| `open_shares`, `resolved_unredeemed_shares` | string | Open rows on Polymarket: `shares` split into what is still open and what resolved while the wallet still holds the tokens. Absent on predict.fun, on PMWAS-cohort wallets and on closed rows. |
+| `first_open_ts` | integer | Unix seconds the position was opened. Closed rows and PMWAS-cohort open rows; absent when no acquisition is recorded. |
+| `closed_at` | integer | Unix seconds of the final disposal. Closed rows only. |
+
+## Errors
 
 Errors return `{"error": "...", "code": "..."}`.
 
