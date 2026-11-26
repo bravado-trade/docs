@@ -43,7 +43,7 @@ An object. With `year`, `years` holds only that year. Amounts named `*_uusdc` ar
 <ResponseField name="batch_block" type="integer" required>The PMWAS batch the figures were read at. `0` when the figures come from the engine fallback source (see `disclosure.source`).</ResponseField>
 <ResponseField name="generated_at" type="string" required>When the report was assembled (UTC, ISO 8601).</ResponseField>
 <ResponseField name="disclosure" type="object" required>How the figures were produced: `source`, `cost_basis_method`, `fee_basis`, `term_split` and the explanatory notes (term, wash sale, fees, cash flows). Read it before using the figures for a filing.</ResponseField>
-<ResponseField name="years" type="array" required>One year summary per calendar year with dispositions. Fields in the table below.</ResponseField>
+<ResponseField name="years" type="array" required>One year summary per calendar year with dispositions. Fields in the table below. An empty array (`[]`, never `null`) when the period you asked for (for example `year=2025&quarter=3`) holds no taxable line for a wallet that has history; `disclosure.empty_period` says so and `totals` are then sums over nothing.</ResponseField>
 <ResponseField name="totals" type="object" required>The same fields as a year summary, summed over `years` (`year` is `0`).</ResponseField>
 <ResponseField name="open_positions" type="object" required>The wallet's open positions at report time: `count`, `cost_basis_uusdc`, `value_uusdc`, `unrealized_uusdc` and `long_term_count` (positions held 365 days or more). `null` when they are unknown, with the reason in `disclosure.open_positions_note`; never a zero.</ResponseField>
 <ResponseField name="income_all_time" type="array">Program income by `kind` (`count`, `fmv_uusdc`), all time. Present for wallets served from the engine fallback source.</ResponseField>
@@ -53,7 +53,7 @@ An object. With `year`, `years` holds only that year. Amounts named `*_uusdc` ar
 <ResponseField name="totals_known_years" type="object">The sum of the years that are known. Present with `book_status` `quarantined`.</ResponseField>
 
 <ResponseField name="unbooked_activity" type="object" required>
-  Disclosure of activity the tax figures do **not** include (the IRS-facing numbers omit the same fills as the PnL). The same block is on `GET /traders/{address}/tax-report/8949` (JSON body field; on the CSV as the response headers `X-Unbooked-Status` and `X-Unbooked-Fills`). Always present; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
+  Disclosure of activity the tax figures do **not** include (the IRS-facing numbers omit the same fills as the PnL). The same block is on `GET /traders/{address}/tax-report/8949` (JSON body field; on the CSV as the response headers `X-Unbooked-Status` and `X-Unbooked-Fills`). Always present on a `200` response; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
 
   <Expandable title="unbooked_activity fields">
     <ResponseField name="status" type="string">
@@ -96,25 +96,237 @@ Each element of `years`, and `totals`, has these fields.
 | `exchange_surplus`, `third_party_fees` | object | Separate lines outside trading gain or loss: `status`, `amount_uusdc` and the classification. |
 | `redemption_cash` | object | Engine fallback only: redemptions of already-realized receivables (`count`, `uusdc`). Cash events, not dispositions. |
 
+## Errors
+
+Errors return `{"error": "...", "code": "..."}` where a `code` is listed; the `400` cases carry an `error` message and no `code`.
+
+| Status | `code` | Meaning |
+|---|---|---|
+| 400 | none | `address` is not `0x` plus 40 hex characters, `year` is outside 2020 to 2100, or `quarter` is outside 1 to 4. |
+| 404 | `wallet_not_found` | The warehouse has never seen this wallet, so there is no statement to give. It is not served as an empty report because a report of zeros would read as "no tax", which is not known. A wallet that has history but nothing in the period you asked for is not this error: it returns `200` with `years: []`. |
+
+The same `404` and `code` are returned by `GET /traders/{address}/tax-report/8949` and `GET /traders/{address}/event-graph`. The `404` body is only `error` and `code`; `unbooked_activity` is on every `200` response, not on this error.
+
 ### Example
 
 <CodeGroup>
 
 ```bash cURL
-curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc.../tax-report \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0x821dab0565ebf5b327f51db06223fdcfe01acf16/tax-report \
   -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
   -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
   -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
-  -d year=2024
+  -d year=2026
 ```
 
-```json Response
+```json Response (a live call with year=2026; disclosure and top_markets shortened)
 {
-  "year": 2024,
-  "short_term": { "count": 118, "gain_loss_uusdc": "13300000000" },
-  "long_term": { "count": 14, "gain_loss_uusdc": "2600000000" },
-  "fees_uusdc": "3200000000",
-  "net_taxable_uusdc": "15900000000"
+  "trader": "0x821dab0565ebf5b327f51db06223fdcfe01acf16",
+  "batch_block": 0,
+  "generated_at": "2026-11-26T11:56:11Z",
+  "disclosure": {
+    "source": "engine-fallback",
+    "cost_basis_method": "FIFO",
+    "fee_basis": "engine_net",
+    "term_split": false,
+    "income_included_in_net_taxable": false,
+    "term_note": "holding period is UNKNOWN for this source: the FIFO engine stores no acquire date per draw, so no short/long-term split is computed. short_term / long_term are null (all figures are under total) and every 8949 row states date_acquired and term as UNKNOWN. A term-split (§20.4) statement requires the wallet in the PMWAS batch roster."
+  },
+  "years": [
+    {
+      "year": 2026,
+      "short_term": null,
+      "long_term": null,
+      "total": {
+        "count": 400524,
+        "proceeds_uusdc": "334953230954637",
+        "cost_basis_uusdc": "332577985976987",
+        "gain_loss_uusdc": "2375244977650",
+        "proceeds_unknown": 0
+      },
+      "fees_uusdc": "3040590370090",
+      "taxable_gain_loss_uusdc": "2375244977650",
+      "non_taxable_count": 0,
+      "by_disposal_kind": null,
+      "income_by_kind": [
+        {
+          "kind": "LIQUIDITY_REWARD",
+          "count": 185,
+          "fmv_uusdc": "1728982977600"
+        }
+      ],
+      "income_total_uusdc": "1728982977600",
+      "deposits_uusdc": null,
+      "withdrawals_uusdc": "0",
+      "net_taxable_uusdc": "2375244977650",
+      "fees_deducted_from_net_taxable": false,
+      "redemption_cash": {
+        "count": 200348,
+        "uusdc": "251820082648961"
+      },
+      "not_computed": [
+        "short_term",
+        "long_term",
+        "deposits_uusdc"
+      ],
+      "quarters": [
+        {
+          "quarter": 3,
+          "count": 118591,
+          "proceeds_uusdc": "100939859451615",
+          "proceeds_unknown": 0,
+          "gain_loss_uusdc": "836161646811"
+        },
+        {
+          "quarter": 4,
+          "count": 281933,
+          "proceeds_uusdc": "234013371503022",
+          "proceeds_unknown": 0,
+          "gain_loss_uusdc": "1539083330839"
+        }
+      ],
+      "top_markets": [
+        {
+          "market_id": "3829899",
+          "label": "Yes",
+          "count": 14,
+          "proceeds_uusdc": "379766585640",
+          "proceeds_unknown": 0,
+          "gain_loss_uusdc": "141158500841"
+        },
+        {
+          "market_id": "6575005",
+          "label": "Yes",
+          "count": 10,
+          "proceeds_uusdc": "283739440176",
+          "proceeds_unknown": 0,
+          "gain_loss_uusdc": "139920605693"
+        },
+        {
+          "market_id": "(other)",
+          "count": 400428,
+          "proceeds_uusdc": "332804095361524",
+          "proceeds_unknown": 0,
+          "gain_loss_uusdc": "1870525437759"
+        }
+      ],
+      "wash_candidate_count": 191873,
+      "wash_candidate_loss_uusdc": "-68807305227483",
+      "exchange_surplus": {
+        "status": "known",
+        "amount_uusdc": 0,
+        "amount": "0.000000",
+        "count": 0,
+        "classification": "income_outside_trading_pnl",
+        "in_realized_pnl": false,
+        "scope": "year:2026",
+        "through_block": 97992135,
+        "coverage": "rule_v1: V1 taker-SELL sweeps and V2 differences visible as pUSD legs. NOT sized (absence is UNKNOWN, not 0): surplus swept through the V1 BUY-refund path and V2 maker-asset refund sweeps that leave no distinguishing leg",
+        "source": "pm_fill_cash_adjust.surplus_uusdc @ published generation (kernel migration 089)"
+      },
+      "third_party_fees": {
+        "status": "known",
+        "amount_uusdc": 0,
+        "amount": "0.000000",
+        "count": 0,
+        "classification": "expense_outside_trading_pnl",
+        "in_realized_pnl": false,
+        "scope": "year:2026",
+        "through_block": 97991284,
+        "coverage": "registered collectors only (kernel/venue RedemptionFeeCollectors; the registry is NOT proven complete: a collector outside it is UNKNOWN, not 0). Fees the wallet paid to a collector inside its own tx, bound to its redemption/merge/split (anchor_kind NONE rows included); a collateral move to a wallet of the payer's OWN owner is not a fee and is never counted (PMWAS §10.8)",
+        "source": "pm_tx_third_party_fee.fee_uusdc @ published generation (kernel migration 088)"
+      }
+    }
+  ],
+  "unbooked_activity": {
+    "status": "unbooked",
+    "sources": [
+      {
+        "source": "pv2_module",
+        "modules": [
+          1,
+          2
+        ],
+        "fills": 1,
+        "captured_fills": 1,
+        "binary_fills": 1,
+        "negrisk_fills": 0,
+        "first_ts": 1794852274,
+        "last_ts": 1794852274,
+        "reason": "Fills on Polymarket Protocol V2 Binary and NegRisk markets are captured but not yet included in this wallet's PnL, positions or tax figures; they will be added in a future restatement"
+      }
+    ],
+    "as_of": 1795694073
+  },
+  "income_all_time": [
+    {
+      "kind": "LIQUIDITY_REWARD",
+      "count": 0,
+      "fmv_uusdc": "1728982977600"
+    }
+  ],
+  "totals": {
+    "year": 0,
+    "short_term": null,
+    "long_term": null,
+    "total": {
+      "count": 400524,
+      "proceeds_uusdc": "334953230954637",
+      "cost_basis_uusdc": "332577985976987",
+      "gain_loss_uusdc": "2375244977650",
+      "proceeds_unknown": 0
+    },
+    "fees_uusdc": "3040590370090",
+    "taxable_gain_loss_uusdc": "2375244977650",
+    "non_taxable_count": 0,
+    "by_disposal_kind": null,
+    "income_by_kind": null,
+    "income_total_uusdc": "1728982977600",
+    "deposits_uusdc": null,
+    "withdrawals_uusdc": "0",
+    "net_taxable_uusdc": "2375244977650",
+    "fees_deducted_from_net_taxable": false,
+    "redemption_cash": {
+      "count": 200348,
+      "uusdc": "251820082648961"
+    },
+    "not_computed": [
+      "short_term",
+      "long_term",
+      "deposits_uusdc"
+    ],
+    "exchange_surplus": {
+      "status": "known",
+      "amount_uusdc": 0,
+      "amount": "0.000000",
+      "count": 0,
+      "classification": "income_outside_trading_pnl",
+      "in_realized_pnl": false,
+      "scope": "years_in_report",
+      "through_block": 97992135,
+      "coverage": "rule_v1: V1 taker-SELL sweeps and V2 differences visible as pUSD legs. NOT sized (absence is UNKNOWN, not 0): surplus swept through the V1 BUY-refund path and V2 maker-asset refund sweeps that leave no distinguishing leg",
+      "source": "pm_fill_cash_adjust.surplus_uusdc @ published generation (kernel migration 089)"
+    },
+    "third_party_fees": {
+      "status": "known",
+      "amount_uusdc": 0,
+      "amount": "0.000000",
+      "count": 0,
+      "classification": "expense_outside_trading_pnl",
+      "in_realized_pnl": false,
+      "scope": "years_in_report",
+      "through_block": 97991284,
+      "coverage": "registered collectors only (kernel/venue RedemptionFeeCollectors; the registry is NOT proven complete: a collector outside it is UNKNOWN, not 0). Fees the wallet paid to a collector inside its own tx, bound to its redemption/merge/split (anchor_kind NONE rows included); a collateral move to a wallet of the payer's OWN owner is not a fee and is never counted (PMWAS §10.8)",
+      "source": "pm_tx_third_party_fee.fee_uusdc @ published generation (kernel migration 088)"
+    }
+  },
+  "open_positions": {
+    "count": 1170,
+    "cost_basis_uusdc": "356164518362",
+    "value_uusdc": "314726739950",
+    "unrealized_uusdc": "-41437778412",
+    "long_term_count": 0
+  }
 }
 ```
 

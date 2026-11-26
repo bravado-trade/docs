@@ -46,6 +46,10 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 
 ### Path Parameters
 
+<ParamField path="address" type="string" required>
+  Wallet address: `0x` followed by 40 hex characters.
+</ParamField>
+
 ### Query Parameters
 
 <ParamField query="window" default="30d" type="string">
@@ -186,7 +190,9 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/pnl
 
     <ResponseField name="reason" type="string">
       Present only when `status` is `unknown` or `not_applicable`: why.
-    </Resp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
 
 <Note>
   The **last point of every window's series is the same number**: the

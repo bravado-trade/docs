@@ -102,30 +102,175 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}
 <CodeGroup>
 
 ```bash cURL
-curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0xabc123def456abc123def456abc123def456abc1 \
+curl -G https://partner-api.bravadotrade.com/trader-analytics/traders/0x821dab0565ebf5b327f51db06223fdcfe01acf16 \
   -H "X-BRAVADO-API-KEY: $BRAVADO_API_KEY" \
   -H "X-BRAVADO-TIMESTAMP: <unix-ms>" \
   -H "X-BRAVADO-SIGNATURE: <signature-for-this-request>" \
-  -d window=30d \
-  -d basis=net \
-  -d income=detail
+  -d window=all
 ```
 
-```json Response (abbreviated)
+```json Response (a live call, window=all; the optional username field is omitted)
 {
-  "trader": "0xabc123def456abc123def456abc123def456abc1",
-  "username": "sharpshooter",
-  "realized_pnl": "3420.110000",
-  "unrealized_pnl": "210.440000",
-  "total_pnl": "3630.550000",
-  "recognized_capital": "0.000000",
-  "recognized_capital_source": "fifo_fills",
-  "fees": "88.200000",
-  "volume": "32100.000000",
-  "active_positions": 5,
-  "total_trades": 390,
-  "win_rate": "0.6497",
-  "window": "30d"
+  "trader": "0x821dab0565ebf5b327f51db06223fdcfe01acf16",
+  "window": "all",
+  "overall_pnl": "2333807.199238",
+  "realized_pnl": "2375244.97765",
+  "unrealized_pnl": "-41437.778412",
+  "total_fees": "3039027.04537",
+  "fees": "3039027.04537",
+  "fees_basis": "engine_net",
+  "total_pnl": "2333807.199238",
+  "income": "1728982.977600",
+  "portfolio_value": "314726.73995",
+  "active_positions": 1170,
+  "total_positions": 253614,
+  "total_trades": 2916953,
+  "total_wins": 132409,
+  "total_losses": 120121,
+  "win_rate": "0.5243",
+  "biggest_win": "146652.291183",
+  "biggest_loss": "-116819.34278",
+  "avg_hold_seconds": 78249,
+  "best_winning_streak": 8,
+  "max_drawdown": "857980.052422",
+  "portfolio_peak": "2394720.734058",
+  "first_seen_ts": 1787736933,
+  "last_trade_ts": 1795691555,
+  "volume": "329875627.043487",
+  "unique_markets": 253614,
+  "wallet_creation_date": "2026-08-26",
+  "unbooked_activity": {
+    "status": "unbooked",
+    "sources": [
+      {
+        "source": "pv2_module",
+        "modules": [
+          1,
+          2
+        ],
+        "fills": 1,
+        "captured_fills": 1,
+        "binary_fills": 1,
+        "negrisk_fills": 0,
+        "first_ts": 1794852274,
+        "last_ts": 1794852274,
+        "reason": "Fills on Polymarket Protocol V2 Binary and NegRisk markets are captured but not yet included in this wallet's PnL, positions or tax figures; they will be added in a future restatement"
+      }
+    ],
+    "as_of": 1795694073
+  },
+  "book_status": "ok",
+  "exchange_surplus": {
+    "status": "known",
+    "amount_uusdc": 0,
+    "amount": "0.000000",
+    "count": 0,
+    "classification": "income_outside_trading_pnl",
+    "in_realized_pnl": false,
+    "scope": "all_time",
+    "through_block": 97992135,
+    "coverage": "rule_v1: V1 taker-SELL sweeps and V2 differences visible as pUSD legs. NOT sized (absence is UNKNOWN, not 0): surplus swept through the V1 BUY-refund path and V2 maker-asset refund sweeps that leave no distinguishing leg",
+    "source": "pm_fill_cash_adjust.surplus_uusdc @ published generation (kernel migration 089)"
+  },
+  "third_party_fees": {
+    "status": "known",
+    "amount_uusdc": 0,
+    "amount": "0.000000",
+    "count": 0,
+    "classification": "expense_outside_trading_pnl",
+    "in_realized_pnl": false,
+    "scope": "all_time",
+    "through_block": 97991284,
+    "coverage": "registered collectors only (kernel/venue RedemptionFeeCollectors; the registry is NOT proven complete: a collector outside it is UNKNOWN, not 0). Fees the wallet paid to a collector inside its own tx, bound to its redemption/merge/split (anchor_kind NONE rows included); a collateral move to a wallet of the payer's OWN owner is not a fee and is never counted (PMWAS §10.8)",
+    "source": "pm_tx_third_party_fee.fee_uusdc @ published generation (kernel migration 088)"
+  },
+  "windows": {
+    "1d": {
+      "realized_pnl": "78611.013540",
+      "roi": "0.011445",
+      "profit_factor": "1.072095",
+      "avg_buy_price": "0.468455",
+      "avg_sell_price": null,
+      "entry_edge": null,
+      "positions_closed": 3768,
+      "wins": 1687,
+      "losses": 2081,
+      "win_rate": "0.4477",
+      "volume": "6868035.694474",
+      "trades": 50821,
+      "fees_paid": "49669.188400",
+      "fees_paid_source": "pm_wallet_fees_daily",
+      "fees_paid_exchange_scope": "ctf_v2"
+    },
+    "7d": {
+      "realized_pnl": "365925.654050",
+      "roi": "0.008193",
+      "profit_factor": "1.051587",
+      "avg_buy_price": "0.487397",
+      "avg_sell_price": null,
+      "entry_edge": null,
+      "positions_closed": 26063,
+      "wins": 12079,
+      "losses": 13984,
+      "win_rate": "0.4635",
+      "volume": "44662732.039844",
+      "trades": 339362,
+      "fees_paid": "286676.665690",
+      "fees_paid_source": "pm_wallet_fees_daily",
+      "fees_paid_exchange_scope": "ctf_v2"
+    },
+    "30d": {
+      "realized_pnl": "799599.593063",
+      "roi": "0.006150",
+      "profit_factor": "1.030806",
+      "avg_buy_price": "0.486440",
+      "avg_sell_price": null,
+      "entry_edge": null,
+      "positions_closed": 97023,
+      "wins": 48059,
+      "losses": 48964,
+      "win_rate": "0.4953",
+      "volume": "130012060.856876",
+      "trades": 1156232,
+      "fees_paid": "1043124.250610",
+      "fees_paid_source": "pm_wallet_fees_daily",
+      "fees_paid_exchange_scope": "ctf_v2"
+    },
+    "all_time": {
+      "realized_pnl": "1524298.603516",
+      "roi": "0.005995",
+      "profit_factor": "1.027562",
+      "avg_buy_price": "0.510303",
+      "avg_sell_price": null,
+      "entry_edge": null,
+      "positions_closed": 252530,
+      "wins": 132409,
+      "losses": 120121,
+      "win_rate": "0.5243",
+      "volume": "329875627.043487",
+      "trades": 2916953,
+      "fees_paid": "3039027.045370",
+      "fees_paid_source": "pm_wallet_fees",
+      "fees_paid_exchange_scope": "ctf_v2",
+      "max_loss_streak": 4,
+      "max_loss_streak_unit": "active_days"
+    }
+  },
+  "recognized_capital": null,
+  "recognized_capital_source": "pre_convention",
+  "style": {
+    "is_whale": false,
+    "is_market_maker": true,
+    "is_active_trader": true,
+    "is_buy_and_hold": false,
+    "is_degen": false,
+    "is_high_conviction": false,
+    "is_contrarian": false,
+    "is_value_hunter": false,
+    "primary_style": "market_maker"
+  },
+  "computed_at": 1794297741,
+  "style_source": "style_rollup"
 }
 ```
 

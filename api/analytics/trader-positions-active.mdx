@@ -41,7 +41,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 <ResponseField name="total" type="integer" required>Number of positions before paging.</ResponseField>
 <ResponseField name="limit" type="integer" required>The page size applied.</ResponseField>
 <ResponseField name="offset" type="integer" required>The offset applied.</ResponseField>
-<ResponseField name="unpriced_positions" type="integer" required>Open positions with an unknown mark, over the whole list before paging (0 included). On Polymarket it equals the profile's unpriced count; predict.fun's profile has no such figure, so there it is counted from the listed open rows only.</ResponseField>
+<ResponseField name="unpriced_positions" type="integer" required>Open positions with an unknown mark, over the whole list before paging (0 included). It equals the number of open rows whose `mark_source` is `unknown`; those rows are listed with null mark and value, never valued at `0`. The profile (`GET /traders/{address}`) does not serve this count.</ResponseField>
 <ResponseField name="unbooked_activity" type="object" required>
   Disclosure of activity the positions and PnL on this response do **not** include. Same block as on [`GET /traders/{address}`](/api/analytics/trader#response). Always present; never `null`, and never an empty object. Until Polymarket Protocol V2 Binary and NegRisk (module 1 and 2) fills are booked, every figure for a wallet that traded those markets omits those fills, and this block says how many.
 
