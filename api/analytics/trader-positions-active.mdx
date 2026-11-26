@@ -19,7 +19,7 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 ### Query Parameters
 
 <ParamField query="include_uncatalogued" default="false" type="string">
-  `true` or `false`; any other value returns `400` with `"code": "invalid_include_uncatalogued"`. Also lists held tokens that are not in the market catalogue and have no mark (`identity_source` `uncatalogued`, `mark_source` `unknown`, null value). By default they are left out and counted in `uncatalogued_count`, a subset of `unpriced_positions`.
+  `true` or `false`; any other value returns `400` with `"code": "invalid_include_uncatalogued"`. Also lists held tokens whose identity is uncatalogued and that have no mark (`identity_source` `uncatalogued_condition` or `uncatalogued`, `mark_source` `unknown`, null value, and null `avg_cost_cents` / `realized_pnl` when there is no cost or fills source). By default they are left out and counted in `uncatalogued_count`, a subset of `unpriced_positions`.
 </ParamField>
 
 ### Response
@@ -54,8 +54,10 @@ GET https://partner-api.bravadotrade.com/trader-analytics/traders/{address}/posi
 
 See [/positions field reference](/api/analytics/trader-positions#response-position-fields) for the row schema.
 
-<ResponseField name="uncatalogued_count" type="integer">Held tokens that are not in the market catalogue and have no mark, over the whole open list regardless of paging. A subset of `unpriced_positions`. Omitted when the open list is unknown (`open_value_source` is set).</ResponseField>
-<ResponseField name="identity_source" type="string">`catalogue` or `uncatalogued` on each open row.</ResponseField>
+<ResponseField name="uncatalogued_count" type="integer">Held tokens whose `identity_source` is `uncatalogued_condition` or `uncatalogued` and that have no mark, over the whole open list regardless of paging. A subset of `unpriced_positions`. Omitted when the open list is unknown (`open_value_source` is set).</ResponseField>
+<ResponseField name="identity_source" type="string">On each open row, how the token was identified, the same value as on [`GET /positions`](/api/analytics/positions): `catalogue` (a market catalogue row, including a row whose market is not yet known), `collateral_sibling` (minted with a different collateral, identified through its catalogued sibling), `uncatalogued_condition` (the chain condition is known but the catalogue has no market for it yet) or `uncatalogued` (nothing is known about the token).</ResponseField>
+<ResponseField name="avg_cost_source" type="string">On each open row: `lot_state`, `last_fill`, `lot_uncovered` or `none`. On an uncatalogued row with `lot_uncovered` or `none`, `avg_cost_cents` is `null` (unknown, not zero). Catalogued rows keep `"0"` for an uncosted token.</ResponseField>
+<ResponseField name="realized_pnl_source" type="string">On each open row: `fifo_fills` or `not_in_projection` (no fills row for the token). On an uncatalogued row with `not_in_projection`, `realized_pnl` is `null` (unknown, not zero).</ResponseField>
 
 ### Errors
 
